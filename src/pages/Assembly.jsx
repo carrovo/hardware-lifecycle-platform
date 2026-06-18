@@ -4,76 +4,16 @@ import { useApp } from '../context/AppContext';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 
-const KANBAN_COLS = [
-  { key: '装配中',    label: '装配中',   color: 'border-blue-400',   bg: 'bg-blue-50',   badge: 'bg-blue-400' },
-  { key: '功能测试中', label: '功能测试', color: 'border-violet-400', bg: 'bg-violet-50', badge: 'bg-violet-400' },
-  { key: '老化测试中', label: '老化测试', color: 'border-amber-400',  bg: 'bg-amber-50',  badge: 'bg-amber-400' },
-  { key: '终测中',    label: '终测',     color: 'border-orange-400', bg: 'bg-orange-50', badge: 'bg-orange-400' },
-  { key: '待分配项目', label: '待分配',   color: 'border-green-400',  bg: 'bg-green-50',  badge: 'bg-green-400' },
+const STATUS_CHIPS = [
+  { key: '全部',     color: 'bg-gray-100 text-gray-700 border-gray-300' },
+  { key: '装配中',   color: 'bg-blue-100 text-blue-700 border-blue-300' },
+  { key: '功能测试中', color: 'bg-violet-100 text-violet-700 border-violet-300' },
+  { key: '老化测试中', color: 'bg-amber-100 text-amber-700 border-amber-300' },
+  { key: '终测中',   color: 'bg-orange-100 text-orange-700 border-orange-300' },
+  { key: '待分配项目', color: 'bg-green-100 text-green-700 border-green-300' },
+  { key: '返修中',   color: 'bg-red-100 text-red-700 border-red-300' },
+  { key: '已激活',   color: 'bg-teal-100 text-teal-700 border-teal-300' },
 ];
-
-const NOW_DATE = new Date('2024-01-22');
-
-function daysSince(dateStr) {
-  if (!dateStr) return 0;
-  const d = new Date(dateStr.replace(' ', 'T'));
-  return Math.floor((NOW_DATE - d) / 86400000);
-}
-
-function DeviceCard({ device, typeName }) {
-  const days = daysSince(device.assemblyTime || device.updatedAt);
-  const isStuck = days > 2;
-  return (
-    <Link to={`/devices/${device.id}`}>
-      <div className={`bg-white rounded-lg shadow-sm p-3 mb-2 border-l-4 cursor-pointer hover:shadow-md transition-shadow relative ${
-        isStuck ? 'border-orange-400' : 'border-gray-200'
-      }`}>
-        {isStuck && (
-          <span className="absolute top-2 right-2 text-amber-500 text-xs font-bold">⚠</span>
-        )}
-        <div className="font-mono text-xs font-semibold text-gray-800 pr-5">{device.sn}</div>
-        <div className="text-xs text-gray-500 mt-0.5">{typeName}</div>
-        <div className="flex items-center justify-between mt-2">
-          <span className="text-xs text-gray-400">{device.assembler}</span>
-          <span className={`text-xs ${isStuck ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>
-            {days > 0 ? `${days}天前` : '今天'}
-          </span>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function KanbanView({ devices, getTypeName }) {
-  const grouped = {};
-  KANBAN_COLS.forEach((c) => { grouped[c.key] = []; });
-  devices.forEach((d) => { if (grouped[d.status]) grouped[d.status].push(d); });
-
-  return (
-    <div className="flex gap-3 overflow-x-auto pb-2">
-      {KANBAN_COLS.map((col) => (
-        <div key={col.key} className="flex-1 min-w-[160px]">
-          <div className={`border-t-2 ${col.color} ${col.bg} rounded-t px-3 py-2 flex items-center justify-between mb-2`}>
-            <span className="text-xs font-semibold text-gray-700">{col.label}</span>
-            <span className={`${col.badge} text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center`}>
-              {grouped[col.key].length}
-            </span>
-          </div>
-          <div className="space-y-0">
-            {grouped[col.key].map((d) => (
-              <DeviceCard key={d.id} device={d} typeName={getTypeName(d.deviceTypeId)} />
-            ))}
-            {grouped[col.key].length === 0 && (
-              <div className="text-center text-gray-300 text-xs py-6 border-2 border-dashed border-gray-100 rounded-lg">
-                暂无
-              </div>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function AssemblyModal({ isOpen, onClose, onSubmit, deviceTypes, moduleTypes, materials, currentUser }) {
   const [step, setStep] = useState(1);
@@ -239,12 +179,24 @@ function AssemblyModal({ isOpen, onClose, onSubmit, deviceTypes, moduleTypes, ma
 export default function Assembly() {
   const { state, dispatch } = useApp();
   const [showModal, setShowModal] = useState(false);
-  const [view, setView] = useState('kanban');
+  const [filterStatus, setFilterStatus] = useState('全部');
+  const [search, setSearch] = useState('');
 
   const allDevices = state.devices.filter((d) =>
     ['装配中', '功能测试中', '老化测试中', '终测中', '待分配项目', '已激活', '返修中'].includes(d.status)
   );
   const getTypeName = (id) => state.deviceTypes.find((dt) => dt.id === id)?.name || id;
+
+  const statusCounts = STATUS_CHIPS.slice(1).reduce((acc, c) => {
+    acc[c.key] = allDevices.filter((d) => d.status === c.key).length;
+    return acc;
+  }, {});
+
+  const filtered = allDevices.filter((d) => {
+    const matchStatus = filterStatus === '全部' || d.status === filterStatus;
+    const matchSearch = !search || d.sn.toLowerCase().includes(search.toLowerCase());
+    return matchStatus && matchSearch;
+  });
 
   const handleAssembly = (form) => {
     const now = form.assemblyTime;
@@ -270,55 +222,71 @@ export default function Assembly() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-gray-800">整机装配</h1>
-        <div className="flex items-center gap-2">
-          <div className="flex border border-gray-200 rounded overflow-hidden text-sm">
-            <button onClick={() => setView('kanban')}
-              className={`px-3 py-1.5 ${view === 'kanban' ? 'bg-slate-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
-              看板
+        <button onClick={() => setShowModal(true)}
+          className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
+          + 新建装配
+        </button>
+      </div>
+
+      {/* Status chips */}
+      <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 flex flex-wrap gap-2 items-center">
+        <button onClick={() => setFilterStatus('全部')}
+          className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${
+            filterStatus === '全部' ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300 hover:border-slate-400'
+          }`}>
+          全部 <span className="ml-1">{allDevices.length}</span>
+        </button>
+        {STATUS_CHIPS.slice(1).map((c) => (
+          statusCounts[c.key] > 0 && (
+            <button key={c.key} onClick={() => setFilterStatus(c.key)}
+              className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${
+                filterStatus === c.key
+                  ? 'bg-slate-700 text-white border-slate-700'
+                  : `${c.color} hover:brightness-95`
+              }`}>
+              {c.key} <span className="ml-1 font-bold">{statusCounts[c.key]}</span>
             </button>
-            <button onClick={() => setView('list')}
-              className={`px-3 py-1.5 ${view === 'list' ? 'bg-slate-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
-              列表
-            </button>
-          </div>
-          <button onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
-            + 新建装配
-          </button>
+          )
+        ))}
+        <div className="ml-auto flex items-center gap-2">
+          <input type="text" placeholder="搜索设备SN..." value={search} onChange={(e) => setSearch(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-40" />
+          <span className="text-sm text-gray-400">共 {filtered.length} 台</span>
         </div>
       </div>
 
-      {view === 'kanban' ? (
-        <KanbanView devices={allDevices} getTypeName={getTypeName} />
-      ) : (
-        <div className="bg-white rounded shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {['ID', '设备SN', '整机类型', '装配状态', '装配人', '装配时间', '照片'].map((h) => (
-                  <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {allDevices.map((d) => (
-                <tr key={d.id} className="hover:bg-blue-50 transition-colors">
-                  <td className="px-4 py-2 text-gray-400 font-mono text-xs">{d.id}</td>
-                  <td className="px-4 py-2 font-medium text-gray-800">{d.sn}</td>
-                  <td className="px-4 py-2 text-gray-600">{getTypeName(d.deviceTypeId)}</td>
-                  <td className="px-4 py-2"><StatusBadge status={d.status} /></td>
-                  <td className="px-4 py-2 text-gray-600">{d.assembler}</td>
-                  <td className="px-4 py-2 text-gray-500 text-xs">{d.assemblyTime}</td>
-                  <td className="px-4 py-2 text-gray-400 text-xs">{d.photoName || '—'}</td>
-                </tr>
+      {/* Table */}
+      <div className="bg-white rounded shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              {['设备SN', '整机类型', '当前状态', '装配人', '装配时间', '照片', '操作'].map((h) => (
+                <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
               ))}
-              {allDevices.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">暂无装配记录</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {filtered.map((d) => (
+              <tr key={d.id} className="hover:bg-blue-50 transition-colors">
+                <td className="px-4 py-2 font-medium text-gray-800 font-mono text-xs">{d.sn}</td>
+                <td className="px-4 py-2 text-gray-600">{getTypeName(d.deviceTypeId)}</td>
+                <td className="px-4 py-2"><StatusBadge status={d.status} /></td>
+                <td className="px-4 py-2 text-gray-600">{d.assembler}</td>
+                <td className="px-4 py-2 text-gray-500 text-xs">{d.assemblyTime}</td>
+                <td className="px-4 py-2 text-gray-400 text-xs">{d.photoName || '—'}</td>
+                <td className="px-4 py-2">
+                  <Link to={`/devices/${d.id}`} className="text-slate-600 hover:text-slate-800 text-xs hover:underline">
+                    查看详情
+                  </Link>
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">暂无装配记录</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <AssemblyModal
         isOpen={showModal} onClose={() => setShowModal(false)} onSubmit={handleAssembly}

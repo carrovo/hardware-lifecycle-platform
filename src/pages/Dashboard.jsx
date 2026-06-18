@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
 const SPARKLINES = {
@@ -13,6 +14,13 @@ const WEEK_DELTA = {
   '老化测试': +3,
   '终测':     +2,
 };
+
+const NOW_DATE = new Date('2024-01-22');
+function daysSince(dateStr) {
+  if (!dateStr) return 0;
+  const d = new Date(dateStr.replace(' ', 'T'));
+  return Math.floor((NOW_DATE - d) / 86400000);
+}
 
 function MiniSparkline({ data, color = '#475569' }) {
   const W = 80, H = 30, PAD = 2;
@@ -50,56 +58,21 @@ function DonutChart({ rate }) {
   );
 }
 
-function KPICard({ label, value, trend, trendLabel }) {
-  const isUp = trend > 0;
-  const isDown = trend < 0;
-  return (
-    <div className="bg-gray-50 border border-gray-100 rounded-xl p-5">
-      <div className="text-4xl font-semibold text-gray-900">{value}</div>
-      <div className="text-sm text-gray-500 mt-1 mb-3">{label}</div>
-      <div className={`flex items-center gap-1 text-sm font-medium ${isUp ? 'text-green-600' : isDown ? 'text-red-500' : 'text-gray-400'}`}>
-        <span className="text-base">{isUp ? '↑' : isDown ? '↓' : '→'}</span>
-        <span>较昨日 {trend > 0 ? `+${trend}` : trend}</span>
-        {trendLabel && <span className="text-gray-400 font-normal ml-1">{trendLabel}</span>}
-      </div>
-    </div>
-  );
-}
-
-function QualityCard({ stage, rate, delta }) {
-  const isUp = delta > 0;
-  const isDown = delta < 0;
-  return (
-    <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 flex items-center gap-4">
-      <div className="flex-1 min-w-0">
-        <div className="text-xs text-gray-500 mb-1">{stage}</div>
-        <div className="flex items-end gap-1">
-          <DonutChart rate={rate} />
-          <div className="text-3xl font-semibold text-gray-900 leading-none pb-1">{rate}<span className="text-lg text-gray-400">%</span></div>
-        </div>
-        <div className={`text-xs mt-2 flex items-center gap-0.5 font-medium ${isUp ? 'text-green-600' : isDown ? 'text-red-500' : 'text-gray-400'}`}>
-          <span>{isUp ? '↑' : isDown ? '↓' : '→'}</span>
-          <span>较上周 {delta > 0 ? `+${delta}pt` : delta === 0 ? '持平' : `${delta}pt`}</span>
-        </div>
-      </div>
-      <MiniSparkline data={SPARKLINES[stage]} color={delta >= 0 ? '#475569' : '#ef4444'} />
-    </div>
-  );
-}
-
 const WIP_STAGES = [
   { key: '装配中',    color: 'bg-blue-400',   label: '装配中' },
   { key: '功能测试中', color: 'bg-violet-400', label: '功能测试' },
   { key: '老化测试中', color: 'bg-amber-400',  label: '老化测试' },
   { key: '终测中',    color: 'bg-orange-400',  label: '终测' },
-  { key: '待分配项目', color: 'bg-green-400',  label: '待分配' },
 ];
 
 export default function Dashboard() {
   const { state } = useApp();
+  const navigate = useNavigate();
   const { materials, devices, testRecords } = state;
 
   const readyToAssign = devices.filter((d) => d.status === '待分配项目').length;
+
+  const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
 
   const funcPassed  = testRecords.filter((t) => t.testType === '功能测试' && t.result === '合格').length;
   const funcTotal   = testRecords.filter((t) => t.testType === '功能测试').length;
@@ -109,8 +82,6 @@ export default function Dashboard() {
   const finalTotal  = testRecords.filter((t) => t.testType === '终测').length;
   const inspPassed  = materials.filter((m) => m.inspectionResult === '合格' || m.inspectionResult === '特批使用').length;
   const inspTotal   = materials.length;
-
-  const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
 
   const qualityStages = [
     { stage: '来料检验', rate: pct(inspPassed, inspTotal),   delta: WEEK_DELTA['来料检验'] },
@@ -124,10 +95,23 @@ export default function Dashboard() {
   devices.forEach((d) => { if (wipCounts[d.status] !== undefined) wipCounts[d.status]++; });
   const wipTotal = Object.values(wipCounts).reduce((a, b) => a + b, 0) || 1;
 
-  const anomalies = testRecords.filter((t) => t.result === '不合格');
-  const stuckDevices = devices.filter((d) =>
-    ['功能测试中', '老化测试中', '终测中', '装配中'].includes(d.status)
-  );
+  const recentFails = testRecords
+    .filter((t) => t.result === '不合格')
+    .slice(-6)
+    .reverse();
+
+  const stuckDevices = devices
+    .filter((d) => ['功能测试中', '老化测试中', '终测中', '装配中'].includes(d.status))
+    .map((d) => ({ ...d, days: daysSince(d.updatedAt || d.assemblyTime) }))
+    .filter((d) => d.days > 2)
+    .sort((a, b) => b.days - a.days);
+
+  const getDeviceSN = (id) => devices.find((d) => d.id === id)?.sn || id;
+
+  const inventoryByCategory = materials.reduce((acc, m) => {
+    if (m.status === '待装配') acc[m.category] = (acc[m.category] || 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="p-6 space-y-6">
@@ -135,10 +119,23 @@ export default function Dashboard() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-4 gap-4">
-        <KPICard label="今日来料" value={8} trend={3} />
-        <KPICard label="今日装配完成" value={3} trend={1} />
-        <KPICard label="今日测试通过" value={5} trend={-2} />
-        <KPICard label="待分配设备" value={readyToAssign} trend={2} trendLabel="可调拨" />
+        {[
+          { label: '今日来料', value: 8, trend: 3, path: '/materials' },
+          { label: '今日装配完成', value: 3, trend: 1, path: '/assembly' },
+          { label: '今日测试通过', value: 5, trend: -2, path: '/tests' },
+          { label: '待分配设备', value: readyToAssign, trend: 2, trendLabel: '可调拨', path: '/devices?status=待分配项目' },
+        ].map(({ label, value, trend, trendLabel, path }) => (
+          <button key={label} onClick={() => navigate(path)}
+            className="bg-gray-50 border border-gray-100 rounded-xl p-5 text-left hover:border-slate-300 hover:shadow-sm transition-all group">
+            <div className="text-4xl font-semibold text-gray-900 group-hover:text-slate-700">{value}</div>
+            <div className="text-sm text-gray-500 mt-1 mb-3">{label}</div>
+            <div className={`flex items-center gap-1 text-sm font-medium ${trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+              <span>{trend > 0 ? '↑' : trend < 0 ? '↓' : '→'}</span>
+              <span>较昨日 {trend > 0 ? `+${trend}` : trend}</span>
+              {trendLabel && <span className="text-gray-400 font-normal ml-1">{trendLabel}</span>}
+            </div>
+          </button>
+        ))}
       </div>
 
       {/* Quality + Alerts Row */}
@@ -146,53 +143,88 @@ export default function Dashboard() {
         <div className="col-span-2 space-y-3">
           <h2 className="text-sm font-semibold text-gray-700">各环节质量指标</h2>
           <div className="grid grid-cols-2 gap-3">
-            {qualityStages.map((q) => (
-              <QualityCard key={q.stage} {...q} />
+            {qualityStages.map(({ stage, rate, delta }) => (
+              <button key={stage} onClick={() => navigate('/tests')}
+                className="bg-gray-50 border border-gray-100 rounded-xl p-4 flex items-center gap-4 text-left hover:border-slate-300 hover:shadow-sm transition-all group">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-gray-500 mb-1">{stage}</div>
+                  <div className="flex items-end gap-1">
+                    <DonutChart rate={rate} />
+                    <div className="text-3xl font-semibold text-gray-900 leading-none pb-1">
+                      {rate}<span className="text-lg text-gray-400">%</span>
+                    </div>
+                  </div>
+                  <div className={`text-xs mt-2 flex items-center gap-0.5 font-medium ${delta > 0 ? 'text-green-600' : delta < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                    <span>{delta > 0 ? '↑' : delta < 0 ? '↓' : '→'}</span>
+                    <span>较上周 {delta > 0 ? `+${delta}pt` : delta === 0 ? '持平' : `${delta}pt`}</span>
+                  </div>
+                </div>
+                <MiniSparkline data={SPARKLINES[stage]} color={delta >= 0 ? '#475569' : '#ef4444'} />
+              </button>
             ))}
           </div>
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-gray-700">需要关注</h2>
-          {anomalies.length > 0 || stuckDevices.length > 0 ? (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="text-red-600 font-bold text-2xl">{anomalies.length}</span>
-                <span className="text-sm text-red-700">条不合格记录</span>
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-red-700 mb-2">⚠ 滞留设备</div>
-                <div className="space-y-1.5">
-                  {stuckDevices.slice(0, 5).map((d) => (
-                    <div key={d.id} className="flex items-center gap-2 text-xs">
-                      <span className="font-mono text-gray-700 truncate">{d.sn}</span>
-                      <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs border border-orange-200 whitespace-nowrap">
-                        {d.status}
-                      </span>
-                    </div>
-                  ))}
-                  {stuckDevices.length > 5 && (
-                    <div className="text-xs text-red-400">…另{stuckDevices.length - 5}台</div>
-                  )}
+          {/* 不合格记录明细 */}
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700 mb-2">不合格记录明细</h2>
+            {recentFails.length > 0 ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-red-600 font-bold text-xl">{testRecords.filter((t) => t.result === '不合格').length}</span>
+                  <span className="text-sm text-red-700">条累计不合格</span>
                 </div>
+                {recentFails.map((r) => (
+                  <button key={r.id} onClick={() => navigate(`/devices/${r.deviceId}`)}
+                    className="w-full flex items-center justify-between text-xs py-1 hover:bg-red-100 rounded px-1 transition-colors group">
+                    <span className="font-mono text-gray-700 group-hover:text-slate-800">{getDeviceSN(r.deviceId)}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="bg-red-100 text-red-600 border border-red-200 px-1.5 py-0.5 rounded-full text-xs">{r.testType}</span>
+                      <span className="text-gray-400">›</span>
+                    </span>
+                  </button>
+                ))}
               </div>
-            </div>
-          ) : (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-2 text-green-700">
-              <span className="text-xl">✓</span>
-              <span className="text-sm font-medium">一切正常</span>
-            </div>
-          )}
+            ) : (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2 text-green-700 text-sm">
+                <span>✓</span><span>暂无不合格记录</span>
+              </div>
+            )}
+          </div>
 
-          {/* Inventory summary */}
+          {/* 流程异常 */}
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700 mb-2">流程异常（滞留 &gt;2天）</h2>
+            {stuckDevices.length > 0 ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+                {stuckDevices.slice(0, 5).map((d) => (
+                  <button key={d.id} onClick={() => navigate(`/devices/${d.id}`)}
+                    className="w-full flex items-center justify-between text-xs py-1 hover:bg-amber-100 rounded px-1 transition-colors group">
+                    <span className="font-mono text-gray-700 group-hover:text-slate-800">{d.sn}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-full text-xs whitespace-nowrap">{d.status}</span>
+                      <span className="text-amber-600 font-medium whitespace-nowrap">{d.days}天</span>
+                    </span>
+                  </button>
+                ))}
+                {stuckDevices.length > 5 && (
+                  <button onClick={() => navigate('/devices')} className="text-xs text-amber-600 hover:underline">
+                    …另 {stuckDevices.length - 5} 台
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2 text-green-700 text-sm">
+                <span>✓</span><span>无滞留设备</span>
+              </div>
+            )}
+          </div>
+
+          {/* Inventory */}
           <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
             <div className="text-xs font-semibold text-gray-600 mb-3">物料库存快览</div>
-            {Object.entries(
-              materials.reduce((acc, m) => {
-                acc[m.category] = (acc[m.category] || 0) + (m.status === '待装配' ? 1 : 0);
-                return acc;
-              }, {})
-            ).map(([cat, cnt]) => (
+            {Object.entries(inventoryByCategory).map(([cat, cnt]) => (
               <div key={cat} className="flex justify-between text-xs py-0.5">
                 <span className="text-gray-600">{cat}</span>
                 <span className="font-semibold text-gray-800">{cnt} 待装配</span>
@@ -211,25 +243,33 @@ export default function Dashboard() {
             const pctW = Math.round((count / wipTotal) * 100);
             if (pctW === 0) return null;
             return (
-              <div
+              <button
                 key={s.key}
-                className={`${s.color} flex items-center justify-center text-white text-xs font-medium transition-all`}
+                onClick={() => navigate(`/devices?status=${encodeURIComponent(s.key)}`)}
+                className={`${s.color} flex items-center justify-center text-white text-xs font-medium hover:brightness-110 transition-all`}
                 style={{ width: `${pctW}%` }}
-                title={`${s.label}: ${count}台`}
+                title={`${s.label}: ${count}台 — 点击查看`}
               >
                 {pctW > 12 ? `${s.label} ${count}` : count}
-              </div>
+              </button>
             );
           })}
         </div>
         <div className="flex flex-wrap gap-4 mt-3">
           {WIP_STAGES.map((s) => (
-            <div key={s.key} className="flex items-center gap-1.5 text-xs text-gray-500">
+            <button key={s.key} onClick={() => navigate(`/devices?status=${encodeURIComponent(s.key)}`)}
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors">
               <div className={`w-2.5 h-2.5 rounded-full ${s.color}`} />
               <span>{s.label}</span>
               <span className="font-medium text-gray-700">{wipCounts[s.key]}</span>
-            </div>
+            </button>
           ))}
+          <button onClick={() => navigate('/devices?status=待分配项目')}
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors">
+            <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
+            <span>待分配</span>
+            <span className="font-medium text-gray-700">{devices.filter((d) => d.status === '待分配项目').length}</span>
+          </button>
         </div>
       </div>
     </div>

@@ -5,8 +5,6 @@ import {
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
 
-const TODAY = '2024-01-22';
-
 function DonutChart({ rate }) {
   const r = 18, cx = 22, cy = 22;
   const circ = 2 * Math.PI * r;
@@ -25,13 +23,13 @@ function DonutChart({ rate }) {
 }
 
 function AddPlanModal({ isOpen, onClose, onSave }) {
-  const [form, setForm] = useState({ date: TODAY, target: '', actual: '', project: '', notes: '' });
+  const [form, setForm] = useState({ date: '2024-01-22', target: '', actual: '', project: '', notes: '' });
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onSave(form);
     onClose();
-    setForm({ date: TODAY, target: '', actual: '', project: '', notes: '' });
+    setForm({ date: '2024-01-22', target: '', actual: '', project: '', notes: '' });
   };
 
   return (
@@ -97,13 +95,20 @@ export default function ProductionPlan() {
   const [editId, setEditId] = useState(null);
   const [editValues, setEditValues] = useState({});
 
-  const plans = [...state.productionPlans].sort((a, b) => a.date.localeCompare(b.date));
+  const plans = [...state.productionPlans].sort((a, b) =>
+    a.date.localeCompare(b.date) || (a.project || '').localeCompare(b.project || '')
+  );
 
-  const chartData = plans.map((p) => ({
-    date: p.date.slice(5),
-    target: p.target,
-    actual: p.actual,
-  }));
+  // Aggregate by date for chart
+  const chartData = Object.values(
+    plans.reduce((acc, p) => {
+      const key = p.date.slice(5);
+      if (!acc[key]) acc[key] = { date: key, target: 0, actual: 0 };
+      acc[key].target += p.target;
+      acc[key].actual += p.actual;
+      return acc;
+    }, {})
+  );
 
   const handleAddPlan = (form) => {
     dispatch({ type: 'ADD_PRODUCTION_PLAN', payload: {
@@ -118,6 +123,11 @@ export default function ProductionPlan() {
     setEditId(null);
   };
 
+  const handleDelete = (id) => {
+    dispatch({ type: 'DELETE_PRODUCTION_PLAN', payload: id });
+  };
+
+  // By-project aggregation
   const byProject = {};
   plans.forEach((p) => {
     const proj = p.project || '未指定';
@@ -129,6 +139,13 @@ export default function ProductionPlan() {
   const totalTarget = plans.reduce((s, p) => s + p.target, 0);
   const totalActual = plans.reduce((s, p) => s + p.actual, 0);
   const overallRate = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
+
+  // Group by date for visual grouping in table
+  const dateGroups = plans.reduce((acc, p) => {
+    if (!acc[p.date]) acc[p.date] = [];
+    acc[p.date].push(p);
+    return acc;
+  }, {});
 
   return (
     <div className="p-6">
@@ -174,7 +191,7 @@ export default function ProductionPlan() {
 
           {/* Line Chart */}
           <div className="bg-white border border-gray-100 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">产能趋势（目标 vs 实际）</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">产能趋势（目标 vs 实际，按日汇总）</h3>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -190,7 +207,7 @@ export default function ProductionPlan() {
             </ResponsiveContainer>
           </div>
 
-          {/* Table */}
+          {/* Table grouped by date */}
           <div className="bg-white rounded shadow-sm overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
@@ -200,58 +217,79 @@ export default function ProductionPlan() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {plans.map((plan) => {
-                  const isPast = plan.date < TODAY;
-                  const isToday = plan.date === TODAY;
-                  const rate = plan.target > 0 ? Math.round((plan.actual / plan.target) * 100) : 0;
-                  const isEditing = editId === plan.id;
-
+              <tbody>
+                {Object.entries(dateGroups).map(([date, group]) => {
+                  const dayTarget = group.reduce((s, p) => s + p.target, 0);
+                  const dayActual = group.reduce((s, p) => s + p.actual, 0);
+                  const dayRate = dayTarget > 0 ? Math.round((dayActual / dayTarget) * 100) : 0;
                   return (
-                    <tr key={plan.id}
-                      className={`transition-colors hover:bg-blue-50 ${isPast ? 'text-gray-400' : ''}`}>
-                      <td className="px-4 py-2 font-medium">
-                        {plan.date}
-                        {isToday && <span className="ml-1 text-xs bg-blue-100 text-blue-600 px-1.5 rounded-full">今天</span>}
-                      </td>
-                      <td className="px-4 py-2">
-                        {isEditing ? (
-                          <input type="number" value={editValues.target}
-                            onChange={(e) => setEditValues({ ...editValues, target: Number(e.target.value) })}
-                            className="w-16 border border-gray-300 rounded px-1 text-sm" />
-                        ) : plan.target}
-                      </td>
-                      <td className="px-4 py-2">
-                        {isEditing ? (
-                          <input type="number" value={editValues.actual}
-                            onChange={(e) => setEditValues({ ...editValues, actual: Number(e.target.value) })}
-                            className="w-16 border border-gray-300 rounded px-1 text-sm" />
-                        ) : plan.actual}
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <DonutChart rate={rate} />
-                          {rate < 90 && <span className="text-xs text-amber-600">⚠ 未达标</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2">{plan.project || '—'}</td>
-                      <td className="px-4 py-2 text-xs text-gray-400">{plan.notes}</td>
-                      <td className="px-4 py-2">
-                        {isPast ? (
-                          <span className="text-xs text-gray-300">已锁定</span>
-                        ) : isEditing ? (
-                          <div className="flex gap-2">
-                            <button onClick={() => handleEditSave(plan)} className="text-xs text-green-600 hover:underline">保存</button>
-                            <button onClick={() => setEditId(null)} className="text-xs text-gray-400 hover:underline">取消</button>
-                          </div>
-                        ) : (
-                          <button onClick={() => { setEditId(plan.id); setEditValues({ target: plan.target, actual: plan.actual }); }}
-                            className="text-xs text-slate-600 hover:underline">
-                            编辑
-                          </button>
-                        )}
-                      </td>
-                    </tr>
+                    <>
+                      {group.length > 1 && (
+                        <tr key={`${date}-summary`} className="bg-slate-50 border-t-2 border-slate-200">
+                          <td className="px-4 py-1.5 text-xs font-semibold text-slate-600">{date}</td>
+                          <td className="px-4 py-1.5 text-xs font-semibold text-slate-600">{dayTarget}</td>
+                          <td className="px-4 py-1.5 text-xs font-semibold text-slate-600">{dayActual}</td>
+                          <td className="px-4 py-1.5">
+                            <div className="flex items-center gap-2">
+                              <DonutChart rate={dayRate} />
+                              <span className="text-xs text-gray-500">当日合计</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-1.5 text-xs text-gray-400" colSpan={3}>{group.length} 个项目</td>
+                        </tr>
+                      )}
+                      {group.map((plan) => {
+                        const rate = plan.target > 0 ? Math.round((plan.actual / plan.target) * 100) : 0;
+                        const isEditing = editId === plan.id;
+                        return (
+                          <tr key={plan.id}
+                            className={`transition-colors hover:bg-blue-50 border-t border-gray-100 ${group.length > 1 ? 'bg-white' : 'border-t-2 border-slate-200'}`}>
+                            <td className="px-4 py-2 font-medium text-gray-700 text-sm">
+                              {group.length > 1 ? (
+                                <span className="text-gray-400 pl-2 text-xs">└</span>
+                              ) : date}
+                            </td>
+                            <td className="px-4 py-2">
+                              {isEditing ? (
+                                <input type="number" value={editValues.target}
+                                  onChange={(e) => setEditValues({ ...editValues, target: Number(e.target.value) })}
+                                  className="w-16 border border-gray-300 rounded px-1 text-sm" />
+                              ) : plan.target}
+                            </td>
+                            <td className="px-4 py-2">
+                              {isEditing ? (
+                                <input type="number" value={editValues.actual}
+                                  onChange={(e) => setEditValues({ ...editValues, actual: Number(e.target.value) })}
+                                  className="w-16 border border-gray-300 rounded px-1 text-sm" />
+                              ) : plan.actual}
+                            </td>
+                            <td className="px-4 py-2">
+                              <div className="flex items-center gap-2">
+                                <DonutChart rate={rate} />
+                                {rate < 90 && plan.actual > 0 && <span className="text-xs text-amber-600">⚠ 未达标</span>}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2 text-gray-600 text-sm">{plan.project || '—'}</td>
+                            <td className="px-4 py-2 text-xs text-gray-400">{plan.notes}</td>
+                            <td className="px-4 py-2">
+                              {isEditing ? (
+                                <div className="flex gap-2">
+                                  <button onClick={() => handleEditSave(plan)} className="text-xs text-green-600 hover:underline">保存</button>
+                                  <button onClick={() => setEditId(null)} className="text-xs text-gray-400 hover:underline">取消</button>
+                                </div>
+                              ) : (
+                                <div className="flex gap-2">
+                                  <button onClick={() => { setEditId(plan.id); setEditValues({ target: plan.target, actual: plan.actual }); }}
+                                    className="text-xs text-slate-600 hover:underline">编辑</button>
+                                  <button onClick={() => handleDelete(plan.id)}
+                                    className="text-xs text-red-400 hover:underline">删除</button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </>
                   );
                 })}
               </tbody>

@@ -1,6 +1,7 @@
 import { createContext, useContext, useReducer } from 'react';
 import {
   materials as initMaterials,
+  materialBatches as initMaterialBatches,
   devices as initDevices,
   testRecords as initTestRecords,
   deviceTypes as initDeviceTypes,
@@ -13,6 +14,7 @@ const AppContext = createContext(null);
 
 const initialState = {
   materials: initMaterials,
+  materialBatches: initMaterialBatches,
   devices: initDevices,
   testRecords: initTestRecords,
   deviceTypes: initDeviceTypes,
@@ -35,6 +37,17 @@ function appReducer(state, action) {
         ...state,
         materials: state.materials.map((m) =>
           m.id === action.payload.id ? { ...m, ...action.payload } : m
+        ),
+      };
+
+    case 'ADD_MATERIAL_BATCH':
+      return { ...state, materialBatches: [...state.materialBatches, action.payload] };
+
+    case 'UPDATE_MATERIAL_BATCH':
+      return {
+        ...state,
+        materialBatches: state.materialBatches.map((b) =>
+          b.id === action.payload.id ? { ...b, ...action.payload } : b
         ),
       };
 
@@ -72,6 +85,12 @@ function appReducer(state, action) {
         productionPlans: state.productionPlans.map((p) =>
           p.id === action.payload.id ? { ...p, ...action.payload } : p
         ),
+      };
+
+    case 'DELETE_PRODUCTION_PLAN':
+      return {
+        ...state,
+        productionPlans: state.productionPlans.filter((p) => p.id !== action.payload),
       };
 
     case 'ADD_DEVICE_TYPE':

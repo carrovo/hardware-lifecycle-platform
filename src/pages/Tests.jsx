@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
 
@@ -135,73 +136,43 @@ function TestRecordModal({ isOpen, onClose, onSubmit, testType, eligibleDevices,
   );
 }
 
-function TestTable({ records, testType, devices }) {
-  const getDeviceSN = (id) => devices.find((d) => d.id === id)?.sn || id;
-  const filtered = records.filter((r) => r.testType === testType);
-
-  const cols = [
-    '记录ID', '设备SN', '测试结果', '测试员', '测试时间', '报告文件',
-    ...(testType === '老化测试' ? ['持续时长', '温度峰值', '异常次数'] : []),
-    '备注', '记录状态',
-  ];
-
-  return (
-    <div className="bg-white rounded shadow-sm overflow-hidden">
-      <table className="w-full text-sm">
-        <thead className="bg-gray-50">
-          <tr>
-            {cols.map((h) => (
-              <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {filtered.map((r) => (
-            <tr key={r.id} className={`transition-colors ${r.result === '不合格' ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-blue-50'}`}>
-              <td className="px-3 py-2 text-gray-400 font-mono text-xs">{r.id}</td>
-              <td className="px-3 py-2 font-medium text-gray-800 font-mono text-xs">{getDeviceSN(r.deviceId)}</td>
-              <td className="px-3 py-2"><ResultBadge result={r.result} /></td>
-              <td className="px-3 py-2 text-gray-600">{r.operator}</td>
-              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{r.testTime}</td>
-              <td className="px-3 py-2 text-gray-400 text-xs">{r.reportFile || '—'}</td>
-              {testType === '老化测试' && (
-                <>
-                  <td className="px-3 py-2 text-gray-500 text-xs">{r.duration || '—'}</td>
-                  <td className="px-3 py-2 text-gray-500 text-xs">{r.peakTemp || '—'}</td>
-                  <td className="px-3 py-2 text-gray-500 text-xs">{r.anomalyCount ?? '—'}</td>
-                </>
-              )}
-              <td className="px-3 py-2 text-gray-400 text-xs max-w-xs truncate">{r.notes || '—'}</td>
-              <td className="px-3 py-2">
-                <span className={`inline-flex items-center gap-1 rounded-full text-xs px-2 py-0.5 font-medium border ${
-                  r.status === '有效'
-                    ? 'bg-green-100 text-green-700 border-green-300'
-                    : 'bg-gray-100 text-gray-500 border-gray-300'
-                }`}>
-                  {r.status === '有效' ? '✓' : '○'} {r.status}
-                </span>
-              </td>
-            </tr>
-          ))}
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={cols.length} className="px-4 py-8 text-center text-gray-400">暂无{testType}记录</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 export default function Tests() {
   const { state, dispatch } = useApp();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(0);
   const [showModal, setShowModal] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filterResult, setFilterResult] = useState('全部');
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab) {
+      const idx = TEST_TYPES.indexOf(tab);
+      if (idx >= 0) setActiveTab(idx);
+    }
+  }, [searchParams]);
 
   const currentTestType = TEST_TYPES[activeTab];
   const eligibleStatus = DEVICE_STATUS_FOR_TEST[currentTestType];
   const eligibleDevices = state.devices.filter((d) => d.status === eligibleStatus);
+
+  const getDeviceSN = (id) => state.devices.find((d) => d.id === id)?.sn || id;
+
+  const allForTab = state.testRecords.filter((r) => r.testType === currentTestType);
+  const passCount = allForTab.filter((r) => r.result === '合格').length;
+  const failCount = allForTab.filter((r) => r.result === '不合格').length;
+
+  const filtered = allForTab.filter((r) => {
+    const matchResult = filterResult === '全部' || r.result === filterResult;
+    const matchSearch = !search || getDeviceSN(r.deviceId).toLowerCase().includes(search.toLowerCase());
+    return matchResult && matchSearch;
+  });
+
+  const cols = [
+    '记录ID', '设备SN', '测试结果', '测试员', '测试时间', '报告文件',
+    ...(currentTestType === '老化测试' ? ['持续时长', '温度峰值', '异常次数'] : []),
+    '备注', '记录状态',
+  ];
 
   const handleSubmitTest = (form) => {
     const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -240,23 +211,104 @@ export default function Tests() {
         </button>
       </div>
 
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
-        {TEST_TYPES.map((tab, i) => (
-          <button key={tab} onClick={() => setActiveTab(i)}
-            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              activeTab === i ? 'border-slate-700 text-slate-700' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}>
-            {tab}
-            <span className={`ml-1.5 text-xs rounded-full px-1.5 py-0.5 ${
-              activeTab === i ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-500'
-            }`}>
-              {state.testRecords.filter((r) => r.testType === tab).length}
-            </span>
-          </button>
-        ))}
+      {/* Tabs */}
+      <div className="flex gap-1 mb-4 border-b border-gray-200">
+        {TEST_TYPES.map((tab, i) => {
+          const cnt = state.testRecords.filter((r) => r.testType === tab).length;
+          return (
+            <button key={tab} onClick={() => { setActiveTab(i); setSearch(''); setFilterResult('全部'); }}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                activeTab === i ? 'border-slate-700 text-slate-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}>
+              {tab}
+              <span className={`ml-1.5 text-xs rounded-full px-1.5 py-0.5 ${
+                activeTab === i ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-500'
+              }`}>{cnt}</span>
+            </button>
+          );
+        })}
       </div>
 
-      <TestTable records={state.testRecords} testType={currentTestType} devices={state.devices} />
+      {/* Summary chips */}
+      <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 flex flex-wrap gap-2 items-center">
+        <button onClick={() => setFilterResult('全部')}
+          className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${
+            filterResult === '全部' ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300 hover:border-slate-400'
+          }`}>
+          全部 <span className="ml-1">{allForTab.length}</span>
+        </button>
+        <button onClick={() => setFilterResult('合格')}
+          className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${
+            filterResult === '合格' ? 'bg-slate-700 text-white border-slate-700' : 'bg-green-100 text-green-700 border-green-300 hover:brightness-95'
+          }`}>
+          合格 <span className="ml-1 font-bold">{passCount}</span>
+        </button>
+        <button onClick={() => setFilterResult('不合格')}
+          className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${
+            filterResult === '不合格' ? 'bg-slate-700 text-white border-slate-700' : 'bg-red-100 text-red-700 border-red-300 hover:brightness-95'
+          }`}>
+          不合格 <span className="ml-1 font-bold">{failCount}</span>
+        </button>
+        {passCount + failCount > 0 && (
+          <span className="text-xs text-gray-400 ml-1">
+            通过率 {Math.round((passCount / (passCount + failCount)) * 100)}%
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <input type="text" placeholder="搜索设备SN..." value={search} onChange={(e) => setSearch(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-40" />
+          <span className="text-sm text-gray-400">共 {filtered.length} 条</span>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              {cols.map((h) => (
+                <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {filtered.map((r) => (
+              <tr key={r.id} className={`transition-colors ${r.result === '不合格' ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-blue-50'}`}>
+                <td className="px-3 py-2 text-gray-400 font-mono text-xs">{r.id}</td>
+                <td className="px-3 py-2 font-medium text-gray-800 font-mono text-xs">{getDeviceSN(r.deviceId)}</td>
+                <td className="px-3 py-2"><ResultBadge result={r.result} /></td>
+                <td className="px-3 py-2 text-gray-600">{r.operator}</td>
+                <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{r.testTime}</td>
+                <td className="px-3 py-2 text-gray-400 text-xs">{r.reportFile || '—'}</td>
+                {currentTestType === '老化测试' && (
+                  <>
+                    <td className="px-3 py-2 text-gray-500 text-xs">{r.duration || '—'}</td>
+                    <td className="px-3 py-2 text-gray-500 text-xs">{r.peakTemp || '—'}</td>
+                    <td className="px-3 py-2 text-gray-500 text-xs">{r.anomalyCount ?? '—'}</td>
+                  </>
+                )}
+                <td className="px-3 py-2 text-gray-400 text-xs max-w-xs truncate">{r.notes || '—'}</td>
+                <td className="px-3 py-2">
+                  <span className={`inline-flex items-center gap-1 rounded-full text-xs px-2 py-0.5 font-medium border ${
+                    r.status === '有效'
+                      ? 'bg-green-100 text-green-700 border-green-300'
+                      : 'bg-gray-100 text-gray-500 border-gray-300'
+                  }`}>
+                    {r.status === '有效' ? '✓' : '○'} {r.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={cols.length} className="px-4 py-8 text-center text-gray-400">
+                  {search || filterResult !== '全部' ? '无匹配记录' : `暂无${currentTestType}记录`}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <TestRecordModal
         isOpen={showModal} onClose={() => setShowModal(false)}
