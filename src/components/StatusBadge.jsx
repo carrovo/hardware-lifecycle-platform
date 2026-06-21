@@ -17,9 +17,27 @@ const statusColorMap = {
   '终测中':    'bg-amber-100 text-amber-700 border-amber-300',
   // Device flow — complete/available (green)
   '待分配项目': 'bg-green-100 text-green-700 border-green-300',
-  '已激活':    'bg-green-100 text-green-700 border-green-300',
+  '已分配项目': 'bg-teal-100 text-teal-700 border-teal-300',
+  '在线运营':  'bg-emerald-100 text-emerald-700 border-emerald-300',
+  // Device flow — retired (gray)
+  '退役':     'bg-gray-200 text-gray-500 border-gray-300',
   // Device flow — anomaly (red)
   '返修中':    'bg-red-100 text-red-700 border-red-300',
+  // Alert severity
+  '轻微':     'bg-amber-100 text-amber-700 border-amber-300',
+  '严重':     'bg-red-100 text-red-700 border-red-300',
+  // Alert / work order status
+  '待处理':   'bg-orange-100 text-orange-700 border-orange-300',
+  '处理中':   'bg-blue-100 text-blue-700 border-blue-300',
+  '已关闭':   'bg-gray-100 text-gray-500 border-gray-300',
+  '已处理':   'bg-green-100 text-green-700 border-green-300',
+  // Work order severity
+  '高':  'bg-red-100 text-red-700 border-red-300',
+  '中':  'bg-amber-100 text-amber-700 border-amber-300',
+  '低':  'bg-blue-100 text-blue-700 border-blue-300',
+  // Delivery results
+  '通过':    'bg-green-100 text-green-700 border-green-300',
+  '未通过':  'bg-red-100 text-red-700 border-red-300',
   // Record meta-status
   '有效': 'bg-green-100 text-green-700 border-green-300',
   '作废': 'bg-gray-100 text-gray-500 border-gray-300',

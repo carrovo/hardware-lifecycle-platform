@@ -124,7 +124,7 @@ export default function Dashboard() {
           { label: '今日装配完成', value: 3, trend: 1, path: '/assembly' },
           { label: '今日测试通过', value: 5, trend: -2, path: '/tests' },
           { label: '待分配设备', value: readyToAssign, trend: 2, trendLabel: '可调拨', path: '/devices?status=待分配项目' },
-          { label: '当日返修设备', value: devices.filter((d) => d.status === '返修中').length, trend: 0, path: '/devices?status=返修中' },
+          { label: '当日异常工单', value: devices.filter((d) => d.status === '返修中').length, trend: 0, path: '/work-orders?status=处理中' },
         ].map(({ label, value, trend, trendLabel, path }) => (
           <button key={label} onClick={() => navigate(path)}
             className="bg-gray-50 border border-gray-100 rounded-xl p-5 text-left hover:border-slate-300 hover:shadow-sm transition-all group">

@@ -9,6 +9,14 @@ import Assembly from './pages/Assembly';
 import Tests from './pages/Tests';
 import Devices from './pages/Devices';
 import DeviceDetail from './pages/DeviceDetail';
+import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
+import DeviceAllocation from './pages/DeviceAllocation';
+import Delivery from './pages/Delivery';
+import Operations from './pages/Operations';
+import Alerts from './pages/Alerts';
+import WorkOrders from './pages/WorkOrders';
+import Retirement from './pages/Retirement';
 
 function AppRoutes() {
   return (
@@ -23,6 +31,14 @@ function AppRoutes() {
         <Route path="/tests" element={<Tests />} />
         <Route path="/devices" element={<Devices />} />
         <Route path="/devices/:id" element={<DeviceDetail />} />
+        <Route path="/projects" element={<Projects />} />
+        <Route path="/projects/:id" element={<ProjectDetail />} />
+        <Route path="/device-allocation" element={<DeviceAllocation />} />
+        <Route path="/delivery" element={<Delivery />} />
+        <Route path="/operations" element={<Operations />} />
+        <Route path="/alerts" element={<Alerts />} />
+        <Route path="/work-orders" element={<WorkOrders />} />
+        <Route path="/retirement" element={<Retirement />} />
       </Routes>
     </Layout>
   );

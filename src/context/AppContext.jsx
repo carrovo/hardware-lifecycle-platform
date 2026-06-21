@@ -8,6 +8,12 @@ import {
   moduleTypes as initModuleTypes,
   productionPlans as initProductionPlans,
   operationLogs as initOperationLogs,
+  projects as initProjects,
+  deviceAllocations as initDeviceAllocations,
+  deliveryRecords as initDeliveryRecords,
+  alerts as initAlerts,
+  workOrders as initWorkOrders,
+  retirements as initRetirements,
 } from '../data/mockData';
 
 const AppContext = createContext(null);
@@ -21,6 +27,12 @@ const initialState = {
   moduleTypes: initModuleTypes,
   productionPlans: initProductionPlans,
   operationLogs: initOperationLogs,
+  projects: initProjects,
+  deviceAllocations: initDeviceAllocations,
+  deliveryRecords: initDeliveryRecords,
+  alerts: initAlerts,
+  workOrders: initWorkOrders,
+  retirements: initRetirements,
   currentUser: '张三',
 };
 
@@ -98,6 +110,52 @@ function appReducer(state, action) {
 
     case 'ADD_MODULE_TYPE':
       return { ...state, moduleTypes: [...state.moduleTypes, action.payload] };
+
+    // Part2 & Part3 cases
+    case 'ADD_PROJECT':
+      return { ...state, projects: [...state.projects, action.payload] };
+
+    case 'UPDATE_PROJECT':
+      return {
+        ...state,
+        projects: state.projects.map((p) =>
+          p.id === action.payload.id ? { ...p, ...action.payload } : p
+        ),
+      };
+
+    case 'ADD_DEVICE_ALLOCATION':
+      return { ...state, deviceAllocations: [...state.deviceAllocations, action.payload] };
+
+    case 'TRANSFER_DEVICE_ALLOCATION':
+      return { ...state, deviceAllocations: [...state.deviceAllocations, action.payload] };
+
+    case 'ADD_DELIVERY_RECORD':
+      return { ...state, deliveryRecords: [...state.deliveryRecords, action.payload] };
+
+    case 'ADD_ALERT':
+      return { ...state, alerts: [...state.alerts, action.payload] };
+
+    case 'UPDATE_ALERT':
+      return {
+        ...state,
+        alerts: state.alerts.map((a) =>
+          a.id === action.payload.id ? { ...a, ...action.payload } : a
+        ),
+      };
+
+    case 'ADD_WORK_ORDER':
+      return { ...state, workOrders: [...state.workOrders, action.payload] };
+
+    case 'UPDATE_WORK_ORDER':
+      return {
+        ...state,
+        workOrders: state.workOrders.map((w) =>
+          w.id === action.payload.id ? { ...w, ...action.payload } : w
+        ),
+      };
+
+    case 'ADD_RETIREMENT':
+      return { ...state, retirements: [...state.retirements, action.payload] };
 
     default:
       return state;

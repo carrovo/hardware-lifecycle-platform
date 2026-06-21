@@ -12,7 +12,6 @@ const STATUS_CHIPS = [
   { key: '终测中',    color: 'bg-amber-100 text-amber-700 border-amber-300' },
   { key: '待分配项目', color: 'bg-green-100 text-green-700 border-green-300' },
   { key: '返修中',    color: 'bg-red-100 text-red-700 border-red-300' },
-  { key: '已激活',    color: 'bg-green-100 text-green-700 border-green-300' },
 ];
 
 const STEP_LABELS = ['选择整机类型', '选择模组物料', '填写装配信息', '确认提交'];
@@ -37,7 +36,7 @@ function AssemblyModal({ isOpen, onClose, onSubmit, deviceTypes, moduleTypes, ma
 
   const canSubmit = () => {
     if (!selectedType || !assembler || !assemblyTime) return false;
-    return selectedType.requiredModules.every((rm) => selectedModules[rm.moduleTypeId]);
+    const slots = selectedType.slots || []; return slots.every((s) => selectedModules[s.moduleTypeId || s.id]);
   };
 
   const handleClose = () => {
@@ -49,9 +48,10 @@ function AssemblyModal({ isOpen, onClose, onSubmit, deviceTypes, moduleTypes, ma
     if (!canSubmit()) return;
     onSubmit({
       deviceTypeId: selectedTypeId,
-      usedMaterials: selectedType.requiredModules.map((rm) => ({
-        materialId: selectedModules[rm.moduleTypeId],
-        moduleTypeId: rm.moduleTypeId,
+      usedMaterials: (selectedType.slots || []).map((s) => ({
+        materialId: selectedModules[s.moduleTypeId],
+        moduleTypeId: s.moduleTypeId,
+        slotId: s.id,
       })),
       assembler, assemblyTime, photoName,
     });
@@ -89,9 +89,9 @@ function AssemblyModal({ isOpen, onClose, onSubmit, deviceTypes, moduleTypes, ma
               <div>
                 <div className="font-medium text-gray-800">{dt.name}</div>
                 <div className="text-xs text-gray-500 mt-1">
-                  {dt.requiredModules.map((rm) => {
-                    const mt = moduleTypes.find((m) => m.id === rm.moduleTypeId);
-                    return `${mt?.name || rm.moduleTypeId} × ${rm.quantity}`;
+                  {(dt.slots || []).map((s) => {
+                    const mt = moduleTypes.find((m) => m.id === s.moduleTypeId);
+                    return `${s.slotName}: ${mt?.name || s.moduleTypeId} × ${s.quantity}`;
                   }).join(' / ')}
                 </div>
               </div>
@@ -110,13 +110,14 @@ function AssemblyModal({ isOpen, onClose, onSubmit, deviceTypes, moduleTypes, ma
       {step === 2 && selectedType && (
         <div className="space-y-4">
           <p className="text-sm text-gray-600 mb-2">为每个模组选择物料（灰色=已占用，不可选）：</p>
-          {selectedType.requiredModules.map((rm) => {
+          {(selectedType.slots || []).map((rm) => {
             const mt = moduleTypes.find((m) => m.id === rm.moduleTypeId);
             const allMats = getAllMaterialsForSlot(rm.moduleTypeId);
             const availCount = allMats.filter((m) => m.status === '待装配').length;
             return (
-              <div key={rm.moduleTypeId} className="border border-gray-200 rounded p-3">
+              <div key={rm.id || rm.moduleTypeId} className="border border-gray-200 rounded p-3">
                 <div className="flex items-center gap-2 mb-2">
+                  {rm.slotName && <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{rm.slotName}</span>}
                   <span className="text-sm font-medium text-gray-800">{mt?.name}</span>
                   <span className="text-xs text-gray-500">({mt?.category}) × {rm.quantity}</span>
                   {availCount === 0
@@ -142,8 +143,8 @@ function AssemblyModal({ isOpen, onClose, onSubmit, deviceTypes, moduleTypes, ma
           })}
           <div className="flex justify-between pt-4">
             <button onClick={() => setStep(1)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">上一步</button>
-            <button onClick={() => { if (selectedType.requiredModules.every((rm) => selectedModules[rm.moduleTypeId])) setStep(3); }}
-              disabled={!selectedType.requiredModules.every((rm) => selectedModules[rm.moduleTypeId])}
+            <button onClick={() => { if ((selectedType.slots || []).every((rm) => selectedModules[rm.moduleTypeId])) setStep(3); }}
+              disabled={!(selectedType.slots || []).every((rm) => selectedModules[rm.moduleTypeId])}
               className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed">
               下一步
             </button>
@@ -194,11 +195,11 @@ function AssemblyModal({ isOpen, onClose, onSubmit, deviceTypes, moduleTypes, ma
             </div>
             <div className="border-t border-gray-200 pt-3">
               <div className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">所用模组物料</div>
-              {selectedType?.requiredModules.map((rm) => {
+              {(selectedType?.slots || []).map((rm) => {
                 const mt = moduleTypes.find((m) => m.id === rm.moduleTypeId);
                 const mat = materials.find((m) => m.id === selectedModules[rm.moduleTypeId]);
                 return (
-                  <div key={rm.moduleTypeId} className="flex items-center justify-between text-xs py-1 border-b border-gray-100 last:border-0">
+                  <div key={rm.id || rm.moduleTypeId} className="flex items-center justify-between text-xs py-1 border-b border-gray-100 last:border-0">
                     <span className="text-gray-600">{mt?.name} <span className="text-gray-400">({mt?.category})</span></span>
                     <span className="font-mono text-gray-800">{mat?.sn || '—'}</span>
                   </div>
@@ -240,7 +241,7 @@ export default function Assembly() {
   const [search, setSearch] = useState('');
 
   const allDevices = state.devices.filter((d) =>
-    ['装配中', '功能测试中', '老化测试中', '终测中', '待分配项目', '已激活', '返修中'].includes(d.status)
+    ['装配中', '功能测试中', '老化测试中', '终测中', '待分配项目', '返修中'].includes(d.status)
   );
   const getTypeName = (id) => state.deviceTypes.find((dt) => dt.id === id)?.name || id;
 
@@ -279,17 +280,10 @@ export default function Assembly() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-gray-800">整机装配</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => alert('飞书同步功能待接入')}
-            className="px-3 py-2 text-sm text-blue-600 border border-blue-300 rounded hover:bg-blue-50 flex items-center gap-1.5">
-            <span>同步飞书</span>
-          </button>
-          <button onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
-            + 新建装配
-          </button>
-        </div>
+        <button onClick={() => setShowModal(true)}
+          className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
+          + 新建装配
+        </button>
       </div>
 
       {/* Status chips */}

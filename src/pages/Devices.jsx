@@ -11,8 +11,10 @@ const STATUS_CHIPS = [
   { key: '老化测试中', color: 'bg-amber-100 text-amber-700 border-amber-300' },
   { key: '终测中',    color: 'bg-amber-100 text-amber-700 border-amber-300' },
   { key: '待分配项目', color: 'bg-green-100 text-green-700 border-green-300' },
+  { key: '已分配项目', color: 'bg-teal-100 text-teal-700 border-teal-300' },
+  { key: '在线运营',  color: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+  { key: '退役',     color: 'bg-gray-200 text-gray-500 border-gray-300' },
   { key: '返修中',    color: 'bg-red-100 text-red-700 border-red-300' },
-  { key: '已激活',    color: 'bg-green-100 text-green-700 border-green-300' },
 ];
 
 const NOW_DATE = new Date('2024-01-22');
@@ -40,7 +42,7 @@ export default function Devices() {
   const inProgress = devices.filter((d) =>
     ['装配中', '整机装配', '功能测试中', '老化测试中', '终测中', '返修中'].includes(d.status)
   ).length;
-  const activated = devices.filter((d) => d.status === '已激活').length;
+  const online = devices.filter((d) => d.status === '在线运营').length;
   const readyToAssign = devices.filter((d) => d.status === '待分配项目').length;
 
   const statusCounts = STATUS_CHIPS.slice(1).reduce((acc, c) => {
@@ -67,7 +69,7 @@ export default function Devices() {
         {[
           { label: '设备总数',    value: total,          color: 'border-slate-500' },
           { label: '在制/进行中', value: inProgress,     color: 'border-blue-500' },
-          { label: '已激活',      value: activated,      color: 'border-green-500' },
+          { label: '在线运营',      value: online,         color: 'border-emerald-500' },
           { label: '待分配项目',  value: readyToAssign,  color: 'border-emerald-500' },
         ].map(({ label, value, color }) => (
           <div key={label} className={`bg-gray-50 border border-gray-100 rounded-xl p-4 border-l-4 ${color}`}>
