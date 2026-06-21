@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { MATERIAL_CATEGORIES } from '../data/mockData';
@@ -144,20 +145,39 @@ function AddBatchModal({ isOpen, onClose, onSave }) {
 
 export default function Materials() {
   const { state, dispatch } = useApp();
+  const [searchParams] = useSearchParams();
   const [showModal, setShowModal] = useState(false);
   const [filterCategory, setFilterCategory] = useState('全部');
+  const [filterSupplier, setFilterSupplier] = useState('全部');
+  const [filterResult, setFilterResult] = useState('全部');
+  const [filterItemStatus, setFilterItemStatus] = useState('全部');
   const [search, setSearch] = useState('');
   const [expandedIds, setExpandedIds] = useState(new Set());
 
+  useEffect(() => {
+    const r = searchParams.get('result');
+    if (r) setFilterResult(r);
+  }, [searchParams]);
+
   const batches = state.materialBatches || [];
+  const suppliers = ['全部', ...new Set(batches.map((b) => b.supplier).filter(Boolean))];
+
+  const hasFilters = filterCategory !== '全部' || filterSupplier !== '全部' || filterResult !== '全部' || filterItemStatus !== '全部' || search;
+  const clearFilters = () => {
+    setFilterCategory('全部'); setFilterSupplier('全部');
+    setFilterResult('全部'); setFilterItemStatus('全部'); setSearch('');
+  };
 
   const filtered = batches.filter((b) => {
     const matchCat = filterCategory === '全部' || b.category === filterCategory;
+    const matchSupplier = filterSupplier === '全部' || b.supplier === filterSupplier;
+    const matchResult = filterResult === '全部' || b.items.some((it) => it.result === filterResult);
+    const matchItemStatus = filterItemStatus === '全部' || b.items.some((it) => it.status === filterItemStatus);
     const matchSearch = !search ||
       b.batchNo.toLowerCase().includes(search.toLowerCase()) ||
       b.supplier.toLowerCase().includes(search.toLowerCase()) ||
       b.items.some((it) => it.sn.toLowerCase().includes(search.toLowerCase()));
-    return matchCat && matchSearch;
+    return matchCat && matchSupplier && matchResult && matchItemStatus && matchSearch;
   });
 
   const toggleExpand = (id) => {
@@ -202,18 +222,57 @@ export default function Materials() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 flex flex-wrap gap-3 items-center">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">类别</label>
-          <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
-            className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none">
-            <option value="全部">全部</option>
-            {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+      <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 space-y-3">
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500 whitespace-nowrap">类别</label>
+            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none">
+              <option value="全部">全部</option>
+              {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500 whitespace-nowrap">供应商</label>
+            <select value={filterSupplier} onChange={(e) => setFilterSupplier(e.target.value)}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none">
+              {suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500 whitespace-nowrap">检验结果</label>
+            <select value={filterResult} onChange={(e) => setFilterResult(e.target.value)}
+              className={`border rounded px-2 py-1.5 text-sm focus:outline-none ${
+                filterResult === '不合格' ? 'border-red-300 text-red-700 bg-red-50'
+                : filterResult === '合格' ? 'border-green-300 text-green-700 bg-green-50'
+                : 'border-gray-300'
+              }`}>
+              <option value="全部">全部</option>
+              <option value="合格">合格</option>
+              <option value="不合格">不合格</option>
+              <option value="特批使用">特批使用</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500 whitespace-nowrap">物料状态</label>
+            <select value={filterItemStatus} onChange={(e) => setFilterItemStatus(e.target.value)}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none">
+              <option value="全部">全部</option>
+              <option value="待装配">待装配</option>
+              <option value="已占用">已占用</option>
+              <option value="退货换货">退货换货</option>
+            </select>
+          </div>
+          <input type="text" placeholder="搜索批次号 / 供应商 / SN..." value={search} onChange={(e) => setSearch(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-52" />
+          {hasFilters && (
+            <button onClick={clearFilters}
+              className="text-xs text-slate-600 border border-slate-300 rounded px-2.5 py-1.5 hover:bg-slate-50 whitespace-nowrap">
+              清除筛选
+            </button>
+          )}
+          <div className="text-sm text-gray-400 ml-auto">共 {filtered.length} 批次 · {totalItems} 件</div>
         </div>
-        <input type="text" placeholder="搜索批次号 / 供应商 / SN..." value={search} onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-52" />
-        <div className="text-sm text-gray-400 ml-auto">共 {filtered.length} 批次 · {totalItems} 件</div>
       </div>
 
       {/* Batch table */}

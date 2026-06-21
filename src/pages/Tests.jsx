@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
 
@@ -143,13 +143,16 @@ export default function Tests() {
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState('');
   const [filterResult, setFilterResult] = useState('全部');
+  const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => {
     const tab = searchParams.get('tab');
+    const result = searchParams.get('result');
     if (tab) {
       const idx = TEST_TYPES.indexOf(tab);
       if (idx >= 0) setActiveTab(idx);
     }
+    if (result) setFilterResult(result);
   }, [searchParams]);
 
   const currentTestType = TEST_TYPES[activeTab];
@@ -169,9 +172,7 @@ export default function Tests() {
   });
 
   const cols = [
-    '记录ID', '设备SN', '测试结果', '测试员', '测试时间', '报告文件',
-    ...(currentTestType === '老化测试' ? ['持续时长', '温度峰值', '异常次数'] : []),
-    '备注', '记录状态',
+    '', '记录ID', '设备SN', '测试结果', '测试时间', '备注', '记录有效性',
   ];
 
   const handleSubmitTest = (form) => {
@@ -266,39 +267,95 @@ export default function Tests() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {cols.map((h) => (
-                <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
+              {cols.map((h, i) => (
+                <th key={i} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
-            {filtered.map((r) => (
-              <tr key={r.id} className={`transition-colors ${r.result === '不合格' ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-blue-50'}`}>
-                <td className="px-3 py-2 text-gray-400 font-mono text-xs">{r.id}</td>
-                <td className="px-3 py-2 font-medium text-gray-800 font-mono text-xs">{getDeviceSN(r.deviceId)}</td>
-                <td className="px-3 py-2"><ResultBadge result={r.result} /></td>
-                <td className="px-3 py-2 text-gray-600">{r.operator}</td>
-                <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{r.testTime}</td>
-                <td className="px-3 py-2 text-gray-400 text-xs">{r.reportFile || '—'}</td>
-                {currentTestType === '老化测试' && (
-                  <>
-                    <td className="px-3 py-2 text-gray-500 text-xs">{r.duration || '—'}</td>
-                    <td className="px-3 py-2 text-gray-500 text-xs">{r.peakTemp || '—'}</td>
-                    <td className="px-3 py-2 text-gray-500 text-xs">{r.anomalyCount ?? '—'}</td>
-                  </>
-                )}
-                <td className="px-3 py-2 text-gray-400 text-xs max-w-xs truncate">{r.notes || '—'}</td>
-                <td className="px-3 py-2">
-                  <span className={`inline-flex items-center gap-1 rounded-full text-xs px-2 py-0.5 font-medium border ${
-                    r.status === '有效'
-                      ? 'bg-green-100 text-green-700 border-green-300'
-                      : 'bg-gray-100 text-gray-500 border-gray-300'
-                  }`}>
-                    {r.status === '有效' ? '✓' : '○'} {r.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
+          <tbody>
+            {filtered.map((r) => {
+              const isExpanded = expandedId === r.id;
+              const devSN = getDeviceSN(r.deviceId);
+              const device = state.devices.find((d) => d.id === r.deviceId);
+              return (
+                <>
+                  <tr key={r.id}
+                    onClick={() => setExpandedId(isExpanded ? null : r.id)}
+                    className={`cursor-pointer transition-colors border-t border-gray-100 ${
+                      isExpanded ? 'bg-slate-50' : r.result === '不合格' ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-blue-50'
+                    }`}>
+                    <td className="px-3 py-2.5 text-gray-400 text-xs w-6">
+                      <span>{isExpanded ? '▼' : '▶'}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-gray-400 font-mono text-xs">{r.id}</td>
+                    <td className="px-3 py-2.5 font-medium text-gray-800 font-mono text-xs">{devSN}</td>
+                    <td className="px-3 py-2.5"><ResultBadge result={r.result} /></td>
+                    <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{r.testTime}</td>
+                    <td className="px-3 py-2.5 text-gray-400 text-xs max-w-xs truncate">{r.notes || '—'}</td>
+                    <td className="px-3 py-2.5">
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-normal ${
+                        r.status === '有效' ? 'text-gray-400' : 'text-gray-300 line-through'
+                      }`}>
+                        {r.status}
+                      </span>
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr key={`${r.id}-expand`}>
+                      <td colSpan={cols.length} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
+                        <div className="px-10 py-4 grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                          <div className="col-span-2 text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">测试详情</div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-400 min-w-16">测试员</span>
+                            <span className="text-gray-800 font-medium">{r.operator}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-400 min-w-16">测试时间</span>
+                            <span className="text-gray-700">{r.testTime}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-400 min-w-16">关联设备</span>
+                            <Link to={`/devices/${r.deviceId}`} className="text-blue-600 hover:underline font-mono text-xs">{devSN}</Link>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-400 min-w-16">报告文件</span>
+                            <span className="text-gray-700 font-mono text-xs">{r.reportFile || '—'}</span>
+                          </div>
+                          {currentTestType === '老化测试' && (
+                            <>
+                              <div className="flex gap-2">
+                                <span className="text-gray-400 min-w-16">持续时长</span>
+                                <span className="text-gray-700">{r.duration || '—'}</span>
+                              </div>
+                              <div className="flex gap-2">
+                                <span className="text-gray-400 min-w-16">温度峰值</span>
+                                <span className="text-gray-700">{r.peakTemp || '—'}</span>
+                              </div>
+                              <div className="flex gap-2">
+                                <span className="text-gray-400 min-w-16">异常次数</span>
+                                <span className="text-gray-700">{r.anomalyCount ?? '—'}</span>
+                              </div>
+                            </>
+                          )}
+                          {r.result === '不合格' && (
+                            <div className="col-span-2 flex gap-2 mt-1">
+                              <span className="text-gray-400 min-w-16">返修情况</span>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                                device?.status === '返修中'
+                                  ? 'bg-red-100 text-red-700 border-red-300'
+                                  : 'bg-green-100 text-green-700 border-green-300'
+                              }`}>
+                                {device?.status === '返修中' ? '返修中' : `已修复 (当前: ${device?.status || '未知'})`}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })}
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={cols.length} className="px-4 py-8 text-center text-gray-400">

@@ -4,15 +4,15 @@ import { useApp } from '../context/AppContext';
 import StatusBadge from '../components/StatusBadge';
 
 const STATUS_CHIPS = [
-  { key: '全部',     color: 'bg-gray-100 text-gray-700 border-gray-300' },
-  { key: '装配中',   color: 'bg-blue-100 text-blue-700 border-blue-300' },
-  { key: '整机装配', color: 'bg-sky-100 text-sky-700 border-sky-300' },
-  { key: '功能测试中', color: 'bg-violet-100 text-violet-700 border-violet-300' },
+  { key: '全部',      color: 'bg-gray-100 text-gray-700 border-gray-300' },
+  { key: '装配中',    color: 'bg-blue-100 text-blue-700 border-blue-300' },
+  { key: '整机装配',  color: 'bg-blue-100 text-blue-700 border-blue-300' },
+  { key: '功能测试中', color: 'bg-blue-100 text-blue-700 border-blue-300' },
   { key: '老化测试中', color: 'bg-amber-100 text-amber-700 border-amber-300' },
-  { key: '终测中',   color: 'bg-orange-100 text-orange-700 border-orange-300' },
+  { key: '终测中',    color: 'bg-amber-100 text-amber-700 border-amber-300' },
   { key: '待分配项目', color: 'bg-green-100 text-green-700 border-green-300' },
-  { key: '返修中',   color: 'bg-red-100 text-red-700 border-red-300' },
-  { key: '已激活',   color: 'bg-teal-100 text-teal-700 border-teal-300' },
+  { key: '返修中',    color: 'bg-red-100 text-red-700 border-red-300' },
+  { key: '已激活',    color: 'bg-green-100 text-green-700 border-green-300' },
 ];
 
 const NOW_DATE = new Date('2024-01-22');

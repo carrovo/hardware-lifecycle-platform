@@ -22,7 +22,7 @@ function DonutChart({ rate }) {
   );
 }
 
-function AddPlanModal({ isOpen, onClose, onSave }) {
+function AddPlanModal({ isOpen, onClose, onSave, existingProjects }) {
   const [form, setForm] = useState({ date: '2024-01-22', target: '', actual: '', project: '', notes: '' });
 
   const handleSubmit = (e) => {
@@ -35,6 +35,17 @@ function AddPlanModal({ isOpen, onClose, onSave }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="新增生产计划">
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">关联项目/订单 *</label>
+          <input type="text" list="proj-list" value={form.project}
+            onChange={(e) => setForm({ ...form, project: e.target.value })}
+            placeholder="选择已有项目或输入新项目名"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500 font-medium" required />
+          <datalist id="proj-list">
+            {existingProjects.map((p) => <option key={p} value={p} />)}
+          </datalist>
+          <p className="text-xs text-gray-400 mt-1">可从下拉中选择已有项目，或直接输入新项目名</p>
+        </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">日期</label>
           <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
@@ -51,12 +62,6 @@ function AddPlanModal({ isOpen, onClose, onSave }) {
             <input type="number" min="0" value={form.actual} onChange={(e) => setForm({ ...form, actual: e.target.value })}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" required />
           </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">关联项目/订单</label>
-          <input type="text" value={form.project} onChange={(e) => setForm({ ...form, project: e.target.value })}
-            placeholder="项目名称（选填）"
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
@@ -140,6 +145,14 @@ export default function ProductionPlan() {
   const totalActual = plans.reduce((s, p) => s + p.actual, 0);
   const overallRate = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
 
+  const TODAY = '2024-01-22';
+  const todayPlans = plans.filter((p) => p.date === TODAY);
+  const todayTarget = todayPlans.reduce((s, p) => s + p.target, 0);
+  const todayActual = todayPlans.reduce((s, p) => s + p.actual, 0);
+  const todayRate = todayTarget > 0 ? Math.round((todayActual / todayTarget) * 100) : 0;
+
+  const existingProjects = [...new Set(plans.map((p) => p.project).filter(Boolean))];
+
   // Group by date for visual grouping in table
   const dateGroups = plans.reduce((acc, p) => {
     if (!acc[p.date]) acc[p.date] = [];
@@ -173,19 +186,22 @@ export default function ProductionPlan() {
           {/* Summary KPIs */}
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-gray-50 border border-gray-100 rounded-xl p-5 flex items-center gap-4">
-              <DonutChart rate={overallRate} />
+              <DonutChart rate={todayRate} />
               <div>
-                <div className="text-sm text-gray-500">整体达成率</div>
-                <div className="text-xs text-gray-400 mt-0.5">{totalActual} / {totalTarget} 台</div>
+                <div className="text-sm text-gray-500">全厂当日达成率</div>
+                <div className="text-xs text-gray-400 mt-0.5">{todayActual} / {todayTarget} 台 · {TODAY}</div>
+                <div className="text-xs text-gray-400 mt-0.5">累计达成率 {overallRate}%</div>
               </div>
             </div>
             <div className="bg-gray-50 border border-gray-100 rounded-xl p-5">
-              <div className="text-3xl font-semibold text-gray-900">{totalTarget}</div>
-              <div className="text-sm text-gray-500 mt-1">累计目标产量</div>
+              <div className="text-3xl font-semibold text-gray-900">{todayTarget}</div>
+              <div className="text-sm text-gray-500 mt-1">全厂当日目标汇总</div>
+              <div className="text-xs text-gray-400 mt-1">累计 {totalTarget} 台</div>
             </div>
             <div className="bg-gray-50 border border-gray-100 rounded-xl p-5">
-              <div className="text-3xl font-semibold text-gray-900">{totalActual}</div>
-              <div className="text-sm text-gray-500 mt-1">累计实际完成</div>
+              <div className="text-3xl font-semibold text-gray-900">{todayActual}</div>
+              <div className="text-sm text-gray-500 mt-1">全厂当日实际完成汇总</div>
+              <div className="text-xs text-gray-400 mt-1">累计 {totalActual} 台</div>
             </div>
           </div>
 
@@ -339,7 +355,7 @@ export default function ProductionPlan() {
         </div>
       )}
 
-      <AddPlanModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleAddPlan} />
+      <AddPlanModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleAddPlan} existingProjects={existingProjects} />
     </div>
   );
 }

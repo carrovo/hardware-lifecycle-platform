@@ -118,12 +118,13 @@ export default function Dashboard() {
       <h1 className="text-xl font-bold text-gray-800">生产看板</h1>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         {[
           { label: '今日来料', value: 8, trend: 3, path: '/materials' },
           { label: '今日装配完成', value: 3, trend: 1, path: '/assembly' },
           { label: '今日测试通过', value: 5, trend: -2, path: '/tests' },
           { label: '待分配设备', value: readyToAssign, trend: 2, trendLabel: '可调拨', path: '/devices?status=待分配项目' },
+          { label: '当日返修设备', value: devices.filter((d) => d.status === '返修中').length, trend: 0, path: '/devices?status=返修中' },
         ].map(({ label, value, trend, trendLabel, path }) => (
           <button key={label} onClick={() => navigate(path)}
             className="bg-gray-50 border border-gray-100 rounded-xl p-5 text-left hover:border-slate-300 hover:shadow-sm transition-all group">
@@ -143,8 +144,12 @@ export default function Dashboard() {
         <div className="col-span-2 space-y-3">
           <h2 className="text-sm font-semibold text-gray-700">各环节质量指标</h2>
           <div className="grid grid-cols-2 gap-3">
-            {qualityStages.map(({ stage, rate, delta }) => (
-              <button key={stage} onClick={() => navigate('/tests')}
+            {qualityStages.map(({ stage, rate, delta }) => {
+              const navTarget = stage === '来料检验'
+                ? '/materials?result=不合格'
+                : `/tests?tab=${encodeURIComponent(stage)}&result=${encodeURIComponent('不合格')}`;
+              return (
+              <button key={stage} onClick={() => navigate(navTarget)}
                 className="bg-gray-50 border border-gray-100 rounded-xl p-4 flex items-center gap-4 text-left hover:border-slate-300 hover:shadow-sm transition-all group">
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-gray-500 mb-1">{stage}</div>
@@ -161,7 +166,8 @@ export default function Dashboard() {
                 </div>
                 <MiniSparkline data={SPARKLINES[stage]} color={delta >= 0 ? '#475569' : '#ef4444'} />
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
 
