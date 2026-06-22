@@ -3,7 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
-import OperationLog from '../components/OperationLog';
 
 const FLOW_STAGES = ['来料检验', '整机装配', '功能测试', '老化测试', '终测', '待分配'];
 
@@ -95,6 +94,170 @@ function VoidTestRecordInline({ record, onVoid }) {
   );
 }
 
+const CATEGORY_COLOR = {
+  assembly: 'bg-blue-500',
+  test_pass: 'bg-green-500',
+  test_fail: 'bg-red-500',
+  allocation: 'bg-purple-500',
+  delivery_pass: 'bg-teal-500',
+  delivery_fail: 'bg-orange-500',
+  workorder: 'bg-yellow-500',
+  replacement: 'bg-amber-500',
+  log: 'bg-gray-400',
+  voided: 'bg-gray-300',
+};
+
+function buildTimeline(device, state) {
+  const events = [];
+
+  events.push({
+    id: `${device.id}-assembly`,
+    actionType: '整机装配',
+    category: 'assembly',
+    operator: device.assembler,
+    timestamp: device.assemblyTime,
+    summary: '整机装配完成',
+    detail: `装配人：${device.assembler}`,
+  });
+
+  state.testRecords
+    .filter((t) => t.deviceId === device.id)
+    .forEach((t) => {
+      const voided = t.voided;
+      const pass = t.result === '合格';
+      events.push({
+        id: t.id,
+        actionType: t.testType,
+        category: voided ? 'voided' : pass ? 'test_pass' : 'test_fail',
+        operator: t.operator,
+        timestamp: t.testTime,
+        summary: `${t.testType} — ${t.result}${voided ? '（已作废）' : ''}`,
+        detail: t.notes || '',
+        voided,
+      });
+    });
+
+  state.deviceAllocations
+    .filter((a) => a.deviceId === device.id)
+    .forEach((a) => {
+      const proj = state.projects.find((p) => p.id === a.projectId);
+      events.push({
+        id: a.id,
+        actionType: '分配至项目',
+        category: 'allocation',
+        operator: a.allocatedBy,
+        timestamp: a.allocatedAt,
+        summary: `分配至项目：${proj?.name || a.projectId}`,
+        detail: a.notes || '',
+      });
+    });
+
+  state.deliveryRecords
+    .filter((d) => d.deviceId === device.id)
+    .forEach((d) => {
+      const pass = d.result === '合格' || d.result === '通过';
+      events.push({
+        id: d.id,
+        actionType: d.stage,
+        category: pass ? 'delivery_pass' : 'delivery_fail',
+        operator: d.operator,
+        timestamp: d.recordTime,
+        summary: `${d.stage} — ${d.result}`,
+        detail: d.notes || (d.address ? `地址：${d.address}` : ''),
+      });
+    });
+
+  state.workOrders
+    .filter((w) => w.deviceId === device.id)
+    .forEach((wo) => {
+      events.push({
+        id: wo.id,
+        actionType: '维修工单',
+        category: 'workorder',
+        operator: wo.assignedTo,
+        timestamp: wo.createdAt,
+        summary: `工单 ${wo.id}：${wo.description}`,
+        detail: wo.repairActions || '',
+      });
+      (wo.replacedModules || []).forEach((rm, i) => {
+        const mtName = state.moduleTypes.find((m) => m.id === rm.moduleTypeId)?.name || rm.moduleTypeId;
+        const removedSN = state.materials.find((m) => m.id === rm.removedMaterialId)?.sn || rm.removedMaterialId;
+        const addedSN = state.materials.find((m) => m.id === rm.addedMaterialId)?.sn || rm.addedMaterialId;
+        events.push({
+          id: `${wo.id}-rm-${i}`,
+          actionType: '换件',
+          category: 'replacement',
+          operator: rm.operator || wo.assignedTo,
+          timestamp: rm.operatedAt || wo.updatedAt,
+          summary: `换件：${rm.slotName || mtName}`,
+          detail: `拆：${removedSN} → 装：${addedSN}${rm.notes ? `（${rm.notes}）` : ''}`,
+        });
+      });
+    });
+
+  const ALLOWED_LOG_TYPES = new Set(['返修完成', '退役', '作废测试记录']);
+  state.operationLogs
+    .filter((l) => l.deviceId === device.id && ALLOWED_LOG_TYPES.has(l.actionType))
+    .forEach((l) => {
+      events.push({
+        id: l.id,
+        actionType: l.actionType,
+        category: 'log',
+        operator: l.operator,
+        timestamp: l.timestamp,
+        summary: l.notes,
+        detail: `${l.fromStatus || '—'} → ${l.toStatus || '—'}`,
+      });
+    });
+
+  return events
+    .filter((e) => e.timestamp)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+}
+
+function Timeline({ entries }) {
+  if (entries.length === 0) {
+    return <div className="text-sm text-gray-400">暂无生命周期记录</div>;
+  }
+
+  return (
+    <div className="relative">
+      <div className="absolute left-3.5 top-0 bottom-0 w-px bg-gray-200" />
+      <div className="space-y-3">
+        {entries.map((entry, idx) => {
+          const dotColor = CATEGORY_COLOR[entry.category] || 'bg-gray-400';
+          return (
+            <div key={entry.id || idx} className={`relative flex gap-4 ${entry.voided ? 'opacity-50' : ''}`}>
+              <div className={`relative z-10 w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold mt-0.5 ${dotColor}`}>
+                {entry.category === 'assembly' ? '装' :
+                 entry.category === 'allocation' ? '分' :
+                 entry.category === 'workorder' ? '修' :
+                 entry.category === 'replacement' ? '换' :
+                 entry.category === 'log' ? '记' :
+                 entry.category.startsWith('delivery') ? '交' : '测'}
+              </div>
+              <div className="flex-1 pb-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className={`text-sm font-medium ${entry.voided ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                      {entry.summary}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">{entry.timestamp}</div>
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-xs text-gray-500">{entry.operator}</span>
+                  {entry.detail && <span className="text-xs text-gray-400">· {entry.detail}</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function DeviceDetail() {
   const { id } = useParams();
   const { state, dispatch } = useApp();
@@ -115,7 +278,6 @@ export default function DeviceDetail() {
   const testRecords = state.testRecords
     .filter((t) => t.deviceId === id)
     .sort((a, b) => new Date(a.testTime) - new Date(b.testTime));
-  const logs = state.operationLogs.filter((l) => l.deviceId === id);
 
   const getModuleName = (moduleTypeId) =>
     state.moduleTypes.find((m) => m.id === moduleTypeId)?.name || moduleTypeId;
@@ -146,6 +308,8 @@ export default function DeviceDetail() {
       },
     });
   };
+
+  const timelineEntries = buildTimeline(device, state);
 
   return (
     <div className="p-6 space-y-4">
@@ -283,10 +447,10 @@ export default function DeviceDetail() {
         )}
       </div>
 
-      {/* Section 4: Operation Log */}
+      {/* Section 4: Full Lifecycle Timeline */}
       <div className="bg-white rounded shadow-sm p-5">
-        <h2 className="text-base font-semibold text-gray-700 mb-4">操作日志 / 状态变更记录</h2>
-        <OperationLog logs={logs} />
+        <h2 className="text-base font-semibold text-gray-700 mb-4">全生命周期时间线</h2>
+        <Timeline entries={timelineEntries} />
       </div>
     </div>
   );

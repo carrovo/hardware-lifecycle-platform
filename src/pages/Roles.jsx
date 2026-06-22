@@ -5,6 +5,7 @@ const ALL_ACTIONS = [
   'add_production_plan', 'add_project', 'add_device_allocation', 'add_delivery',
   'add_work_order', 'add_retirement', 'add_device_type', 'add_module_type',
   'edit_device_type', 'edit_module_type', 'void_project', 'manage_users', 'manage_roles',
+  'start_work_order', 'submit_recheck', 'do_recheck', 'add_module_replacement',
 ];
 
 const ACTION_LABELS = {
@@ -25,6 +26,10 @@ const ACTION_LABELS = {
   'void_project': '作废项目',
   'manage_users': '用户管理',
   'manage_roles': '角色管理',
+  'start_work_order': '开始处理工单',
+  'submit_recheck': '提交复检',
+  'do_recheck': '执行复检',
+  'add_module_replacement': '记录换件',
 };
 
 export default function Roles() {

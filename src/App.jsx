@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AppProvider } from './context/AppContext';
-import { RoleProvider } from './context/RoleContext';
+import { useEffect } from 'react';
+import { AppProvider, useApp } from './context/AppContext';
+import { RoleProvider, useRole } from './context/RoleContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { FEISHU_USERS } from './data/mockData';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -23,6 +26,18 @@ import Users from './pages/Users';
 import Roles from './pages/Roles';
 
 function AppRoutes() {
+  const { dispatch } = useApp();
+  const { setCurrentRole } = useRole();
+  const { userId } = useAuth();
+
+  useEffect(() => {
+    if (userId) {
+      dispatch({ type: 'SET_CURRENT_USER', payload: userId });
+      const user = FEISHU_USERS.find((u) => u.id === userId);
+      if (user?.role) setCurrentRole(user.role);
+    }
+  }, [userId]);
+
   return (
     <Layout>
       <Routes>
@@ -50,17 +65,24 @@ function AppRoutes() {
   );
 }
 
+function PrivateRoute({ children }) {
+  const { isLoggedIn } = useAuth();
+  return isLoggedIn ? children : <Navigate to="/login" replace />;
+}
+
 function App() {
   return (
     <BrowserRouter>
-      <RoleProvider>
-        <AppProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/*" element={<AppRoutes />} />
-          </Routes>
-        </AppProvider>
-      </RoleProvider>
+      <AuthProvider>
+        <RoleProvider>
+          <AppProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/*" element={<PrivateRoute><AppRoutes /></PrivateRoute>} />
+            </Routes>
+          </AppProvider>
+        </RoleProvider>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

@@ -208,8 +208,8 @@ export const alerts = [
 export const workOrders = [
   { id: 'WO-001', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', projectId: 'PROJ-003', description: '关节3电机过热，温度达92°C，需检查散热系统及电机状态', severity: '高', status: '处理中', assignedTo: '王五', createdAt: '2026-06-20 14:30', updatedAt: '2026-06-20 16:00', closedAt: null, repairActions: '已到现场，正在拆除散热模组检查', replacedModules: [], recheckResult: null, notes: '散热风扇异物堵塞' },
   { id: 'WO-002', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', projectId: 'PROJ-001', description: '预控模组通信中断，设备无法接收指令', severity: '高', status: '待处理', assignedTo: '赵六', createdAt: '2026-06-21 01:10', updatedAt: '2026-06-21 01:10', closedAt: null, repairActions: '', replacedModules: [], recheckResult: null, notes: '' },
-  { id: 'WO-003', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', projectId: 'PROJ-003', description: '设备离线，网络模块故障，需更换', severity: '高', status: '处理中', assignedTo: '李四', createdAt: '2026-06-21 08:00', updatedAt: '2026-06-21 09:00', closedAt: null, repairActions: '已确认网络模块损坏，准备更换', replacedModules: [{ removedMaterialId: 'MAT-013', addedMaterialId: 'MAT-014', moduleTypeId: 'MT-006' }], recheckResult: null, notes: '网口物理损坏，可能为进水导致' },
-  { id: 'WO-004', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', projectId: 'PROJ-001', description: '末端执行器抓取精度异常，超出允许误差范围', severity: '中', status: '已关闭', assignedTo: '李四', createdAt: '2026-06-18 12:00', updatedAt: '2026-06-18 17:00', closedAt: '2026-06-18 17:00', repairActions: '重新标定末端执行器，精度恢复正常', replacedModules: [], recheckResult: '合格', notes: '标定参数偏移，已重置' },
+  { id: 'WO-003', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', projectId: 'PROJ-003', description: '设备离线，网络模块故障，需更换', severity: '高', status: '复检中', assignedTo: '李四', recheckOperator: '王五', createdAt: '2026-06-21 08:00', updatedAt: '2026-06-21 10:00', closedAt: null, repairActions: '已更换预控计算模组，网络连接恢复', replacedModules: [{ id: 'RM-001', slotName: '预控槁位', moduleTypeId: 'MT-006', removedMaterialId: 'MAT-013', addedMaterialId: 'MAT-014', disposition: '报废', operator: '李四', operatedAt: '2026-06-21 09:00', notes: '网口进水损坏' }], recheckResult: null, recheckNotes: '', notes: '网口物理损坏，可能为进水导致' },
+  { id: 'WO-004', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', projectId: 'PROJ-001', description: '末端执行器抓取精度异常，超出允许误差范围', severity: '中', status: '已关闭', assignedTo: '李四', recheckOperator: '李四', createdAt: '2026-06-18 12:00', updatedAt: '2026-06-18 17:00', closedAt: '2026-06-18 17:00', repairActions: '重新标定末端执行器，精度恢复正常', replacedModules: [], recheckResult: '合格', recheckNotes: '复检各项指标合格', notes: '标定参数偏移，已重置' },
   { id: 'WO-005', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', projectId: 'PROJ-002', description: '导航地图更新失败，设备反复回到原点', severity: '低', status: '已关闭', assignedTo: '张三', createdAt: '2026-06-15 09:00', updatedAt: '2026-06-15 14:00', closedAt: '2026-06-15 14:00', repairActions: '远程推送新地图固件，重新建图完成', replacedModules: [], recheckResult: '合格', notes: '固件版本不兼容导致' },
 ];
 
@@ -222,35 +222,33 @@ export const FEISHU_USERS = [
   { id: 'u1', name: '张三', avatar: 'Z', dept: '制造部', role: '装配工' },
   { id: 'u2', name: '李四', avatar: 'L', dept: '质检部', role: '质检员' },
   { id: 'u3', name: '王五', avatar: 'W', dept: '测试部', role: '测试员' },
-  { id: 'u4', name: '赵六', avatar: 'Z', dept: '运维部', role: '运维' },
+  { id: 'u4', name: '赵六', avatar: 'Z', dept: '运维部', role: '运维工程师' },
   { id: 'u5', name: '陈厂长', avatar: 'C', dept: '管理部', role: '厂长' },
   { id: 'u6', name: '刘项目', avatar: 'L', dept: '项目部', role: '项目负责人' },
 ];
 
 export const ROLES_LIST = [
-  '质检员', '装配工', '测试员', '运维', '项目负责人', '厂长', '现场工程师', '维修工程师', '管理员',
+  '质检员', '装配工', '测试员', '运维工程师', '项目负责人', '厂长', '维修工程师', '管理员',
 ];
 
 export const ROLE_NAV_PERMISSIONS = {
   '质检员':     ['/dashboard', '/materials', '/tests', '/devices'],
   '装配工':     ['/dashboard', '/assembly', '/devices', '/materials'],
   '测试员':     ['/dashboard', '/tests', '/devices'],
-  '运维':       ['/dashboard', '/operations', '/alerts', '/work-orders', '/devices'],
+  '运维工程师':  ['/dashboard', '/delivery', '/operations', '/alerts', '/work-orders', '/devices'],
   '项目负责人':  ['/dashboard', '/projects', '/device-allocation', '/delivery', '/devices', '/production-plan'],
   '厂长':       ['/dashboard', '/materials', '/assembly', '/tests', '/devices', '/production-plan', '/device-types', '/projects', '/device-allocation', '/delivery', '/operations', '/alerts', '/work-orders', '/retirement'],
-  '现场工程师':  ['/dashboard', '/delivery', '/operations', '/alerts', '/devices'],
   '维修工程师':  ['/dashboard', '/work-orders', '/devices'],
   '管理员':     ['/dashboard', '/materials', '/assembly', '/tests', '/devices', '/production-plan', '/device-types', '/projects', '/device-allocation', '/delivery', '/operations', '/alerts', '/work-orders', '/retirement', '/users', '/roles'],
 };
 
 export const ROLE_ACTION_PERMISSIONS = {
-  '质检员':     ['add_material_batch', 'void_test_record'],
+  '质检员':     ['add_material_batch', 'void_test_record', 'do_recheck'],
   '装配工':     ['add_assembly'],
   '测试员':     ['add_test_record', 'void_test_record'],
-  '运维':       ['add_work_order', 'update_alert'],
+  '运维工程师':  ['add_work_order', 'update_alert', 'add_delivery', 'start_work_order', 'submit_recheck'],
   '项目负责人':  ['add_project', 'add_device_allocation', 'add_delivery', 'void_project'],
-  '厂长':       ['add_material_batch', 'add_assembly', 'add_test_record', 'void_test_record', 'add_production_plan', 'add_project', 'add_device_allocation', 'add_delivery', 'add_work_order', 'add_retirement', 'add_device_type', 'add_module_type', 'edit_device_type', 'edit_module_type', 'void_project'],
-  '现场工程师':  ['add_delivery', 'update_alert'],
-  '维修工程师':  ['add_work_order', 'update_work_order'],
-  '管理员':     ['add_material_batch', 'add_assembly', 'add_test_record', 'void_test_record', 'add_production_plan', 'add_project', 'add_device_allocation', 'add_delivery', 'add_work_order', 'add_retirement', 'add_device_type', 'add_module_type', 'edit_device_type', 'edit_module_type', 'void_project', 'manage_users', 'manage_roles'],
+  '厂长':       ['add_material_batch', 'add_assembly', 'add_test_record', 'void_test_record', 'add_production_plan', 'add_project', 'add_device_allocation', 'add_delivery', 'add_work_order', 'add_retirement', 'add_device_type', 'add_module_type', 'edit_device_type', 'edit_module_type', 'void_project', 'start_work_order', 'submit_recheck', 'do_recheck', 'add_module_replacement'],
+  '维修工程师':  ['add_work_order', 'update_work_order', 'start_work_order', 'submit_recheck', 'add_module_replacement'],
+  '管理员':     ['add_material_batch', 'add_assembly', 'add_test_record', 'void_test_record', 'add_production_plan', 'add_project', 'add_device_allocation', 'add_delivery', 'add_work_order', 'add_retirement', 'add_device_type', 'add_module_type', 'edit_device_type', 'edit_module_type', 'void_project', 'manage_users', 'manage_roles', 'start_work_order', 'submit_recheck', 'do_recheck', 'add_module_replacement'],
 };
