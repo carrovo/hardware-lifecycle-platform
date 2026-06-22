@@ -16,8 +16,8 @@ export const moduleTypes = [
 export const deviceTypes = [
   {
     id: 'DT-001',
-    name: 'RoboArm-X1',
-    urdf: 'roboarm_x1.urdf',
+    name: 'AlphaBot 1',
+    urdf: 'alphabot_1.urdf',
     slots: [
       { id: 's1', slotName: '底盘槁位', moduleTypeId: 'MT-001', quantity: 1 },
       { id: 's2', slotName: '左臂槁位', moduleTypeId: 'MT-002', quantity: 1 },
@@ -33,8 +33,8 @@ export const deviceTypes = [
   },
   {
     id: 'DT-002',
-    name: 'RoboArm-X2',
-    urdf: 'roboarm_x2.urdf',
+    name: 'AlphaBot 2',
+    urdf: 'alphabot_2.urdf',
     slots: [
       { id: 's1', slotName: '底盘槁位', moduleTypeId: 'MT-001', quantity: 1 },
       { id: 's2', slotName: '左臂槁位', moduleTypeId: 'MT-002', quantity: 1 },
@@ -51,6 +51,24 @@ export const deviceTypes = [
       { id: 's13', slotName: '胸部相机槁位', moduleTypeId: 'MT-005', quantity: 1 },
       { id: 's14', slotName: '腰部相机槁位', moduleTypeId: 'MT-005', quantity: 1 },
       { id: 's15', slotName: '预控槁位', moduleTypeId: 'MT-006', quantity: 1 },
+    ],
+  },
+  {
+    id: 'DT-003',
+    name: 'AlphaBot 1S',
+    urdf: 'alphabot_1s.urdf',
+    slots: [
+      { id: 's1', slotName: '底盘槁位', moduleTypeId: 'MT-001', quantity: 1 },
+      { id: 's2', slotName: '左臂槁位', moduleTypeId: 'MT-002', quantity: 1 },
+      { id: 's3', slotName: '右臂槁位', moduleTypeId: 'MT-002', quantity: 1 },
+      { id: 's4', slotName: '关节电机A槁位', moduleTypeId: 'MT-003', quantity: 1 },
+      { id: 's5', slotName: '关节电机B槁位', moduleTypeId: 'MT-003', quantity: 1 },
+      { id: 's6', slotName: '关节电机C槁位', moduleTypeId: 'MT-003', quantity: 1 },
+      { id: 's7', slotName: '关节电机D槁位', moduleTypeId: 'MT-003', quantity: 1 },
+      { id: 's8', slotName: '左手末端槁位', moduleTypeId: 'MT-004', quantity: 1 },
+      { id: 's9', slotName: '右手末端槁位', moduleTypeId: 'MT-004', quantity: 1 },
+      { id: 's10', slotName: '头部相机槁位', moduleTypeId: 'MT-005', quantity: 1 },
+      { id: 's11', slotName: '预控槁位', moduleTypeId: 'MT-006', quantity: 1 },
     ],
   },
 ];
