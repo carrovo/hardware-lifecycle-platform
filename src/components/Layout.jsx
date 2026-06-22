@@ -48,9 +48,8 @@ const ROLE_COLORS = {
   '质检员': 'bg-green-600',
   '装配工': 'bg-amber-600',
   '测试员': 'bg-cyan-600',
-  '运维': 'bg-teal-600',
+  '运维工程师': 'bg-teal-600',
   '项目负责人': 'bg-indigo-600',
-  '现场工程师': 'bg-orange-600',
   '维修工程师': 'bg-red-600',
 };
 

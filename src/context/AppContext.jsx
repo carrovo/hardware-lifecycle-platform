@@ -14,6 +14,7 @@ import {
   alerts as initAlerts,
   workOrders as initWorkOrders,
   retirements as initRetirements,
+  moduleReplacements as initModuleReplacements,
   FEISHU_USERS,
 } from '../data/mockData';
 
@@ -34,6 +35,7 @@ const initialState = {
   alerts: initAlerts,
   workOrders: initWorkOrders,
   retirements: initRetirements,
+  moduleReplacements: initModuleReplacements,
   currentUser: '张三',
   currentUserId: 'u1',
 };
@@ -160,6 +162,9 @@ function appReducer(state, action) {
 
     case 'ADD_RETIREMENT':
       return { ...state, retirements: [...state.retirements, action.payload] };
+
+    case 'ADD_MODULE_REPLACEMENT':
+      return { ...state, moduleReplacements: [...state.moduleReplacements, action.payload] };
 
     case 'UPDATE_MODULE_TYPE':
       return {

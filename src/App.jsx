@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { RoleProvider } from './context/RoleContext';
 import Layout from './components/Layout';
@@ -21,6 +21,15 @@ import WorkOrders from './pages/WorkOrders';
 import Retirement from './pages/Retirement';
 import Users from './pages/Users';
 import Roles from './pages/Roles';
+
+function RequireAuth({ children }) {
+  const location = useLocation();
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+  if (!isLoggedIn) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  return children;
+}
 
 function AppRoutes() {
   return (
@@ -57,7 +66,7 @@ function App() {
         <AppProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
-            <Route path="/*" element={<AppRoutes />} />
+            <Route path="/*" element={<RequireAuth><AppRoutes /></RequireAuth>} />
           </Routes>
         </AppProvider>
       </RoleProvider>
