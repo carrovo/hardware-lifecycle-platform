@@ -200,7 +200,11 @@ export default function Delivery() {
                     {getDeviceSN(r.deviceId)}
                   </Link>
                 </td>
-                <td className="px-4 py-2.5 text-gray-600">{r.projectId ? getProjectName(r.projectId) : '—'}</td>
+                <td className="px-4 py-2.5 text-gray-600">
+                  {r.projectId
+                    ? <Link to={`/projects/${r.projectId}`} className="text-slate-700 hover:text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>{getProjectName(r.projectId)}</Link>
+                    : '—'}
+                </td>
                 <td className="px-4 py-2.5"><StatusBadge status={r.result} /></td>
                 <td className="px-4 py-2.5 text-gray-600">{r.operator || '—'}</td>
                 {activeTab !== '出厂检验' && <td className="px-4 py-2.5 text-gray-500 text-xs">{r.address || '—'}</td>}

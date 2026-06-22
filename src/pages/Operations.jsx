@@ -89,7 +89,9 @@ export default function Operations() {
             </div>
 
             <div className="text-xs text-gray-500 mb-3">
-              {d.projectId ? getProjectName(d.projectId) : '—'}
+              {d.projectId
+                ? <Link to={`/projects/${d.projectId}`} className="hover:text-blue-600 hover:underline">{getProjectName(d.projectId)}</Link>
+                : '—'}
             </div>
 
             <div className="space-y-2">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
@@ -396,7 +396,11 @@ function WorkOrderDetail({ wo, state, dispatch, currentUser, canDo }) {
         <div className="flex items-center gap-4 text-sm">
           <div><span className="text-gray-500">状态：</span><StatusBadge status={wo.status} /></div>
           <div><span className="text-gray-500">严重程度：</span><StatusBadge status={wo.severity} /></div>
-          <div><span className="text-gray-500">所属项目：</span><span className="text-gray-800">{project?.name || '—'}</span></div>
+          <div><span className="text-gray-500">所属项目：</span>
+            {project
+              ? <Link to={`/projects/${project.id}`} className="text-slate-700 hover:text-blue-600 hover:underline">{project.name}</Link>
+              : <span className="text-gray-800">—</span>}
+          </div>
           {wo.recheckPerson && <div><span className="text-gray-500">复检人：</span><span className="text-gray-800">{wo.recheckPerson}</span></div>}
           {wo.closedAt && <div><span className="text-gray-500">关闭时间：</span><span className="text-gray-700">{wo.closedAt}</span></div>}
         </div>

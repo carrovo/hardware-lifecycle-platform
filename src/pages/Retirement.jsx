@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
@@ -142,7 +143,11 @@ export default function Retirement() {
                 <tr key={r.id} className="hover:bg-gray-50">
                   <td className="px-4 py-2.5 font-mono text-xs text-gray-700 font-medium">{r.deviceSN}</td>
                   <td className="px-4 py-2.5 text-gray-600">{device ? getTypeName(device.deviceTypeId) : '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-600">{device?.projectId ? getProjectName(device.projectId) : '—'}</td>
+                  <td className="px-4 py-2.5 text-gray-600">
+                    {device?.projectId
+                      ? <Link to={`/projects/${device.projectId}`} className="text-slate-700 hover:text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>{getProjectName(device.projectId)}</Link>
+                      : '—'}
+                  </td>
                   <td className="px-4 py-2.5 text-gray-700 max-w-xs">
                     <div className="truncate" title={r.reason}>{r.reason}</div>
                   </td>

@@ -203,7 +203,7 @@ function AlertDetail({ alert, state, dispatch, currentRole, currentUser }) {
               <span>告警时间：{alert.alertTime}</span>
               <span>来源：{alert.source}</span>
               {device && <span>设备：<Link to={`/devices/${device.id}`} className="text-blue-600 hover:underline">{device.sn}</Link></span>}
-              {project && <span>项目：{project.name}</span>}
+              {project && <span>项目：<Link to={`/projects/${project.id}`} className="text-blue-600 hover:underline">{project.name}</Link></span>}
             </div>
           </div>
         </div>

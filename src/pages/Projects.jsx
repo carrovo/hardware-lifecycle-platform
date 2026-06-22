@@ -118,6 +118,8 @@ export default function Projects() {
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [voidTarget, setVoidTarget] = useState(null);
+  const [searchName, setSearchName] = useState('');
+  const [filterStatus, setFilterStatus] = useState('全部');
 
   const { projects, deviceAllocations } = state;
 
@@ -156,7 +158,11 @@ export default function Projects() {
     });
   };
 
-  const activeProjects = projects.filter((p) => !p.voided);
+  const filteredProjects = projects.filter((p) => {
+    const matchName = !searchName || p.name.toLowerCase().includes(searchName.toLowerCase()) || (p.client || '').toLowerCase().includes(searchName.toLowerCase());
+    const matchStatus = filterStatus === '全部' || (filterStatus === '有效' && !p.voided) || (filterStatus === '已作废' && p.voided);
+    return matchName && matchStatus;
+  });
 
   return (
     <div className="p-6">
@@ -170,6 +176,31 @@ export default function Projects() {
         )}
       </div>
 
+      {/* Filters */}
+      <div className="bg-white rounded shadow-sm px-4 py-3 mb-3 flex flex-wrap gap-3 items-center">
+        <input
+          type="text"
+          placeholder="搜索项目名称或客户…"
+          value={searchName}
+          onChange={(e) => setSearchName(e.target.value)}
+          className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-slate-500 w-52"
+        />
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-slate-500"
+        >
+          <option value="全部">全部状态</option>
+          <option value="有效">有效</option>
+          <option value="已作废">已作废</option>
+        </select>
+        <button
+          onClick={() => { setSearchName(''); setFilterStatus('全部'); }}
+          className="text-xs text-gray-400 hover:text-gray-600 underline"
+        >重置</button>
+        <span className="ml-auto text-sm text-gray-400">共 {filteredProjects.length} 个</span>
+      </div>
+
       <div className="bg-white rounded shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
@@ -180,7 +211,7 @@ export default function Projects() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {projects.map((p) => {
+            {filteredProjects.map((p) => {
               const allocated = getAllocatedCount(p.id);
               const pct = Math.min(Math.round((allocated / p.targetCount) * 100), 100);
               return (
@@ -226,8 +257,8 @@ export default function Projects() {
                 </tr>
               );
             })}
-            {projects.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">暂无项目</td></tr>
+            {filteredProjects.length === 0 && (
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">暂无匹配项目</td></tr>
             )}
           </tbody>
         </table>

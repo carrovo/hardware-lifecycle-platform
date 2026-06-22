@@ -1,10 +1,85 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
+import Modal from '../components/Modal';
+
+function EditProjectModal({ isOpen, onClose, project, onSave }) {
+  const [form, setForm] = useState({
+    name: project?.name || '',
+    client: project?.client || '',
+    contactPerson: project?.contactPerson || '',
+    contactPhone: project?.contactPhone || '',
+    background: project?.background || '',
+    notes: project?.notes || '',
+    targetCount: project?.targetCount || 1,
+    manager: project?.manager || '',
+  });
+
+  const f = (key) => ({ value: form[key], onChange: (e) => setForm({ ...form, [key]: e.target.value }) });
+  const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({ ...form, targetCount: Number(form.targetCount) });
+    onClose();
+  };
+
+  if (!project) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="编辑项目信息" size="lg">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">项目名称 *</label>
+            <input type="text" className={inputClass} required {...f('name')} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">目标需求量 *</label>
+            <input type="number" min="1" className={inputClass} required {...f('targetCount')} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">客户名称</label>
+            <input type="text" className={inputClass} {...f('client')} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">项目负责人</label>
+            <input type="text" className={inputClass} {...f('manager')} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">联系人</label>
+            <input type="text" className={inputClass} {...f('contactPerson')} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">联系电话</label>
+            <input type="text" className={inputClass} {...f('contactPhone')} />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">项目背景</label>
+          <textarea rows={3} className={inputClass} {...f('background')} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+          <textarea rows={2} className={inputClass} {...f('notes')} />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
 
 export default function ProjectDetail() {
   const { id } = useParams();
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
+  const { canDo } = useRole();
+  const [showEditModal, setShowEditModal] = useState(false);
+
   const { projects, deviceAllocations, devices, deliveryRecords, deviceTypes } = state;
 
   const project = projects.find((p) => p.id === id);
@@ -16,7 +91,6 @@ export default function ProjectDetail() {
     );
   }
 
-  // Get allocated device IDs for this project (deduplicated — latest allocation)
   const allocations = deviceAllocations.filter((a) => a.projectId === id);
   const allocatedDeviceIds = [...new Set(allocations.map((a) => a.deviceId))];
   const allocatedDevices = allocatedDeviceIds
@@ -39,13 +113,31 @@ export default function ProjectDetail() {
     });
   };
 
+  const handleSave = (form) => {
+    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    dispatch({
+      type: 'UPDATE_PROJECT',
+      payload: { id, ...form, updatedAt: now },
+    });
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <Link to="/projects" className="hover:text-slate-700 hover:underline">项目列表</Link>
-        <span>›</span>
-        <span className="text-gray-800 font-medium">{project.name}</span>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <Link to="/projects" className="hover:text-slate-700 hover:underline">项目列表</Link>
+          <span>›</span>
+          <span className="text-gray-800 font-medium">{project.name}</span>
+        </div>
+        {canDo('add_project') && !project.voided && (
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 text-gray-700"
+          >
+            编辑信息
+          </button>
+        )}
       </div>
 
       {/* Basic Info */}
@@ -161,6 +253,13 @@ export default function ProjectDetail() {
           </table>
         </div>
       )}
+
+      <EditProjectModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        project={project}
+        onSave={handleSave}
+      />
     </div>
   );
 }

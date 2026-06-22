@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
@@ -190,7 +191,9 @@ export default function DeviceAllocation() {
                       {a.type}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-gray-700">{getProjectName(a.projectId)}</td>
+                  <td className="px-4 py-2.5">
+                    <Link to={`/projects/${a.projectId}`} className="text-slate-700 hover:text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>{getProjectName(a.projectId)}</Link>
+                  </td>
                   <td className="px-4 py-2.5 text-gray-600">{a.allocatedBy}</td>
                   <td className="px-4 py-2.5 text-gray-400 text-xs">{a.allocatedAt}</td>
                   <td className="px-4 py-2.5 text-gray-500 text-xs">{a.notes || '—'}</td>
