@@ -453,7 +453,7 @@ export const ROLES_LIST = [
 ];
 
 export const ROLE_NAV_PERMISSIONS = {
-  '质检员':     ['/dashboard', '/materials', '/tests', '/devices'],
+  '质检员':     ['/dashboard', '/materials', '/tests', '/devices', '/work-orders'],
   '装配工':     ['/dashboard', '/assembly', '/devices', '/materials'],
   '测试员':     ['/dashboard', '/tests', '/devices'],
   '运维工程师':  ['/dashboard', '/work-orders', '/devices', '/delivery'],
