@@ -249,9 +249,9 @@ export const materialBatches = [
 // ============ Part2 & Part3 Data ============
 
 export const projects = [
-  { id: 'PROJ-001', name: '智慧工厂机器人项目', client: '宁德新能源科技有限公司', contactPerson: '刘总', contactPhone: '13800138001', background: '为宁德工厂引入智能搬运机器人，提升生产线自动化水平，降低人力成本约30%。', notes: '优先保障A栋产线交付', targetCount: 5, manager: '张三', createdAt: '2026-05-15 09:00', updatedAt: '2026-06-10 10:00' },
-  { id: 'PROJ-002', name: '医疗配送机器人项目', client: '北京协和医院', contactPerson: '王主任', contactPhone: '13900139002', background: '部署智能配送机器人于住院部，实现药品、标本、餐食的自动化配送，减少交叉感染风险。', notes: '需满足医疗级别EMC认证', targetCount: 3, manager: '李四', createdAt: '2026-05-20 10:00', updatedAt: '2026-06-12 09:00' },
-  { id: 'PROJ-003', name: '港口巡检机器人项目', client: '上海港务集团', contactPerson: '陈经理', contactPhone: '13700137003', background: '替代人工进行集装箱区域巡检，覆盖防火、防盗、设备状态监测等功能。', notes: '防护等级需IP65以上', targetCount: 4, manager: '王五', createdAt: '2026-06-01 10:00', updatedAt: '2026-06-18 14:00' },
+  { id: 'PROJ-001', name: '智魔方项目', client: '智魔方科技有限公司', contactPerson: '采购负责人', contactPhone: '13800138001', background: '为智魔方科技园区引入智能搬运机器人，提升产线自动化水平，降低人力成本约30%。', notes: '优先保障A厂房产线交付', targetCount: 5, manager: '张三', createdAt: '2026-05-15 09:00', updatedAt: '2026-06-10 10:00' },
+  { id: 'PROJ-002', name: '华熙生物项目', client: '华熙生物科技股份有限公司', contactPerson: '项目对接人', contactPhone: '13900139002', background: '为华熙生物园区部署智能物流机器人，实现原料、样品及成品的自动化配送，提升园区运营效率。', notes: '需满足生物园区洁净环境要求', targetCount: 3, manager: '李四', createdAt: '2026-05-20 10:00', updatedAt: '2026-06-12 09:00' },
+  { id: 'PROJ-003', name: '机场项目', client: '首都国际机场集团', contactPerson: '运营负责人', contactPhone: '13700137003', background: '在机场航站楼部署巡检机器人，覆盖安防巡逻、设备状态监测及旅客引导等功能。', notes: '防护等级需IP65以上，需通过民航安全认证', targetCount: 4, manager: '王五', createdAt: '2026-06-01 10:00', updatedAt: '2026-06-18 14:00' },
 ];
 
 export const deviceAllocations = [
@@ -268,11 +268,11 @@ export const deliveryRecords = [
   { id: 'DELIV-001', deviceId: 'DEV-007', projectId: 'PROJ-001', stage: '出厂检验', result: '合格', operator: '张三', recordTime: '2026-06-10 14:00', notes: '各项指标正常', address: '' },
   { id: 'DELIV-002', deviceId: 'DEV-008', projectId: 'PROJ-001', stage: '出厂检验', result: '合格', operator: '张三', recordTime: '2026-06-10 15:00', notes: '', address: '' },
   { id: 'DELIV-003', deviceId: 'DEV-009', projectId: 'PROJ-002', stage: '出厂检验', result: '合格', operator: '李四', recordTime: '2026-06-12 11:00', notes: '医疗EMC认证通过', address: '' },
-  { id: 'DELIV-004', deviceId: 'DEV-007', projectId: 'PROJ-001', stage: '现场安装调试', result: '通过', operator: '王五', recordTime: '2026-06-15 10:00', notes: '安装顺利，调试完成', address: '宁德市蕉城区工厂A栋' },
-  { id: 'DELIV-005', deviceId: 'DEV-008', projectId: 'PROJ-001', stage: '现场安装调试', result: '未通过', operator: '王五', recordTime: '2026-06-15 14:00', notes: '网络配置异常，需重新配置', address: '宁德市蕉城区工厂A栋' },
-  { id: 'DELIV-006', deviceId: 'DEV-008', projectId: 'PROJ-001', stage: '现场安装调试', result: '通过', operator: '王五', recordTime: '2026-06-16 09:00', notes: '重新配置后通过', address: '宁德市蕉城区工厂A栋' },
-  { id: 'DELIV-007', deviceId: 'DEV-009', projectId: 'PROJ-002', stage: '现场安装调试', result: '通过', operator: '赵六', recordTime: '2026-06-17 11:00', notes: '医院环境调试完成', address: '北京市东城区协和医院住院部' },
-  { id: 'DELIV-008', deviceId: 'DEV-007', projectId: 'PROJ-001', stage: '客户验收', result: '通过', operator: '张三', recordTime: '2026-06-18 15:00', notes: '客户满意，签署验收单', address: '宁德市蕉城区工厂A栋' },
+  { id: 'DELIV-004', deviceId: 'DEV-007', projectId: 'PROJ-001', stage: '现场安装调试', result: '通过', operator: '王五', recordTime: '2026-06-15 10:00', notes: '安装顺利，调试完成', address: '北京市朝阳区智魔方科技园A厂房' },
+  { id: 'DELIV-005', deviceId: 'DEV-008', projectId: 'PROJ-001', stage: '现场安装调试', result: '未通过', operator: '王五', recordTime: '2026-06-15 14:00', notes: '网络配置异常，需重新配置', address: '北京市朝阳区智魔方科技园A厂房' },
+  { id: 'DELIV-006', deviceId: 'DEV-008', projectId: 'PROJ-001', stage: '现场安装调试', result: '通过', operator: '王五', recordTime: '2026-06-16 09:00', notes: '重新配置后通过', address: '北京市朝阳区智魔方科技园A厂房' },
+  { id: 'DELIV-007', deviceId: 'DEV-009', projectId: 'PROJ-002', stage: '现场安装调试', result: '通过', operator: '赵六', recordTime: '2026-06-17 11:00', notes: '医院环境调试完成', address: '北京市通州区华熙生物园区实验楼' },
+  { id: 'DELIV-008', deviceId: 'DEV-007', projectId: 'PROJ-001', stage: '客户验收', result: '通过', operator: '张三', recordTime: '2026-06-18 15:00', notes: '客户满意，签署验收单', address: '北京市朝阳区智魔方科技园A厂房' },
   { id: 'DELIV-009', deviceId: 'DEV-012', projectId: 'PROJ-003', stage: '出厂检验', result: '合格', operator: '王五', recordTime: '2026-04-09 11:00', notes: '防护等级IP65验证通过', address: '' },
 ];
 
@@ -282,7 +282,7 @@ export const alerts = [
     alertTime: '2026-06-19 03:22', source: '系统自动', severity: '轻微',
     description: '电池电量低于20%，建议及时充电',
     status: '已解决', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-19 06:00', fromStatus: '待处理', toStatus: '处理中', notes: '已收到告警，安排现场充电' },
       { operator: '赵六', time: '2026-06-19 08:30', fromStatus: '处理中', toStatus: '已解决', notes: '设备已充电完成，电量恢复至78%' },
@@ -293,7 +293,7 @@ export const alerts = [
     alertTime: '2026-06-20 14:15', source: '系统自动', severity: '严重',
     description: '关节3电机过热，温度达到92°C，超过阈值',
     status: '工单处理中', workOrderId: 'WO-001',
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '陈厂长', role: '厂长' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '建平', role: '厂长' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-20 14:30', fromStatus: '待处理', toStatus: '已生成工单', notes: '严重告警，已生成维修工单 WO-001' },
     ],
@@ -303,7 +303,7 @@ export const alerts = [
     alertTime: '2026-06-20 22:40', source: '系统自动', severity: '轻微',
     description: '存储空间使用率超过70%，建议清理日志',
     status: '待处理', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
     processLogs: [],
   },
   {
@@ -311,7 +311,7 @@ export const alerts = [
     alertTime: '2026-06-21 01:05', source: '系统自动', severity: '严重',
     description: '预控模组通信中断超过5分钟',
     status: '已生成工单', workOrderId: 'WO-002',
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '陈厂长', role: '厂长' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '建平', role: '厂长' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-21 01:10', fromStatus: '待处理', toStatus: '已生成工单', notes: '严重告警，已生成维修工单 WO-002' },
     ],
@@ -321,7 +321,7 @@ export const alerts = [
     alertTime: '2026-06-18 11:30', source: '人工上报', severity: '轻微',
     description: '末端执行器抓取精度下降，误差约±2mm',
     status: '已解决', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
     processLogs: [
       { operator: '李四', time: '2026-06-18 13:00', fromStatus: '待处理', toStatus: '处理中', notes: '已到现场，检查末端传感器' },
       { operator: '李四', time: '2026-06-18 16:00', fromStatus: '处理中', toStatus: '已解决', notes: '重新标定末端执行器，精度恢复正常范围±0.8mm' },
@@ -332,7 +332,7 @@ export const alerts = [
     alertTime: '2026-06-21 07:55', source: '人工上报', severity: '严重',
     description: '设备离线超过8小时，现场人员无法连接',
     status: '工单处理中', workOrderId: 'WO-003',
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '陈厂长', role: '厂长' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '建平', role: '厂长' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-21 08:00', fromStatus: '待处理', toStatus: '已生成工单', notes: '设备完全离线，严重故障，已生成维修工单 WO-003' },
     ],
@@ -342,7 +342,7 @@ export const alerts = [
     alertTime: '2026-06-21 06:10', source: '系统自动', severity: '轻微',
     description: '导航模块定位漂移，偏差超过阈值0.3m',
     status: '处理中', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-21 07:00', fromStatus: '待处理', toStatus: '处理中', notes: '已远程连接，正在排查定位漂移原因，可能是地图数据老化' },
     ],
@@ -352,7 +352,7 @@ export const alerts = [
     alertTime: '2026-06-20 18:30', source: '系统自动', severity: '轻微',
     description: 'CPU使用率持续超过85%，任务响应延迟',
     status: '处理中', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-20 19:15', fromStatus: '待处理', toStatus: '处理中', notes: '已登录后台，发现后台日志服务异常占用CPU，正在清理' },
     ],
@@ -362,7 +362,7 @@ export const alerts = [
     alertTime: '2026-06-22 02:05', source: '系统自动', severity: '轻微',
     description: '机械臂关节润滑度不足，运行摩擦力增大',
     status: '待处理', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
     processLogs: [],
   },
   {
@@ -370,7 +370,7 @@ export const alerts = [
     alertTime: '2026-06-22 07:40', source: '人工上报', severity: '严重',
     description: '主控板过压保护触发，设备紧急停机，无法远程复位',
     status: '待处理', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '陈厂长', role: '厂长' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '建平', role: '厂长' }],
     processLogs: [],
   },
   {
@@ -378,7 +378,7 @@ export const alerts = [
     alertTime: '2026-06-10 14:20', source: '系统自动', severity: '严重',
     description: '关节2位置反馈异常，编码器读数跳变',
     status: '已关闭', workOrderId: 'WO-004',
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '陈厂长', role: '厂长' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '建平', role: '厂长' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-10 14:30', fromStatus: '待处理', toStatus: '已生成工单', notes: '编码器故障，严重级别，已生成工单 WO-004' },
       { operator: '李四', time: '2026-06-18 17:00', fromStatus: '工单处理中', toStatus: '已关闭', notes: '对应工单 WO-004 已关闭，设备恢复正常' },
@@ -389,7 +389,7 @@ export const alerts = [
     alertTime: '2026-06-15 08:55', source: '系统自动', severity: '严重',
     description: '导航地图加载失败，设备反复尝试回原点',
     status: '已关闭', workOrderId: 'WO-005',
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-15 09:00', fromStatus: '待处理', toStatus: '已生成工单', notes: '导航失效，严重影响运营，已生成工单 WO-005' },
       { operator: '张三', time: '2026-06-15 14:00', fromStatus: '工单处理中', toStatus: '已关闭', notes: '对应工单 WO-005 已关闭，远程推送地图固件后恢复正常' },
@@ -431,8 +431,8 @@ export const FEISHU_USERS = [
   { id: 'u2', name: '李四', avatar: 'L', dept: '质检部', role: '质检员' },
   { id: 'u3', name: '王五', avatar: 'W', dept: '测试部', role: '测试员' },
   { id: 'u4', name: '赵六', avatar: 'Z', dept: '运维部', role: '运维工程师' },
-  { id: 'u5', name: '陈厂长', avatar: 'C', dept: '管理部', role: '厂长' },
-  { id: 'u6', name: '刘项目', avatar: 'L', dept: '项目部', role: '项目负责人' },
+  { id: 'u5', name: '建平', avatar: 'J', dept: '管理部', role: '厂长' },
+  { id: 'u6', name: '志强', avatar: 'Z', dept: '项目部', role: '项目负责人' },
 ];
 
 export const ROLES_LIST = [
