@@ -282,7 +282,7 @@ export const alerts = [
     alertTime: '2026-06-19 03:22', source: '系统自动', severity: '轻微',
     description: '电池电量低于20%，建议及时充电',
     status: '已解决', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '蔡八', role: '项目负责人' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-19 06:00', fromStatus: '待处理', toStatus: '处理中', notes: '已收到告警，安排现场充电' },
       { operator: '赵六', time: '2026-06-19 08:30', fromStatus: '处理中', toStatus: '已解决', notes: '设备已充电完成，电量恢复至78%' },
@@ -293,7 +293,7 @@ export const alerts = [
     alertTime: '2026-06-20 14:15', source: '系统自动', severity: '严重',
     description: '关节3电机过热，温度达到92°C，超过阈值',
     status: '工单处理中', workOrderId: 'WO-001',
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '建平', role: '厂长' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '李七', role: '厂长' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-20 14:30', fromStatus: '待处理', toStatus: '已生成工单', notes: '严重告警，已生成维修工单 WO-001' },
     ],
@@ -303,7 +303,7 @@ export const alerts = [
     alertTime: '2026-06-20 22:40', source: '系统自动', severity: '轻微',
     description: '存储空间使用率超过70%，建议清理日志',
     status: '待处理', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '蔡八', role: '项目负责人' }],
     processLogs: [],
   },
   {
@@ -311,7 +311,7 @@ export const alerts = [
     alertTime: '2026-06-21 01:05', source: '系统自动', severity: '严重',
     description: '预控模组通信中断超过5分钟',
     status: '已生成工单', workOrderId: 'WO-002',
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '建平', role: '厂长' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '李七', role: '厂长' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-21 01:10', fromStatus: '待处理', toStatus: '已生成工单', notes: '严重告警，已生成维修工单 WO-002' },
     ],
@@ -321,7 +321,7 @@ export const alerts = [
     alertTime: '2026-06-18 11:30', source: '人工上报', severity: '轻微',
     description: '末端执行器抓取精度下降，误差约±2mm',
     status: '已解决', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '蔡八', role: '项目负责人' }],
     processLogs: [
       { operator: '李四', time: '2026-06-18 13:00', fromStatus: '待处理', toStatus: '处理中', notes: '已到现场，检查末端传感器' },
       { operator: '李四', time: '2026-06-18 16:00', fromStatus: '处理中', toStatus: '已解决', notes: '重新标定末端执行器，精度恢复正常范围±0.8mm' },
@@ -332,7 +332,7 @@ export const alerts = [
     alertTime: '2026-06-21 07:55', source: '人工上报', severity: '严重',
     description: '设备离线超过8小时，现场人员无法连接',
     status: '工单处理中', workOrderId: 'WO-003',
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '建平', role: '厂长' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '李七', role: '厂长' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-21 08:00', fromStatus: '待处理', toStatus: '已生成工单', notes: '设备完全离线，严重故障，已生成维修工单 WO-003' },
     ],
@@ -342,7 +342,7 @@ export const alerts = [
     alertTime: '2026-06-21 06:10', source: '系统自动', severity: '轻微',
     description: '导航模块定位漂移，偏差超过阈值0.3m',
     status: '处理中', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '蔡八', role: '项目负责人' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-21 07:00', fromStatus: '待处理', toStatus: '处理中', notes: '已远程连接，正在排查定位漂移原因，可能是地图数据老化' },
     ],
@@ -352,7 +352,7 @@ export const alerts = [
     alertTime: '2026-06-20 18:30', source: '系统自动', severity: '轻微',
     description: 'CPU使用率持续超过85%，任务响应延迟',
     status: '处理中', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '蔡八', role: '项目负责人' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-20 19:15', fromStatus: '待处理', toStatus: '处理中', notes: '已登录后台，发现后台日志服务异常占用CPU，正在清理' },
     ],
@@ -362,7 +362,7 @@ export const alerts = [
     alertTime: '2026-06-22 02:05', source: '系统自动', severity: '轻微',
     description: '机械臂关节润滑度不足，运行摩擦力增大',
     status: '待处理', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '蔡八', role: '项目负责人' }],
     processLogs: [],
   },
   {
@@ -370,7 +370,7 @@ export const alerts = [
     alertTime: '2026-06-22 07:40', source: '人工上报', severity: '严重',
     description: '主控板过压保护触发，设备紧急停机，无法远程复位',
     status: '待处理', workOrderId: null,
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '建平', role: '厂长' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '李七', role: '厂长' }],
     processLogs: [],
   },
   {
@@ -378,7 +378,7 @@ export const alerts = [
     alertTime: '2026-06-10 14:20', source: '系统自动', severity: '严重',
     description: '关节2位置反馈异常，编码器读数跳变',
     status: '已关闭', workOrderId: 'WO-004',
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '建平', role: '厂长' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '李七', role: '厂长' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-10 14:30', fromStatus: '待处理', toStatus: '已生成工单', notes: '编码器故障，严重级别，已生成工单 WO-004' },
       { operator: '李四', time: '2026-06-18 17:00', fromStatus: '工单处理中', toStatus: '已关闭', notes: '对应工单 WO-004 已关闭，设备恢复正常' },
@@ -389,7 +389,7 @@ export const alerts = [
     alertTime: '2026-06-15 08:55', source: '系统自动', severity: '严重',
     description: '导航地图加载失败，设备反复尝试回原点',
     status: '已关闭', workOrderId: 'WO-005',
-    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '志强', role: '项目负责人' }],
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '蔡八', role: '项目负责人' }],
     processLogs: [
       { operator: '赵六', time: '2026-06-15 09:00', fromStatus: '待处理', toStatus: '已生成工单', notes: '导航失效，严重影响运营，已生成工单 WO-005' },
       { operator: '张三', time: '2026-06-15 14:00', fromStatus: '工单处理中', toStatus: '已关闭', notes: '对应工单 WO-005 已关闭，远程推送地图固件后恢复正常' },
@@ -431,8 +431,8 @@ export const FEISHU_USERS = [
   { id: 'u2', name: '李四', avatar: 'L', dept: '质检部', role: '质检员' },
   { id: 'u3', name: '王五', avatar: 'W', dept: '测试部', role: '测试员' },
   { id: 'u4', name: '赵六', avatar: 'Z', dept: '运维部', role: '运维工程师' },
-  { id: 'u5', name: '建平', avatar: 'J', dept: '管理部', role: '厂长' },
-  { id: 'u6', name: '志强', avatar: 'Z', dept: '项目部', role: '项目负责人' },
+  { id: 'u5', name: '李七', avatar: 'L', dept: '管理部', role: '厂长' },
+  { id: 'u6', name: '蔡八', avatar: 'C', dept: '项目部', role: '项目负责人' },
 ];
 
 export const ROLES_LIST = [
