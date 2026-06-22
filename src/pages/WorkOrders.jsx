@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 
@@ -56,6 +57,7 @@ function AddWorkOrderModal({ isOpen, onClose, onSave, devices, currentUser }) {
 
 export default function WorkOrders() {
   const { state, dispatch } = useApp();
+  const { canDo } = useRole();
   const [searchParams] = useSearchParams();
   const [filterStatus, setFilterStatus] = useState('全部');
   const [expandedId, setExpandedId] = useState(null);
@@ -123,10 +125,12 @@ export default function WorkOrders() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-gray-800">维修工单</h1>
-        <button onClick={() => setShowModal(true)}
-          className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
-          + 新增工单
-        </button>
+        {canDo('add_work_order') && (
+          <button onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
+            + 新增工单
+          </button>
+        )}
       </div>
 
       {/* Filter chips */}

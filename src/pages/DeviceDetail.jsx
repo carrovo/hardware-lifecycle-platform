@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
 import OperationLog from '../components/OperationLog';
 
@@ -56,9 +58,47 @@ function StageStepper({ status }) {
   );
 }
 
+function VoidTestRecordInline({ record, onVoid }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="px-2 py-0.5 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50">
+        作废
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <input
+        type="text"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="填写作废原因..."
+        className="border border-gray-300 rounded px-2 py-1 text-xs w-48 focus:outline-none focus:border-red-400"
+      />
+      <button
+        onClick={() => { if (reason.trim()) { onVoid(record, reason.trim()); setOpen(false); setReason(''); } }}
+        className="px-2 py-1 text-xs text-white bg-red-600 rounded hover:bg-red-700">
+        确认
+      </button>
+      <button
+        onClick={() => { setOpen(false); setReason(''); }}
+        className="px-2 py-1 text-xs text-gray-600 border border-gray-300 rounded hover:bg-gray-50">
+        取消
+      </button>
+    </div>
+  );
+}
+
 export default function DeviceDetail() {
   const { id } = useParams();
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
+  const { canDo } = useRole();
 
   const device = state.devices.find((d) => d.id === id);
 
@@ -85,6 +125,27 @@ export default function DeviceDetail() {
 
   const getMaterial = (materialId) =>
     state.materials.find((m) => m.id === materialId);
+
+  const handleVoidTestRecord = (record, reason) => {
+    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    dispatch({
+      type: 'UPDATE_TEST_RECORD',
+      payload: { id: record.id, voided: true, voidReason: reason, voidedAt: now },
+    });
+    dispatch({
+      type: 'ADD_OPERATION_LOG',
+      payload: {
+        id: `LOG-${Date.now()}`,
+        deviceId: id,
+        operator: state.currentUser,
+        timestamp: now,
+        actionType: '作废测试记录',
+        fromStatus: device.status,
+        toStatus: device.status,
+        notes: `作废测试记录 ${record.id}，原因：${reason}`,
+      },
+    });
+  };
 
   return (
     <div className="p-6 space-y-4">
@@ -181,22 +242,38 @@ export default function DeviceDetail() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['测试类型', '结果', '测试员', '测试时间', '报告文件', '备注'].map((h) => (
+                {['测试类型', '结果', '测试员', '测试时间', '报告文件', '备注', canDo('void_test_record') ? '操作' : ''].filter(Boolean).map((h) => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {testRecords.map((t) => (
-                <tr key={t.id} className={`hover:bg-gray-50 ${t.result === '不合格' ? 'bg-red-50' : ''}`}>
-                  <td className="px-4 py-2 text-gray-700">{t.testType}</td>
+                <tr key={t.id} className={`${t.voided ? 'bg-gray-50 opacity-60' : t.result === '不合格' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+                  <td className={`px-4 py-2 ${t.voided ? 'line-through text-gray-400' : 'text-gray-700'}`}>{t.testType}</td>
                   <td className="px-4 py-2">
-                    <StatusBadge status={t.result === '合格' ? '合格' : '不合格'} />
+                    {t.voided ? (
+                      <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">已作废</span>
+                    ) : (
+                      <StatusBadge status={t.result === '合格' ? '合格' : '不合格'} />
+                    )}
                   </td>
-                  <td className="px-4 py-2 text-gray-600">{t.operator}</td>
-                  <td className="px-4 py-2 text-gray-500 text-xs whitespace-nowrap">{t.testTime}</td>
+                  <td className={`px-4 py-2 ${t.voided ? 'text-gray-400' : 'text-gray-600'}`}>{t.operator}</td>
+                  <td className={`px-4 py-2 text-xs whitespace-nowrap ${t.voided ? 'line-through text-gray-400' : 'text-gray-500'}`}>{t.testTime}</td>
                   <td className="px-4 py-2 text-gray-400 text-xs font-mono">{t.reportFile || '—'}</td>
                   <td className="px-4 py-2 text-gray-400 text-xs">{t.notes || '—'}</td>
+                  {canDo('void_test_record') && (
+                    <td className="px-4 py-2">
+                      {t.voided ? (
+                        <div className="text-xs text-gray-400">
+                          <div>{t.voidedAt}</div>
+                          <div className="truncate max-w-[120px]" title={t.voidReason}>{t.voidReason}</div>
+                        </div>
+                      ) : (
+                        <VoidTestRecordInline record={t} onVoid={handleVoidTestRecord} />
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

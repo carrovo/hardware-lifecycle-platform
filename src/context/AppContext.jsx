@@ -14,6 +14,7 @@ import {
   alerts as initAlerts,
   workOrders as initWorkOrders,
   retirements as initRetirements,
+  FEISHU_USERS,
 } from '../data/mockData';
 
 const AppContext = createContext(null);
@@ -34,12 +35,15 @@ const initialState = {
   workOrders: initWorkOrders,
   retirements: initRetirements,
   currentUser: '张三',
+  currentUserId: 'u1',
 };
 
 function appReducer(state, action) {
   switch (action.type) {
-    case 'SET_CURRENT_USER':
-      return { ...state, currentUser: action.payload };
+    case 'SET_CURRENT_USER': {
+      const user = FEISHU_USERS.find((u) => u.id === action.payload);
+      return { ...state, currentUserId: action.payload, currentUser: user?.name || state.currentUser };
+    }
 
     case 'ADD_MATERIAL':
       return { ...state, materials: [...state.materials, action.payload] };
@@ -156,6 +160,22 @@ function appReducer(state, action) {
 
     case 'ADD_RETIREMENT':
       return { ...state, retirements: [...state.retirements, action.payload] };
+
+    case 'UPDATE_MODULE_TYPE':
+      return {
+        ...state,
+        moduleTypes: state.moduleTypes.map((m) =>
+          m.id === action.payload.id ? { ...m, ...action.payload } : m
+        ),
+      };
+
+    case 'UPDATE_DEVICE_TYPE':
+      return {
+        ...state,
+        deviceTypes: state.deviceTypes.map((d) =>
+          d.id === action.payload.id ? { ...d, ...action.payload } : d
+        ),
+      };
 
     default:
       return state;

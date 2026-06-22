@@ -217,3 +217,40 @@ export const retirements = [
   { id: 'RET-001', deviceId: 'DEV-014', deviceSN: 'SN-DEV-014', reason: '使用年限超过3年，电机磨损严重，维修成本超过整机价值的60%，决定退役', retiredAt: '2026-05-30 14:00', operator: '李四' },
   { id: 'RET-002', deviceId: 'DEV-015', deviceSN: 'SN-DEV-015', reason: '项目结束，设备长期闲置，经评估无转项目价值，按规程退役', retiredAt: '2026-06-01 10:00', operator: '王五' },
 ];
+
+export const FEISHU_USERS = [
+  { id: 'u1', name: '张三', avatar: 'Z', dept: '制造部', role: '装配工' },
+  { id: 'u2', name: '李四', avatar: 'L', dept: '质检部', role: '质检员' },
+  { id: 'u3', name: '王五', avatar: 'W', dept: '测试部', role: '测试员' },
+  { id: 'u4', name: '赵六', avatar: 'Z', dept: '运维部', role: '运维' },
+  { id: 'u5', name: '陈厂长', avatar: 'C', dept: '管理部', role: '厂长' },
+  { id: 'u6', name: '刘项目', avatar: 'L', dept: '项目部', role: '项目负责人' },
+];
+
+export const ROLES_LIST = [
+  '质检员', '装配工', '测试员', '运维', '项目负责人', '厂长', '现场工程师', '维修工程师', '管理员',
+];
+
+export const ROLE_NAV_PERMISSIONS = {
+  '质检员':     ['/dashboard', '/materials', '/tests', '/devices'],
+  '装配工':     ['/dashboard', '/assembly', '/devices', '/materials'],
+  '测试员':     ['/dashboard', '/tests', '/devices'],
+  '运维':       ['/dashboard', '/operations', '/alerts', '/work-orders', '/devices'],
+  '项目负责人':  ['/dashboard', '/projects', '/device-allocation', '/delivery', '/devices', '/production-plan'],
+  '厂长':       ['/dashboard', '/materials', '/assembly', '/tests', '/devices', '/production-plan', '/device-types', '/projects', '/device-allocation', '/delivery', '/operations', '/alerts', '/work-orders', '/retirement'],
+  '现场工程师':  ['/dashboard', '/delivery', '/operations', '/alerts', '/devices'],
+  '维修工程师':  ['/dashboard', '/work-orders', '/devices'],
+  '管理员':     ['/dashboard', '/materials', '/assembly', '/tests', '/devices', '/production-plan', '/device-types', '/projects', '/device-allocation', '/delivery', '/operations', '/alerts', '/work-orders', '/retirement', '/users', '/roles'],
+};
+
+export const ROLE_ACTION_PERMISSIONS = {
+  '质检员':     ['add_material_batch', 'void_test_record'],
+  '装配工':     ['add_assembly'],
+  '测试员':     ['add_test_record', 'void_test_record'],
+  '运维':       ['add_work_order', 'update_alert'],
+  '项目负责人':  ['add_project', 'add_device_allocation', 'add_delivery', 'void_project'],
+  '厂长':       ['add_material_batch', 'add_assembly', 'add_test_record', 'void_test_record', 'add_production_plan', 'add_project', 'add_device_allocation', 'add_delivery', 'add_work_order', 'add_retirement', 'add_device_type', 'add_module_type', 'edit_device_type', 'edit_module_type', 'void_project'],
+  '现场工程师':  ['add_delivery', 'update_alert'],
+  '维修工程师':  ['add_work_order', 'update_work_order'],
+  '管理员':     ['add_material_batch', 'add_assembly', 'add_test_record', 'void_test_record', 'add_production_plan', 'add_project', 'add_device_allocation', 'add_delivery', 'add_work_order', 'add_retirement', 'add_device_type', 'add_module_type', 'edit_device_type', 'edit_module_type', 'void_project', 'manage_users', 'manage_roles'],
+};

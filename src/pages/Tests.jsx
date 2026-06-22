@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 
 const TEST_TYPES = ['功能测试', '老化测试', '终测'];
@@ -138,6 +139,7 @@ function TestRecordModal({ isOpen, onClose, onSubmit, testType, eligibleDevices,
 
 export default function Tests() {
   const { state, dispatch } = useApp();
+  const { canDo } = useRole();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(0);
   const [showModal, setShowModal] = useState(false);
@@ -172,7 +174,7 @@ export default function Tests() {
   });
 
   const cols = [
-    '', '记录ID', '设备SN', '测试结果', '测试时间', '备注', '记录有效性',
+    '', '记录ID', '设备SN', '测试结果', '测试时间', '备注',
   ];
 
   const handleSubmitTest = (form) => {
@@ -188,7 +190,6 @@ export default function Tests() {
       ...(currentTestType === '老化测试' ? {
         duration: form.duration, peakTemp: form.peakTemp, anomalyCount: form.anomalyCount,
       } : {}),
-      status: '有效',
     }});
 
     dispatch({ type: 'UPDATE_DEVICE', payload: { id: form.deviceId, status: nextStatus, updatedAt: now } });
@@ -206,10 +207,12 @@ export default function Tests() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-gray-800">测试中心</h1>
-        <button onClick={() => setShowModal(true)}
-          className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
-          + 新增测试记录
-        </button>
+        {canDo('add_test_record') && (
+          <button onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
+            + 新增测试记录
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -282,23 +285,25 @@ export default function Tests() {
                   <tr key={r.id}
                     onClick={() => setExpandedId(isExpanded ? null : r.id)}
                     className={`cursor-pointer transition-colors border-t border-gray-100 ${
-                      isExpanded ? 'bg-slate-50' : r.result === '不合格' ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-blue-50'
+                      r.voided ? 'bg-gray-50 opacity-60'
+                      : isExpanded ? 'bg-slate-50'
+                      : r.result === '不合格' ? 'bg-red-50 hover:bg-red-100'
+                      : 'hover:bg-blue-50'
                     }`}>
                     <td className="px-3 py-2.5 text-gray-400 text-xs w-6">
                       <span>{isExpanded ? '▼' : '▶'}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-gray-400 font-mono text-xs">{r.id}</td>
-                    <td className="px-3 py-2.5 font-medium text-gray-800 font-mono text-xs">{devSN}</td>
-                    <td className="px-3 py-2.5"><ResultBadge result={r.result} /></td>
-                    <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{r.testTime}</td>
-                    <td className="px-3 py-2.5 text-gray-400 text-xs max-w-xs truncate">{r.notes || '—'}</td>
+                    <td className={`px-3 py-2.5 font-mono text-xs ${r.voided ? 'line-through text-gray-400' : 'text-gray-400'}`}>{r.id}</td>
+                    <td className={`px-3 py-2.5 font-medium font-mono text-xs ${r.voided ? 'line-through text-gray-400' : 'text-gray-800'}`}>{devSN}</td>
                     <td className="px-3 py-2.5">
-                      <span className={`text-xs px-1.5 py-0.5 rounded font-normal ${
-                        r.status === '有效' ? 'text-gray-400' : 'text-gray-300 line-through'
-                      }`}>
-                        {r.status}
-                      </span>
+                      {r.voided ? (
+                        <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">已作废</span>
+                      ) : (
+                        <ResultBadge result={r.result} />
+                      )}
                     </td>
+                    <td className={`px-3 py-2.5 text-xs whitespace-nowrap ${r.voided ? 'line-through text-gray-400' : 'text-gray-500'}`}>{r.testTime}</td>
+                    <td className={`px-3 py-2.5 text-xs max-w-xs truncate ${r.voided ? 'text-gray-300' : 'text-gray-400'}`}>{r.notes || '—'}</td>
                   </tr>
                   {isExpanded && (
                     <tr key={`${r.id}-expand`}>

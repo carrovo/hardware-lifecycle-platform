@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 
@@ -78,6 +80,7 @@ function AddDeliveryModal({ isOpen, onClose, onSave, stage, devices, projects })
 
 export default function Delivery() {
   const { state, dispatch } = useApp();
+  const { canDo } = useRole();
   const [activeTab, setActiveTab] = useState('出厂检验');
   const [showModal, setShowModal] = useState(false);
 
@@ -141,10 +144,12 @@ export default function Delivery() {
           <span className="text-green-600 font-medium">{passResult}: {passCount}</span>
           <span className="text-red-500 font-medium">{failResult}: {failCount}</span>
         </div>
-        <button onClick={() => setShowModal(true)}
-          className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
-          + 新增记录
-        </button>
+        {canDo('add_delivery') && (
+          <button onClick={() => setShowModal(true)}
+            className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
+            + 新增记录
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded shadow-sm overflow-hidden">
@@ -160,7 +165,11 @@ export default function Delivery() {
             {filteredRecords.map((r) => (
               <tr key={r.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5 text-gray-400 text-xs">{r.recordTime}</td>
-                <td className="px-4 py-2.5 font-mono text-xs text-gray-800 font-medium">{getDeviceSN(r.deviceId)}</td>
+                <td className="px-4 py-2.5 font-mono text-xs font-medium">
+                  <Link to={`/devices/${r.deviceId}`} className="text-slate-700 hover:text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
+                    {getDeviceSN(r.deviceId)}
+                  </Link>
+                </td>
                 <td className="px-4 py-2.5 text-gray-600">{r.projectId ? getProjectName(r.projectId) : '—'}</td>
                 <td className="px-4 py-2.5"><StatusBadge status={r.result} /></td>
                 <td className="px-4 py-2.5 text-gray-600">{r.operator || '—'}</td>

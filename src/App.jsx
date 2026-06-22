@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
+import { RoleProvider } from './context/RoleContext';
 import Layout from './components/Layout';
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ProductionPlan from './pages/ProductionPlan';
 import DeviceTypes from './pages/DeviceTypes';
@@ -17,6 +19,8 @@ import Operations from './pages/Operations';
 import Alerts from './pages/Alerts';
 import WorkOrders from './pages/WorkOrders';
 import Retirement from './pages/Retirement';
+import Users from './pages/Users';
+import Roles from './pages/Roles';
 
 function AppRoutes() {
   return (
@@ -39,6 +43,8 @@ function AppRoutes() {
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/work-orders" element={<WorkOrders />} />
         <Route path="/retirement" element={<Retirement />} />
+        <Route path="/users" element={<Users />} />
+        <Route path="/roles" element={<Roles />} />
       </Routes>
     </Layout>
   );
@@ -47,9 +53,14 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <AppProvider>
-        <AppRoutes />
-      </AppProvider>
+      <RoleProvider>
+        <AppProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/*" element={<AppRoutes />} />
+          </Routes>
+        </AppProvider>
+      </RoleProvider>
     </BrowserRouter>
   );
 }

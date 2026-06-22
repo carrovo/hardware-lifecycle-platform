@@ -74,12 +74,12 @@ export default function Dashboard() {
 
   const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
 
-  const funcPassed  = testRecords.filter((t) => t.testType === '功能测试' && t.result === '合格').length;
-  const funcTotal   = testRecords.filter((t) => t.testType === '功能测试').length;
-  const burnPassed  = testRecords.filter((t) => t.testType === '老化测试' && t.result === '合格').length;
-  const burnTotal   = testRecords.filter((t) => t.testType === '老化测试').length;
-  const finalPassed = testRecords.filter((t) => t.testType === '终测' && t.result === '合格').length;
-  const finalTotal  = testRecords.filter((t) => t.testType === '终测').length;
+  const funcPassed  = testRecords.filter((t) => t.testType === '功能测试' && t.result === '合格' && !t.voided).length;
+  const funcTotal   = testRecords.filter((t) => t.testType === '功能测试' && !t.voided).length;
+  const burnPassed  = testRecords.filter((t) => t.testType === '老化测试' && t.result === '合格' && !t.voided).length;
+  const burnTotal   = testRecords.filter((t) => t.testType === '老化测试' && !t.voided).length;
+  const finalPassed = testRecords.filter((t) => t.testType === '终测' && t.result === '合格' && !t.voided).length;
+  const finalTotal  = testRecords.filter((t) => t.testType === '终测' && !t.voided).length;
   const inspPassed  = materials.filter((m) => m.inspectionResult === '合格' || m.inspectionResult === '特批使用').length;
   const inspTotal   = materials.length;
 
@@ -96,7 +96,7 @@ export default function Dashboard() {
   const wipTotal = Object.values(wipCounts).reduce((a, b) => a + b, 0) || 1;
 
   const recentFails = testRecords
-    .filter((t) => t.result === '不合格')
+    .filter((t) => t.result === '不合格' && !t.voided)
     .slice(-6)
     .reverse();
 
@@ -178,7 +178,7 @@ export default function Dashboard() {
             {recentFails.length > 0 ? (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-2">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-red-600 font-bold text-xl">{testRecords.filter((t) => t.result === '不合格').length}</span>
+                  <span className="text-red-600 font-bold text-xl">{testRecords.filter((t) => t.result === '不合格' && !t.voided).length}</span>
                   <span className="text-sm text-red-700">条累计不合格</span>
                 </div>
                 {recentFails.map((r) => (

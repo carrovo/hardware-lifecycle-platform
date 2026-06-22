@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 
 function AddProjectModal({ isOpen, onClose, onSave }) {
@@ -69,12 +70,56 @@ function AddProjectModal({ isOpen, onClose, onSave }) {
   );
 }
 
+function VoidProjectModal({ isOpen, onClose, onConfirm, project, allocatedCount }) {
+  const [reason, setReason] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!reason.trim()) return;
+    onConfirm(reason.trim());
+    setReason('');
+    onClose();
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="作废项目">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="text-sm text-gray-700">
+          确认作废项目 <span className="font-semibold">「{project?.name}」</span>？
+        </div>
+        {allocatedCount > 0 && (
+          <div className="bg-amber-50 border border-amber-300 rounded p-3 text-sm text-amber-800">
+            该项目当前已分配 <span className="font-bold">{allocatedCount}</span> 台设备，作废后这些设备的项目关联将失效，请确认已妥善处理。
+          </div>
+        )}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">作废原因 *</label>
+          <textarea
+            rows={3}
+            required
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="请填写作废原因..."
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500"
+          />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button type="submit" className="px-4 py-2 text-sm text-white bg-red-600 rounded hover:bg-red-700">确认作废</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export default function Projects() {
   const { state, dispatch } = useApp();
+  const { canDo } = useRole();
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
+  const [voidTarget, setVoidTarget] = useState(null);
 
-  const { projects, deviceAllocations, devices } = state;
+  const { projects, deviceAllocations } = state;
 
   const getAllocatedCount = (projectId) => {
     const allocated = deviceAllocations
@@ -96,21 +141,40 @@ export default function Projects() {
     });
   };
 
+  const handleVoid = (reason) => {
+    if (!voidTarget) return;
+    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    dispatch({
+      type: 'UPDATE_PROJECT',
+      payload: {
+        id: voidTarget.id,
+        voided: true,
+        voidReason: reason,
+        voidedAt: now,
+        updatedAt: now,
+      },
+    });
+  };
+
+  const activeProjects = projects.filter((p) => !p.voided);
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-gray-800">项目列表</h1>
-        <button onClick={() => setShowModal(true)}
-          className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
-          + 新增项目
-        </button>
+        {canDo('add_project') && (
+          <button onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
+            + 新增项目
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {['项目名称', '客户', '目标需求量', '已分配/目标', '项目负责人', '创建时间'].map((h) => (
+              {['项目名称', '客户', '目标需求量', '已分配/目标', '项目负责人', '创建时间', canDo('void_project') ? '操作' : ''].filter(Boolean).map((h) => (
                 <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
               ))}
             </tr>
@@ -122,34 +186,61 @@ export default function Projects() {
               return (
                 <tr key={p.id}
                   onClick={() => navigate(`/projects/${p.id}`)}
-                  className="hover:bg-blue-50 cursor-pointer transition-colors">
-                  <td className="px-4 py-3 font-semibold text-slate-800">{p.name}</td>
+                  className={`hover:bg-blue-50 cursor-pointer transition-colors ${p.voided ? 'opacity-60' : ''}`}>
+                  <td className="px-4 py-3 font-semibold text-slate-800">
+                    <span className={p.voided ? 'line-through text-gray-400' : ''}>{p.name}</span>
+                    {p.voided && (
+                      <span className="ml-2 text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded font-normal">已作废</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-600">{p.client || '—'}</td>
                   <td className="px-4 py-3 text-gray-700 font-medium">{p.targetCount} 台</td>
                   <td className="px-4 py-3 min-w-[160px]">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all ${pct >= 100 ? 'bg-green-500' : pct > 50 ? 'bg-blue-500' : 'bg-amber-400'}`}
-                          style={{ width: `${pct}%` }}
-                        />
+                    {p.voided ? (
+                      <span className="text-xs text-gray-400">—</span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-200 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full transition-all ${pct >= 100 ? 'bg-green-500' : pct > 50 ? 'bg-blue-500' : 'bg-amber-400'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-medium text-gray-600 whitespace-nowrap">{allocated}/{p.targetCount}</span>
                       </div>
-                      <span className="text-xs font-medium text-gray-600 whitespace-nowrap">{allocated}/{p.targetCount}</span>
-                    </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-600">{p.manager || '—'}</td>
                   <td className="px-4 py-3 text-gray-400 text-xs">{p.createdAt}</td>
+                  {canDo('void_project') && (
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      {!p.voided && (
+                        <button
+                          onClick={() => setVoidTarget(p)}
+                          className="px-2 py-1 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50">
+                          作废
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               );
             })}
             {projects.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">暂无项目</td></tr>
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">暂无项目</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
       <AddProjectModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleSave} />
+      <VoidProjectModal
+        isOpen={!!voidTarget}
+        onClose={() => setVoidTarget(null)}
+        onConfirm={handleVoid}
+        project={voidTarget}
+        allocatedCount={voidTarget ? getAllocatedCount(voidTarget.id) : 0}
+      />
     </div>
   );
 }
