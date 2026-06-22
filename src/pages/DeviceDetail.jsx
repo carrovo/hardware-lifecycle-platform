@@ -373,7 +373,7 @@ export default function DeviceDetail() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['槁位', '模组类型', '类别', '物料SN', '状态'].map((h) => (
+                {['槁位', '模组类型', '类别', '物料SN', '状态', '出厂日期', '固件版本', '累计运行'].map((h) => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
                 ))}
               </tr>
@@ -392,6 +392,9 @@ export default function DeviceDetail() {
                     <td className="px-4 py-2.5">
                       {mat ? <StatusBadge status={mat.status} size="sm" /> : <span className="text-xs text-gray-400">—</span>}
                     </td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500">{mat?.manufactureDate || '—'}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500 font-mono">{mat?.firmwareVersion ? mat.firmwareVersion : '—'}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500">{mat && mat.operatingHours > 0 ? `${mat.operatingHours}h` : '—'}</td>
                   </tr>
                 );
               })}

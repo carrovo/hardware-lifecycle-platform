@@ -136,12 +136,165 @@ function BulkSubmitModal({ isOpen, onClose, onSave, stage, selectedRecords, getD
   );
 }
 
+function ImportModal({ isOpen, onClose, stage, devices, projects, passResult, resultOptions, onImport }) {
+  const [step, setStep] = useState(1);
+  const [rows, setRows] = useState(null);
+  const [fileName, setFileName] = useState('');
+
+  const hasAddress = stage !== '出厂检验';
+  const headers = hasAddress
+    ? ['整机SN', '检验结果', '操作人', '时间', '现场地址', '备注']
+    : ['整机SN', '检验结果', '操作人', '时间', '备注'];
+
+  const mockRows = [
+    { sn: 'SN-DEV-007', result: passResult, operator: '张三', time: '2026-06-20 09:00', address: '', notes: '批量检验通过', status: 'ok' },
+    { sn: 'SN-DEV-008', result: passResult, operator: '张三', time: '2026-06-20 09:15', address: '', notes: '', status: 'ok' },
+    { sn: 'SN-DEV-999', result: passResult, operator: '张三', time: '2026-06-20 09:30', address: '', notes: '', status: 'error', errorMsg: '设备不存在' },
+  ];
+
+  const displayRows = rows || mockRows;
+
+  const handleDownloadTemplate = () => {
+    const example = hasAddress
+      ? [['SN-DEV-007', passResult, '张三', '2026-06-20 09:00', '北京市朝阳区示例园区', '示例数据'],
+         ['SN-DEV-008', passResult, '张三', '2026-06-20 09:15', '北京市朝阳区示例园区', '']]
+      : [['SN-DEV-007', passResult, '张三', '2026-06-20 09:00', '示例数据'],
+         ['SN-DEV-008', passResult, '张三', '2026-06-20 09:15', '']];
+    const csv = [headers, ...example].map((r) => r.join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `导入模板_${stage}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const validateRow = (r) => {
+    const dev = devices.find((d) => d.sn === r.sn);
+    if (!dev) return { status: 'error', errorMsg: '设备不存在' };
+    if (!resultOptions.includes(r.result)) return { status: 'error', errorMsg: '结果值无效' };
+    return { status: 'ok' };
+  };
+
+  const handleFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      let text = String(ev.target.result || '');
+      if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+      const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+      const dataLines = lines.slice(1); // drop header
+      const parsed = dataLines.map((line) => {
+        const cells = line.split(',').map((c) => c.trim());
+        const r = hasAddress
+          ? { sn: cells[0] || '', result: cells[1] || '', operator: cells[2] || '', time: cells[3] || '', address: cells[4] || '', notes: cells[5] || '' }
+          : { sn: cells[0] || '', result: cells[1] || '', operator: cells[2] || '', time: cells[3] || '', address: '', notes: cells[4] || '' };
+        return { ...r, ...validateRow(r) };
+      });
+      setRows(parsed);
+    };
+    reader.readAsText(file);
+  };
+
+  const hasError = displayRows.some((r) => r.status === 'error');
+
+  const handleClose = () => {
+    setStep(1);
+    setRows(null);
+    setFileName('');
+    onClose();
+  };
+
+  const handleSubmit = () => {
+    const validRows = displayRows.filter((r) => r.status === 'ok');
+    onImport(validRows);
+    handleClose();
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={handleClose} title={`批量导入${stage}记录`} size="xl">
+      {step === 1 && (
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">下载导入模板，填写完成后上传</p>
+          <button onClick={handleDownloadTemplate}
+            className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">
+            下载导入模板
+          </button>
+          <div className="text-xs text-gray-400">
+            模板列：{headers.join('、')}
+          </div>
+          <div className="flex justify-end pt-2">
+            <button onClick={() => setStep(2)}
+              className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">
+              下一步：上传文件
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-4">
+          <div>
+            <input type="file" accept=".csv" onChange={handleFile}
+              className="text-sm text-gray-600" />
+            {fileName && <span className="ml-2 text-xs text-gray-400">{fileName}</span>}
+            {!rows && <p className="text-xs text-gray-400 mt-1">未选择文件，下方显示示例预览数据</p>}
+          </div>
+
+          <div className="border border-gray-200 rounded overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50">
+                <tr>
+                  {[...headers, '状态'].map((h) => (
+                    <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {displayRows.map((r, i) => (
+                  <tr key={i} className={r.status === 'error' ? 'bg-red-50' : 'bg-green-50/40'}>
+                    <td className="px-3 py-2 font-mono">{r.sn}</td>
+                    <td className="px-3 py-2">{r.result}</td>
+                    <td className="px-3 py-2">{r.operator}</td>
+                    <td className="px-3 py-2">{r.time}</td>
+                    {hasAddress && <td className="px-3 py-2">{r.address || '—'}</td>}
+                    <td className="px-3 py-2">{r.notes || '—'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {r.status === 'error'
+                        ? <span className="text-red-600 font-medium">{r.errorMsg}</span>
+                        : <span className="text-green-600 font-medium">✓</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <button onClick={() => setStep(1)}
+              className="text-sm text-slate-600 hover:underline">返回上一步</button>
+            <button onClick={handleSubmit} disabled={hasError}
+              className={`px-4 py-2 text-sm text-white rounded ${hasError ? 'bg-gray-300 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-800'}`}>
+              提交导入
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 export default function Delivery() {
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
   const [activeTab, setActiveTab] = useState('出厂检验');
   const [showModal, setShowModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importMessage, setImportMessage] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [searchSN, setSearchSN] = useState('');
   const [filterProject, setFilterProject] = useState('');
@@ -222,6 +375,28 @@ export default function Delivery() {
     resetSelection();
   };
 
+  const handleImport = (validRows) => {
+    validRows.forEach((r) => {
+      const dev = devices.find((d) => d.sn === r.sn);
+      dispatch({
+        type: 'ADD_DELIVERY_RECORD',
+        payload: {
+          id: `DELIV-${Date.now()}-${dev?.id || r.sn}`,
+          deviceId: dev?.id || r.sn,
+          projectId: dev?.projectId || '',
+          stage: activeTab,
+          result: r.result,
+          operator: r.operator || '',
+          recordTime: r.time || '',
+          notes: r.notes || '',
+          address: r.address || '',
+        },
+      });
+    });
+    setImportMessage(`成功导入 ${validRows.length} 条记录`);
+    setTimeout(() => setImportMessage(''), 3000);
+  };
+
   const handleExport = () => {
     const hasAddress = activeTab !== '出厂检验';
     const headers = ['记录时间', '设备SN', '所属项目', '结果', '操作人', ...(hasAddress ? ['地址'] : []), '备注'];
@@ -241,6 +416,11 @@ export default function Delivery() {
 
   return (
     <div className="p-6">
+      {importMessage && (
+        <div className="fixed top-6 right-6 z-50 bg-green-600 text-white text-sm px-4 py-2.5 rounded shadow-lg">
+          {importMessage}
+        </div>
+      )}
       <h1 className="text-xl font-bold text-gray-800 mb-4">交付流程</h1>
 
       {/* Tabs */}
@@ -290,6 +470,12 @@ export default function Delivery() {
             className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50">
             批量导出
           </button>
+          {canDo('add_delivery') && (
+            <button onClick={() => setShowImportModal(true)}
+              className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50">
+              批量导入
+            </button>
+          )}
           {canDo('add_delivery') && (
             <button onClick={() => setShowModal(true)}
               className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
@@ -378,6 +564,19 @@ export default function Delivery() {
           selectedRecords={selectedRecords}
           getDeviceSN={getDeviceSN}
           resultOptions={stageResultMap[activeTab]}
+        />
+      )}
+
+      {showImportModal && (
+        <ImportModal
+          isOpen={showImportModal}
+          onClose={() => setShowImportModal(false)}
+          stage={activeTab}
+          devices={devices}
+          projects={projects}
+          passResult={passResult}
+          resultOptions={stageResultMap[activeTab]}
+          onImport={handleImport}
         />
       )}
     </div>

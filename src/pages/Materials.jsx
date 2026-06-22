@@ -219,6 +219,8 @@ export default function Materials() {
 
   const batches = state.materialBatches || [];
   const suppliers = ['全部', ...new Set(batches.map((b) => b.supplier).filter(Boolean))];
+  const materialBySN = {};
+  (state.materials || []).forEach((m) => { materialBySN[m.sn] = m; });
 
   const hasFilters = filterCategory !== '全部' || filterSupplier !== '全部' || filterResult !== '全部' || filterItemStatus !== '全部' || search;
   const clearFilters = () => {
@@ -405,18 +407,27 @@ export default function Materials() {
                                     <th className="text-left py-1.5 pr-4 font-medium">SN</th>
                                     <th className="text-left py-1.5 pr-4 font-medium">检验结果</th>
                                     <th className="text-left py-1.5 pr-4 font-medium">物料状态</th>
+                                    <th className="text-left py-1.5 pr-4 font-medium">出厂日期</th>
+                                    <th className="text-left py-1.5 pr-4 font-medium">固件版本</th>
+                                    <th className="text-left py-1.5 pr-4 font-medium">累计运行</th>
                                     <th className="text-left py-1.5 font-medium">备注</th>
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {b.items.map((it) => (
+                                  {b.items.map((it) => {
+                                    const mat = materialBySN[it.sn];
+                                    return (
                                     <tr key={it.id} className={`border-b border-gray-100 last:border-0 ${it.result === '不合格' ? 'bg-red-50' : ''}`}>
                                       <td className="py-1.5 pr-4 font-mono text-gray-700">{it.sn}</td>
                                       <td className="py-1.5 pr-4"><Badge map={RESULT_BADGE} value={it.result} /></td>
                                       <td className="py-1.5 pr-4"><Badge map={STATUS_BADGE} value={it.status} /></td>
+                                      <td className="py-1.5 pr-4 text-gray-500">{mat?.manufactureDate || '—'}</td>
+                                      <td className="py-1.5 pr-4 text-gray-500 font-mono">{mat?.firmwareVersion ? mat.firmwareVersion : '—'}</td>
+                                      <td className="py-1.5 pr-4 text-gray-500">{mat && mat.operatingHours > 0 ? `${mat.operatingHours}h` : '—'}</td>
                                       <td className="py-1.5 text-gray-400">{it.notes || '—'}</td>
                                     </tr>
-                                  ))}
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             </div>

@@ -2,15 +2,21 @@
 
 export const USERS = ['张三', '李四', '王五', '赵六'];
 
-export const MATERIAL_CATEGORIES = ['底盘', '机械臂', '电机', '末端', '全身相机', '预控'];
+export const MATERIAL_CATEGORIES = ['底盘', '机械臂', '电机', '末端', '全身相机', '预控', '传感器'];
 
 export const moduleTypes = [
-  { id: 'MT-001', name: '标准底盘', category: '底盘', specs: '承重≥80kg，驱动轮径200mm', urdf: 'chassis_v2.urdf', active: true },
-  { id: 'MT-002', name: '双自由度机械臂', category: '机械臂', specs: '臂展800mm，负载5kg', urdf: 'arm_v3.urdf', active: true },
-  { id: 'MT-003', name: '伺服电机模组', category: '电机', specs: '额定转矩8N·m，编码器17bit', urdf: 'motor_v1.urdf', active: true },
-  { id: 'MT-004', name: '柔性末端执行器', category: '末端', specs: '夹持力0-50N，精度±0.5mm', urdf: 'end_effector_v2.urdf', active: true },
-  { id: 'MT-005', name: '全身视觉相机', category: '全身相机', specs: '1080P@60fps，FOV 120°', urdf: 'camera_v1.urdf', active: true },
-  { id: 'MT-006', name: '预控计算模组', category: '预控', specs: 'ARM Cortex-A72，8GB RAM', urdf: 'precontrol_v2.urdf', active: true },
+  { id: 'MT-001', name: '差速驱动底盘', category: '底盘', specs: '承重≥80kg，最大速度1.5m/s，续航≥8h，IP54', urdf: 'chassis_diff_v2.urdf', active: true },
+  { id: 'MT-001B', name: '全向轮底盘', category: '底盘', specs: '承重≥60kg，全向移动，最大速度1.0m/s，续航≥6h', urdf: 'chassis_omni_v1.urdf', active: true },
+  { id: 'MT-002', name: '六自由度机械臂', category: '机械臂', specs: '臂展860mm，末端重复定位精度±0.02mm，额定负载5kg', urdf: 'arm_6dof_v3.urdf', active: true },
+  { id: 'MT-003', name: '关节伺服电机', category: '电机', specs: '额定转矩8N·m，编码器17bit，峰值转矩24N·m', urdf: 'joint_motor_v2.urdf', active: true },
+  { id: 'MT-003B', name: '驱动轮电机', category: '电机', specs: '额定转速3000rpm，编码器13bit，IPX5防护', urdf: 'drive_motor_v1.urdf', active: false },
+  { id: 'MT-004', name: '执行夹爪末端', category: '末端', specs: '夹持力0-50N，开口行程0-85mm，精度±0.5mm', urdf: 'gripper_v2.urdf', active: true },
+  { id: 'MT-004B', name: '六维力矩传感器末端', category: '末端', specs: '量程Fx/Fy/Fz 200N，Mx/My/Mz 10N·m，采样率1kHz', urdf: 'force_sensor_v1.urdf', active: true },
+  { id: 'MT-005', name: '腕部RGBD相机', category: '全身相机', specs: '深度分辨率640×480@30fps，测距范围0.3-3m', urdf: 'wrist_cam_v1.urdf', active: true },
+  { id: 'MT-005B', name: '头部RGBD相机', category: '全身相机', specs: '深度分辨率1280×720@30fps，FOV 87°', urdf: 'head_cam_v2.urdf', active: true },
+  { id: 'MT-005C', name: '胸部广角相机', category: '全身相机', specs: '1080P@60fps，FOV 120°，鱼眼畸变<2%', urdf: 'chest_cam_v1.urdf', active: true },
+  { id: 'MT-006', name: '感知控制预控模块', category: '预控', specs: '搭载8核CPU+GPU，运行频率200Hz，支持ROS2，板载32GB存储', urdf: 'precontrol_v3.urdf', active: true },
+  { id: 'MT-007', name: '惯性测量单元IMU', category: '传感器', specs: '6轴IMU，加速度计±8g，陀螺仪±2000°/s，采样率1000Hz', urdf: 'imu_v1.urdf', active: true },
 ];
 
 export const deviceTypes = [
@@ -47,10 +53,11 @@ export const deviceTypes = [
       { id: 's9', slotName: '关节电机F槁位', moduleTypeId: 'MT-003', quantity: 1 },
       { id: 's10', slotName: '左手末端槁位', moduleTypeId: 'MT-004', quantity: 1 },
       { id: 's11', slotName: '右手末端槁位', moduleTypeId: 'MT-004', quantity: 1 },
-      { id: 's12', slotName: '头部相机槁位', moduleTypeId: 'MT-005', quantity: 1 },
-      { id: 's13', slotName: '胸部相机槁位', moduleTypeId: 'MT-005', quantity: 1 },
-      { id: 's14', slotName: '腰部相机槁位', moduleTypeId: 'MT-005', quantity: 1 },
-      { id: 's15', slotName: '预控槁位', moduleTypeId: 'MT-006', quantity: 1 },
+      { id: 's12', slotName: '左腕相机槁位', moduleTypeId: 'MT-005', quantity: 1 },
+      { id: 's13', slotName: '右腕相机槁位', moduleTypeId: 'MT-005', quantity: 1 },
+      { id: 's14', slotName: '头部相机槁位', moduleTypeId: 'MT-005B', quantity: 1 },
+      { id: 's15', slotName: '胸部相机槁位', moduleTypeId: 'MT-005C', quantity: 1 },
+      { id: 's16', slotName: '预控槁位', moduleTypeId: 'MT-006', quantity: 1 },
     ],
   },
   {
@@ -74,74 +81,74 @@ export const deviceTypes = [
 ];
 
 export const materials = [
-  { id: 'MAT-001', sn: 'SN-CHASSIS-001', category: '底盘', model: 'CH-2024-A', batchNo: 'BATCH-2024-001', supplier: '供应商A', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-01 09:30', status: '已占用', notes: '' },
-  { id: 'MAT-002', sn: 'SN-CHASSIS-002', category: '底盘', model: 'CH-2024-A', batchNo: 'BATCH-2024-001', supplier: '供应商A', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-01 09:45', status: '已占用', notes: '' },
-  { id: 'MAT-003', sn: 'SN-ARM-001', category: '机械臂', model: 'ARM-2024-B', batchNo: 'BATCH-2024-002', supplier: '供应商B', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-02 10:00', status: '已占用', notes: '' },
-  { id: 'MAT-004', sn: 'SN-ARM-002', category: '机械臂', model: 'ARM-2024-B', batchNo: 'BATCH-2024-002', supplier: '供应商B', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-02 10:15', status: '待装配', notes: '' },
-  { id: 'MAT-005', sn: 'SN-ARM-003', category: '机械臂', model: 'ARM-2024-B', batchNo: 'BATCH-2024-002', supplier: '供应商B', quantity: 1, inspectionResult: '不合格', inspector: '李四', inspectionTime: '2026-05-02 10:30', status: '退货换货', notes: '外壳有裂纹' },
-  { id: 'MAT-006', sn: 'SN-MOTOR-001', category: '电机', model: 'MTR-2024-C', batchNo: 'BATCH-2024-003', supplier: '供应商C', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-03 08:30', status: '已占用', notes: '' },
-  { id: 'MAT-007', sn: 'SN-MOTOR-002', category: '电机', model: 'MTR-2024-C', batchNo: 'BATCH-2024-003', supplier: '供应商C', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-03 08:45', status: '待装配', notes: '' },
-  { id: 'MAT-008', sn: 'SN-MOTOR-003', category: '电机', model: 'MTR-2024-C', batchNo: 'BATCH-2024-003', supplier: '供应商C', quantity: 1, inspectionResult: '特批使用', inspector: '赵六', inspectionTime: '2026-05-03 09:00', status: '待装配', notes: '噪音略高，特批使用' },
-  { id: 'MAT-009', sn: 'SN-END-001', category: '末端', model: 'END-2024-D', batchNo: 'BATCH-2024-004', supplier: '供应商D', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-04 09:00', status: '已占用', notes: '' },
-  { id: 'MAT-010', sn: 'SN-END-002', category: '末端', model: 'END-2024-D', batchNo: 'BATCH-2024-004', supplier: '供应商D', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-04 09:15', status: '待装配', notes: '' },
-  { id: 'MAT-011', sn: 'SN-CAM-001', category: '全身相机', model: 'CAM-2024-E', batchNo: 'BATCH-2024-005', supplier: '供应商E', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-05 10:00', status: '已占用', notes: '' },
-  { id: 'MAT-012', sn: 'SN-CAM-002', category: '全身相机', model: 'CAM-2024-E', batchNo: 'BATCH-2024-005', supplier: '供应商E', quantity: 1, inspectionResult: '不合格', inspector: '李四', inspectionTime: '2026-05-05 10:20', status: '退货换货', notes: '图像传感器损坏' },
-  { id: 'MAT-013', sn: 'SN-CTRL-001', category: '预控', model: 'CTRL-2024-F', batchNo: 'BATCH-2024-006', supplier: '供应商F', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-06 08:00', status: '已占用', notes: '' },
-  { id: 'MAT-014', sn: 'SN-CTRL-002', category: '预控', model: 'CTRL-2024-F', batchNo: 'BATCH-2024-006', supplier: '供应商F', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-06 08:30', status: '待装配', notes: '' },
-  { id: 'MAT-015', sn: 'SN-MOTOR-004', category: '电机', model: 'MTR-2024-C', batchNo: 'BATCH-2024-007', supplier: '供应商C', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-07 09:00', status: '待装配', notes: '' },
-  { id: 'MAT-016', sn: 'SN-MOTOR-005', category: '电机', model: 'MTR-2024-C', batchNo: 'BATCH-2024-007', supplier: '供应商C', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-07 09:10', status: '已占用', notes: '' },
-  { id: 'MAT-017', sn: 'SN-MOTOR-006', category: '电机', model: 'MTR-2024-C', batchNo: 'BATCH-2024-007', supplier: '供应商C', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-07 09:20', status: '已占用', notes: '' },
-  { id: 'MAT-018', sn: 'SN-CHASSIS-003', category: '底盘', model: 'CH-2024-A', batchNo: 'BATCH-2024-008', supplier: '供应商A', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-10 09:00', status: '已占用', notes: '' },
-  { id: 'MAT-019', sn: 'SN-ARM-004', category: '机械臂', model: 'ARM-2024-B', batchNo: 'BATCH-2024-008', supplier: '供应商B', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-10 09:30', status: '已占用', notes: '' },
-  { id: 'MAT-020', sn: 'SN-ARM-005', category: '机械臂', model: 'ARM-2024-B', batchNo: 'BATCH-2024-008', supplier: '供应商B', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-10 09:45', status: '已占用', notes: '' },
+  { id: 'MAT-001', sn: 'SN-CHASSIS-001', category: '底盘', model: 'CH-2024-A', batchNo: 'BATCH-2024-001', supplier: '供应商A', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-01 09:30', status: '已占用', notes: '', manufactureDate: '2025-10-01', firmwareVersion: '', operatingHours: 800 },
+  { id: 'MAT-002', sn: 'SN-CHASSIS-002', category: '底盘', model: 'CH-2024-A', batchNo: 'BATCH-2024-001', supplier: '供应商A', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-01 09:45', status: '已占用', notes: '', manufactureDate: '2025-10-04', firmwareVersion: '', operatingHours: 867 },
+  { id: 'MAT-003', sn: 'SN-ARM-001', category: '机械臂', model: 'ARM-2024-B', batchNo: 'BATCH-2024-002', supplier: '供应商B', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-02 10:00', status: '已占用', notes: '', manufactureDate: '2025-10-08', firmwareVersion: '', operatingHours: 934 },
+  { id: 'MAT-004', sn: 'SN-ARM-002', category: '机械臂', model: 'ARM-2024-B', batchNo: 'BATCH-2024-002', supplier: '供应商B', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-02 10:15', status: '待装配', notes: '', manufactureDate: '2025-10-12', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-005', sn: 'SN-ARM-003', category: '机械臂', model: 'ARM-2024-B', batchNo: 'BATCH-2024-002', supplier: '供应商B', quantity: 1, inspectionResult: '不合格', inspector: '李四', inspectionTime: '2026-05-02 10:30', status: '退货换货', notes: '外壳有裂纹', manufactureDate: '2025-10-16', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-006', sn: 'SN-MOTOR-001', category: '电机', model: 'MTR-2024-C', batchNo: 'BATCH-2024-003', supplier: '供应商C', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-03 08:30', status: '已占用', notes: '', manufactureDate: '2025-10-20', firmwareVersion: '', operatingHours: 1135 },
+  { id: 'MAT-007', sn: 'SN-MOTOR-002', category: '电机', model: 'MTR-2024-C', batchNo: 'BATCH-2024-003', supplier: '供应商C', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-03 08:45', status: '待装配', notes: '', manufactureDate: '2025-10-24', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-008', sn: 'SN-MOTOR-003', category: '电机', model: 'MTR-2024-C', batchNo: 'BATCH-2024-003', supplier: '供应商C', quantity: 1, inspectionResult: '特批使用', inspector: '赵六', inspectionTime: '2026-05-03 09:00', status: '待装配', notes: '噪音略高，特批使用', manufactureDate: '2025-10-28', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-009', sn: 'SN-END-001', category: '末端', model: 'END-2024-D', batchNo: 'BATCH-2024-004', supplier: '供应商D', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-04 09:00', status: '已占用', notes: '', manufactureDate: '2025-11-01', firmwareVersion: '', operatingHours: 1336 },
+  { id: 'MAT-010', sn: 'SN-END-002', category: '末端', model: 'END-2024-D', batchNo: 'BATCH-2024-004', supplier: '供应商D', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-04 09:15', status: '待装配', notes: '', manufactureDate: '2025-11-05', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-011', sn: 'SN-CAM-001', category: '全身相机', model: 'CAM-2024-E', batchNo: 'BATCH-2024-005', supplier: '供应商E', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-05 10:00', status: '已占用', notes: '', manufactureDate: '2025-11-09', firmwareVersion: '', operatingHours: 1470 },
+  { id: 'MAT-012', sn: 'SN-CAM-002', category: '全身相机', model: 'CAM-2024-E', batchNo: 'BATCH-2024-005', supplier: '供应商E', quantity: 1, inspectionResult: '不合格', inspector: '李四', inspectionTime: '2026-05-05 10:20', status: '退货换货', notes: '图像传感器损坏', manufactureDate: '2025-11-13', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-013', sn: 'SN-CTRL-001', category: '预控', model: 'CTRL-2024-F', batchNo: 'BATCH-2024-006', supplier: '供应商F', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-06 08:00', status: '已占用', notes: '', manufactureDate: '2025-11-17', firmwareVersion: '', operatingHours: 1604 },
+  { id: 'MAT-014', sn: 'SN-CTRL-002', category: '预控', model: 'CTRL-2024-F', batchNo: 'BATCH-2024-006', supplier: '供应商F', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-06 08:30', status: '待装配', notes: '', manufactureDate: '2025-11-21', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-015', sn: 'SN-MOTOR-004', category: '电机', model: 'MTR-2024-C', batchNo: 'BATCH-2024-007', supplier: '供应商C', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-07 09:00', status: '待装配', notes: '', manufactureDate: '2025-11-25', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-016', sn: 'SN-MOTOR-005', category: '电机', model: 'MTR-2024-C', batchNo: 'BATCH-2024-007', supplier: '供应商C', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-07 09:10', status: '已占用', notes: '', manufactureDate: '2025-11-29', firmwareVersion: '', operatingHours: 804 },
+  { id: 'MAT-017', sn: 'SN-MOTOR-006', category: '电机', model: 'MTR-2024-C', batchNo: 'BATCH-2024-007', supplier: '供应商C', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-07 09:20', status: '已占用', notes: '', manufactureDate: '2025-12-03', firmwareVersion: '', operatingHours: 871 },
+  { id: 'MAT-018', sn: 'SN-CHASSIS-003', category: '底盘', model: 'CH-2024-A', batchNo: 'BATCH-2024-008', supplier: '供应商A', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-10 09:00', status: '已占用', notes: '', manufactureDate: '2025-12-07', firmwareVersion: '', operatingHours: 938 },
+  { id: 'MAT-019', sn: 'SN-ARM-004', category: '机械臂', model: 'ARM-2024-B', batchNo: 'BATCH-2024-008', supplier: '供应商B', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-10 09:30', status: '已占用', notes: '', manufactureDate: '2025-12-11', firmwareVersion: '', operatingHours: 1005 },
+  { id: 'MAT-020', sn: 'SN-ARM-005', category: '机械臂', model: 'ARM-2024-B', batchNo: 'BATCH-2024-008', supplier: '供应商B', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-10 09:45', status: '已占用', notes: '', manufactureDate: '2025-12-15', firmwareVersion: '', operatingHours: 1072 },
   // BATCH-009: 底盘, 务实科技
-  { id: 'MAT-021', sn: 'SN-CHASSIS-004', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-009', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-12 09:00', status: '待装配', notes: '' },
-  { id: 'MAT-022', sn: 'SN-CHASSIS-005', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-009', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-12 09:10', status: '待装配', notes: '' },
-  { id: 'MAT-023', sn: 'SN-CHASSIS-006', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-009', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-12 09:20', status: '待装配', notes: '' },
+  { id: 'MAT-021', sn: 'SN-CHASSIS-004', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-009', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-12 09:00', status: '待装配', notes: '', manufactureDate: '2025-12-19', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-022', sn: 'SN-CHASSIS-005', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-009', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-12 09:10', status: '待装配', notes: '', manufactureDate: '2025-12-23', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-023', sn: 'SN-CHASSIS-006', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-009', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-12 09:20', status: '待装配', notes: '', manufactureDate: '2025-12-27', firmwareVersion: '', operatingHours: 0 },
   // BATCH-010: 机械臂, 务实科技
-  { id: 'MAT-024', sn: 'SN-ARM-006', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-010', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-14 10:00', status: '待装配', notes: '' },
-  { id: 'MAT-025', sn: 'SN-ARM-007', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-010', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-14 10:10', status: '待装配', notes: '' },
-  { id: 'MAT-026', sn: 'SN-ARM-008', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-010', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-14 10:20', status: '待装配', notes: '' },
+  { id: 'MAT-024', sn: 'SN-ARM-006', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-010', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-14 10:00', status: '待装配', notes: '', manufactureDate: '2025-12-31', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-025', sn: 'SN-ARM-007', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-010', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-14 10:10', status: '待装配', notes: '', manufactureDate: '2026-01-04', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-026', sn: 'SN-ARM-008', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-010', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-14 10:20', status: '待装配', notes: '', manufactureDate: '2026-01-08', firmwareVersion: '', operatingHours: 0 },
   // BATCH-011: 电机, 迈驰驱动
-  { id: 'MAT-027', sn: 'SN-MOTOR-007', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-011', supplier: '迈驰驱动', quantity: 1, inspectionResult: '不合格', inspector: '王五', inspectionTime: '2026-05-15 08:30', status: '退货换货', notes: '转子偏心，振动超标' },
-  { id: 'MAT-028', sn: 'SN-MOTOR-008', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-011', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-15 08:40', status: '待装配', notes: '' },
-  { id: 'MAT-029', sn: 'SN-MOTOR-009', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-011', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-15 08:50', status: '待装配', notes: '' },
+  { id: 'MAT-027', sn: 'SN-MOTOR-007', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-011', supplier: '迈驰驱动', quantity: 1, inspectionResult: '不合格', inspector: '王五', inspectionTime: '2026-05-15 08:30', status: '退货换货', notes: '转子偏心，振动超标', manufactureDate: '2026-01-12', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-028', sn: 'SN-MOTOR-008', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-011', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-15 08:40', status: '待装配', notes: '', manufactureDate: '2026-01-16', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-029', sn: 'SN-MOTOR-009', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-011', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-15 08:50', status: '待装配', notes: '', manufactureDate: '2026-01-20', firmwareVersion: '', operatingHours: 0 },
   // BATCH-012: 末端, 务实科技
-  { id: 'MAT-030', sn: 'SN-END-003', category: '末端', model: 'END-2026-D', batchNo: 'BATCH-2026-012', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-18 09:00', status: '待装配', notes: '' },
-  { id: 'MAT-031', sn: 'SN-END-004', category: '末端', model: 'END-2026-D', batchNo: 'BATCH-2026-012', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-18 09:10', status: '待装配', notes: '' },
+  { id: 'MAT-030', sn: 'SN-END-003', category: '末端', model: 'END-2026-D', batchNo: 'BATCH-2026-012', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-18 09:00', status: '待装配', notes: '', manufactureDate: '2026-01-24', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-031', sn: 'SN-END-004', category: '末端', model: 'END-2026-D', batchNo: 'BATCH-2026-012', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-18 09:10', status: '待装配', notes: '', manufactureDate: '2026-01-28', firmwareVersion: '', operatingHours: 0 },
   // BATCH-013: 全身相机, 锐视传感器
-  { id: 'MAT-032', sn: 'SN-CAM-003', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-013', supplier: '锐视传感器', quantity: 1, inspectionResult: '特批使用', inspector: '张三', inspectionTime: '2026-05-20 10:00', status: '待装配', notes: '色差偏移轻微，特批使用' },
-  { id: 'MAT-033', sn: 'SN-CAM-004', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-013', supplier: '锐视传感器', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-20 10:10', status: '待装配', notes: '' },
+  { id: 'MAT-032', sn: 'SN-CAM-003', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-013', supplier: '锐视传感器', quantity: 1, inspectionResult: '特批使用', inspector: '张三', inspectionTime: '2026-05-20 10:00', status: '待装配', notes: '色差偏移轻微，特批使用', manufactureDate: '2026-02-01', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-033', sn: 'SN-CAM-004', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-013', supplier: '锐视传感器', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-20 10:10', status: '待装配', notes: '', manufactureDate: '2026-02-05', firmwareVersion: '', operatingHours: 0 },
   // BATCH-014: 预控, 务实科技
-  { id: 'MAT-034', sn: 'SN-CTRL-003', category: '预控', model: 'CTRL-2026-F', batchNo: 'BATCH-2026-014', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-22 08:00', status: '待装配', notes: '' },
-  { id: 'MAT-035', sn: 'SN-CTRL-004', category: '预控', model: 'CTRL-2026-F', batchNo: 'BATCH-2026-014', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-22 08:10', status: '待装配', notes: '' },
+  { id: 'MAT-034', sn: 'SN-CTRL-003', category: '预控', model: 'CTRL-2026-F', batchNo: 'BATCH-2026-014', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-22 08:00', status: '待装配', notes: '', manufactureDate: '2026-02-09', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-035', sn: 'SN-CTRL-004', category: '预控', model: 'CTRL-2026-F', batchNo: 'BATCH-2026-014', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-22 08:10', status: '待装配', notes: '', manufactureDate: '2026-02-13', firmwareVersion: '', operatingHours: 0 },
   // BATCH-015: 底盘, 务实科技 (不合格批次)
-  { id: 'MAT-036', sn: 'SN-CHASSIS-007', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-015', supplier: '务实科技', quantity: 1, inspectionResult: '不合格', inspector: '王五', inspectionTime: '2026-05-25 09:00', status: '退货换货', notes: '底盘焊缝开裂' },
-  { id: 'MAT-037', sn: 'SN-CHASSIS-008', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-015', supplier: '务实科技', quantity: 1, inspectionResult: '不合格', inspector: '王五', inspectionTime: '2026-05-25 09:10', status: '退货换货', notes: '底盘焊缝开裂' },
+  { id: 'MAT-036', sn: 'SN-CHASSIS-007', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-015', supplier: '务实科技', quantity: 1, inspectionResult: '不合格', inspector: '王五', inspectionTime: '2026-05-25 09:00', status: '退货换货', notes: '底盘焊缝开裂', manufactureDate: '2026-02-17', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-037', sn: 'SN-CHASSIS-008', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-015', supplier: '务实科技', quantity: 1, inspectionResult: '不合格', inspector: '王五', inspectionTime: '2026-05-25 09:10', status: '退货换货', notes: '底盘焊缝开裂', manufactureDate: '2026-02-21', firmwareVersion: '', operatingHours: 0 },
   // BATCH-016: 机械臂, 务实科技 (特批使用)
-  { id: 'MAT-038', sn: 'SN-ARM-009', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-016', supplier: '务实科技', quantity: 1, inspectionResult: '特批使用', inspector: '赵六', inspectionTime: '2026-05-28 09:30', status: '待装配', notes: '关节间隙略大，特批低速场景使用' },
-  { id: 'MAT-039', sn: 'SN-ARM-010', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-016', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-28 09:40', status: '待装配', notes: '' },
-  { id: 'MAT-040', sn: 'SN-ARM-011', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-016', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-28 09:50', status: '待装配', notes: '' },
+  { id: 'MAT-038', sn: 'SN-ARM-009', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-016', supplier: '务实科技', quantity: 1, inspectionResult: '特批使用', inspector: '赵六', inspectionTime: '2026-05-28 09:30', status: '待装配', notes: '关节间隙略大，特批低速场景使用', manufactureDate: '2026-02-25', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-039', sn: 'SN-ARM-010', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-016', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-28 09:40', status: '待装配', notes: '', manufactureDate: '2026-03-01', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-040', sn: 'SN-ARM-011', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-016', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-28 09:50', status: '待装配', notes: '', manufactureDate: '2026-03-05', firmwareVersion: '', operatingHours: 0 },
   // BATCH-017: 电机, 迈驰驱动
-  { id: 'MAT-041', sn: 'SN-MOTOR-010', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-017', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-01 08:00', status: '待装配', notes: '' },
-  { id: 'MAT-042', sn: 'SN-MOTOR-011', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-017', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-01 08:10', status: '待装配', notes: '' },
-  { id: 'MAT-043', sn: 'SN-MOTOR-012', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-017', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-01 08:20', status: '待装配', notes: '' },
+  { id: 'MAT-041', sn: 'SN-MOTOR-010', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-017', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-01 08:00', status: '待装配', notes: '', manufactureDate: '2026-03-09', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-042', sn: 'SN-MOTOR-011', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-017', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-01 08:10', status: '待装配', notes: '', manufactureDate: '2026-03-13', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-043', sn: 'SN-MOTOR-012', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-017', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-01 08:20', status: '待装配', notes: '', manufactureDate: '2026-03-17', firmwareVersion: '', operatingHours: 0 },
   // BATCH-018: 末端, 锐视传感器 (不合格)
-  { id: 'MAT-044', sn: 'SN-END-005', category: '末端', model: 'END-2026-D', batchNo: 'BATCH-2026-018', supplier: '锐视传感器', quantity: 1, inspectionResult: '不合格', inspector: '李四', inspectionTime: '2026-06-03 10:00', status: '退货换货', notes: '传感器灵敏度不达标' },
+  { id: 'MAT-044', sn: 'SN-END-005', category: '末端', model: 'END-2026-D', batchNo: 'BATCH-2026-018', supplier: '锐视传感器', quantity: 1, inspectionResult: '不合格', inspector: '李四', inspectionTime: '2026-06-03 10:00', status: '退货换货', notes: '传感器灵敏度不达标', manufactureDate: '2026-03-21', firmwareVersion: '', operatingHours: 0 },
   // BATCH-019: 全身相机, 锐视传感器
-  { id: 'MAT-045', sn: 'SN-CAM-005', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-019', supplier: '锐视传感器', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-06-05 09:00', status: '待装配', notes: '' },
-  { id: 'MAT-046', sn: 'SN-CAM-006', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-019', supplier: '锐视传感器', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-06-05 09:10', status: '待装配', notes: '' },
-  { id: 'MAT-047', sn: 'SN-CAM-007', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-019', supplier: '锐视传感器', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-06-05 09:20', status: '待装配', notes: '' },
+  { id: 'MAT-045', sn: 'SN-CAM-005', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-019', supplier: '锐视传感器', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-06-05 09:00', status: '待装配', notes: '', manufactureDate: '2026-03-25', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-046', sn: 'SN-CAM-006', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-019', supplier: '锐视传感器', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-06-05 09:10', status: '待装配', notes: '', manufactureDate: '2026-03-29', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-047', sn: 'SN-CAM-007', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-019', supplier: '锐视传感器', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-06-05 09:20', status: '待装配', notes: '', manufactureDate: '2026-04-02', firmwareVersion: '', operatingHours: 0 },
   // BATCH-020: 预控, 务实科技
-  { id: 'MAT-048', sn: 'SN-CTRL-005', category: '预控', model: 'CTRL-2026-F', batchNo: 'BATCH-2026-020', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-06-08 08:30', status: '待装配', notes: '' },
-  { id: 'MAT-049', sn: 'SN-CTRL-006', category: '预控', model: 'CTRL-2026-F', batchNo: 'BATCH-2026-020', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-06-08 08:40', status: '维修中', notes: '固件刷写失败，送修' },
+  { id: 'MAT-048', sn: 'SN-CTRL-005', category: '预控', model: 'CTRL-2026-F', batchNo: 'BATCH-2026-020', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-06-08 08:30', status: '待装配', notes: '', manufactureDate: '2026-04-06', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-049', sn: 'SN-CTRL-006', category: '预控', model: 'CTRL-2026-F', batchNo: 'BATCH-2026-020', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-06-08 08:40', status: '维修中', notes: '固件刷写失败，送修', manufactureDate: '2026-04-10', firmwareVersion: '', operatingHours: 436 },
   // BATCH-021: 底盘, 迈驰驱动
-  { id: 'MAT-050', sn: 'SN-CHASSIS-009', category: '底盘', model: 'CH-2026-B', batchNo: 'BATCH-2026-021', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-10 09:00', status: '待装配', notes: '' },
-  { id: 'MAT-051', sn: 'SN-CHASSIS-010', category: '底盘', model: 'CH-2026-B', batchNo: 'BATCH-2026-021', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-10 09:10', status: '已报废', notes: '搬运中碰撞损坏，无法修复' },
+  { id: 'MAT-050', sn: 'SN-CHASSIS-009', category: '底盘', model: 'CH-2026-B', batchNo: 'BATCH-2026-021', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-10 09:00', status: '待装配', notes: '', manufactureDate: '2026-04-14', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-051', sn: 'SN-CHASSIS-010', category: '底盘', model: 'CH-2026-B', batchNo: 'BATCH-2026-021', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-10 09:10', status: '已报废', notes: '搬运中碰撞损坏，无法修复', manufactureDate: '2026-04-18', firmwareVersion: '', operatingHours: 2250 },
   // BATCH-022: 电机, 迈驰驱动
-  { id: 'MAT-052', sn: 'SN-MOTOR-013', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-022', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-06-15 08:00', status: '待装配', notes: '' },
-  { id: 'MAT-053', sn: 'SN-MOTOR-014', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-022', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-06-15 08:10', status: '待装配', notes: '' },
-  { id: 'MAT-054', sn: 'SN-MOTOR-015', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-022', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-06-15 08:20', status: '维修中', notes: '编码器故障，返厂维修' },
+  { id: 'MAT-052', sn: 'SN-MOTOR-013', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-022', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-06-15 08:00', status: '待装配', notes: '', manufactureDate: '2026-04-22', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-053', sn: 'SN-MOTOR-014', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-022', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-06-15 08:10', status: '待装配', notes: '', manufactureDate: '2026-04-26', firmwareVersion: '', operatingHours: 0 },
+  { id: 'MAT-054', sn: 'SN-MOTOR-015', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-022', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-06-15 08:20', status: '维修中', notes: '编码器故障，返厂维修', manufactureDate: '2026-04-30', firmwareVersion: '', operatingHours: 400 },
 ];
 
 export const devices = [
@@ -158,8 +165,18 @@ export const devices = [
   { id: 'DEV-011', sn: 'SN-DEV-011', deviceTypeId: 'DT-001', status: '在线运营', assembler: '王五', assemblyTime: '2026-04-15 10:00', photoName: 'assembly_dev011.jpg', usedMaterials: [{ materialId: 'MAT-006', moduleTypeId: 'MT-003' }], projectId: 'PROJ-002', batteryPercent: 62, storagePercent: 71, lastHeartbeat: '2026-06-21 07:30', online: true, createdAt: '2026-04-15 10:00', updatedAt: '2026-06-21 07:30' },
   { id: 'DEV-012', sn: 'SN-DEV-012', deviceTypeId: 'DT-002', status: '在线运营', assembler: '赵六', assemblyTime: '2026-04-10 09:00', photoName: 'assembly_dev012.jpg', usedMaterials: [{ materialId: 'MAT-009', moduleTypeId: 'MT-004' }], projectId: 'PROJ-003', batteryPercent: 15, storagePercent: 88, lastHeartbeat: '2026-06-20 23:10', online: false, createdAt: '2026-04-10 09:00', updatedAt: '2026-06-20 23:10' },
   { id: 'DEV-013', sn: 'SN-DEV-013', deviceTypeId: 'DT-001', status: '在线运营', assembler: '张三', assemblyTime: '2026-03-25 10:00', photoName: 'assembly_dev013.jpg', usedMaterials: [], projectId: 'PROJ-001', batteryPercent: 93, storagePercent: 30, lastHeartbeat: '2026-06-21 09:02', online: true, createdAt: '2026-03-25 10:00', updatedAt: '2026-06-21 09:02' },
-  { id: 'DEV-014', sn: 'SN-DEV-014', deviceTypeId: 'DT-002', status: '退役', assembler: '李四', assemblyTime: '2026-01-10 09:00', photoName: 'assembly_dev014.jpg', usedMaterials: [], projectId: 'PROJ-002', createdAt: '2026-01-10 09:00', updatedAt: '2026-05-30 14:00' },
-  { id: 'DEV-015', sn: 'SN-DEV-015', deviceTypeId: 'DT-001', status: '退役', assembler: '王五', assemblyTime: '2026-01-05 09:00', photoName: 'assembly_dev015.jpg', usedMaterials: [], projectId: 'PROJ-003', createdAt: '2026-01-05 09:00', updatedAt: '2026-06-01 10:00' },
+  // 装配中 (target 3: DEV-001, DEV-016, DEV-017)
+  { id: 'DEV-016', sn: 'SN-DEV-016', deviceTypeId: 'DT-001', status: '装配中', assembler: '李四', assemblyTime: '2026-06-19 09:00', photoName: 'assembly_dev016.jpg', usedMaterials: [], createdAt: '2026-06-19 09:00', updatedAt: '2026-06-19 09:00' },
+  { id: 'DEV-017', sn: 'SN-DEV-017', deviceTypeId: 'DT-002', status: '装配中', assembler: '王五', assemblyTime: '2026-06-20 10:30', photoName: 'assembly_dev017.jpg', usedMaterials: [], createdAt: '2026-06-20 10:30', updatedAt: '2026-06-20 10:30' },
+  // 功能测试中 (target 3: DEV-002, DEV-018, DEV-019)
+  { id: 'DEV-018', sn: 'SN-DEV-018', deviceTypeId: 'DT-001', status: '功能测试中', assembler: '赵六', assemblyTime: '2026-06-16 11:00', photoName: 'assembly_dev018.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-004', moduleTypeId: 'MT-002' }], createdAt: '2026-06-16 11:00', updatedAt: '2026-06-17 10:00' },
+  { id: 'DEV-019', sn: 'SN-DEV-019', deviceTypeId: 'DT-002', status: '功能测试中', assembler: '张三', assemblyTime: '2026-06-15 14:30', photoName: 'assembly_dev019.jpg', usedMaterials: [{ materialId: 'MAT-007', moduleTypeId: 'MT-003' }], createdAt: '2026-06-15 14:30', updatedAt: '2026-06-17 09:30' },
+  // 老化测试中 (target 2: DEV-003, DEV-020)
+  { id: 'DEV-020', sn: 'SN-DEV-020', deviceTypeId: 'DT-001', status: '老化测试中', assembler: '李四', assemblyTime: '2026-06-13 09:00', photoName: 'assembly_dev020.jpg', usedMaterials: [{ materialId: 'MAT-010', moduleTypeId: 'MT-004' }], createdAt: '2026-06-13 09:00', updatedAt: '2026-06-16 14:00' },
+  // 终测中 (target 2: DEV-004, DEV-021)
+  { id: 'DEV-021', sn: 'SN-DEV-021', deviceTypeId: 'DT-002', status: '终测中', assembler: '王五', assemblyTime: '2026-06-09 08:30', photoName: 'assembly_dev021.jpg', usedMaterials: [{ materialId: 'MAT-014', moduleTypeId: 'MT-006' }], createdAt: '2026-06-09 08:30', updatedAt: '2026-06-17 11:00' },
+  // 待分配项目 (target 3: DEV-005, DEV-006, DEV-022)
+  { id: 'DEV-022', sn: 'SN-DEV-022', deviceTypeId: 'DT-001', status: '待分配项目', assembler: '赵六', assemblyTime: '2026-06-02 10:00', photoName: 'assembly_dev022.jpg', usedMaterials: [{ materialId: 'MAT-018', moduleTypeId: 'MT-001' }, { materialId: 'MAT-019', moduleTypeId: 'MT-002' }, { materialId: 'MAT-016', moduleTypeId: 'MT-003' }], createdAt: '2026-06-02 10:00', updatedAt: '2026-06-09 16:00' },
 ];
 
 export const testRecords = [
@@ -201,7 +218,6 @@ export const operationLogs = [
   { id: 'LOG-008', deviceId: 'DEV-003', operator: '王五', timestamp: '2026-06-16 15:00', actionType: '老化测试通过', fromStatus: '整机装配', toStatus: '老化测试中', notes: '更换散热后重测通过' },
   { id: 'LOG-009', deviceId: 'DEV-007', operator: '王五', timestamp: '2026-06-10 09:00', actionType: '分配至项目', fromStatus: '待分配项目', toStatus: '已分配项目', notes: '分配至项目A' },
   { id: 'LOG-010', deviceId: 'DEV-010', operator: '张三', timestamp: '2026-04-22 10:00', actionType: '上线运营', fromStatus: '已分配项目', toStatus: '在线运营', notes: '现场安装完成，上线运营' },
-  { id: 'LOG-011', deviceId: 'DEV-014', operator: '李四', timestamp: '2026-05-30 14:00', actionType: '退役', fromStatus: '在线运营', toStatus: '退役', notes: '使用年限到期，正式退役' },
 ];
 
 export const productionPlans = [
@@ -406,10 +422,7 @@ export const workOrders = [
   { id: 'WO-006', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', projectId: 'PROJ-001', description: '机械臂关节2抖动明显，定位精度异常，误差超出允许范围±3mm', severity: '中', status: '复检中', assignedTo: '王五', recheckPerson: '李四', createdAt: '2026-06-21 10:00', updatedAt: '2026-06-21 14:30', closedAt: null, repairActions: '重新校准关节电机编码器，调整PID参数，更换磨损轴承衬套', replacedModules: [], recheckResult: null, notes: '关节2齿轮轻微磨损，已调整间隙' },
 ];
 
-export const retirements = [
-  { id: 'RET-001', deviceId: 'DEV-014', deviceSN: 'SN-DEV-014', reason: '使用年限超过3年，电机磨损严重，维修成本超过整机价值的60%，决定退役', retiredAt: '2026-05-30 14:00', operator: '李四' },
-  { id: 'RET-002', deviceId: 'DEV-015', deviceSN: 'SN-DEV-015', reason: '项目结束，设备长期闲置，经评估无转项目价值，按规程退役', retiredAt: '2026-06-01 10:00', operator: '王五' },
-];
+export const retirements = [];
 
 export const moduleReplacements = [
   {
