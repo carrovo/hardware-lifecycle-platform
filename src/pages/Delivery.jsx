@@ -78,11 +78,71 @@ function AddDeliveryModal({ isOpen, onClose, onSave, stage, devices, projects })
   );
 }
 
+function BulkSubmitModal({ isOpen, onClose, onSave, stage, selectedRecords, getDeviceSN, resultOptions }) {
+  const [form, setForm] = useState({
+    result: resultOptions[0],
+    operator: '',
+    recordTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
+    notes: '',
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(form);
+    onClose();
+    setForm({ result: resultOptions[0], operator: '', recordTime: new Date().toISOString().slice(0, 16).replace('T', ' '), notes: '' });
+  };
+
+  const f = (key) => ({ value: form[key], onChange: (e) => setForm({ ...form, [key]: e.target.value }) });
+  const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`批量提交${stage}结果（${selectedRecords.length}台）`}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">已选设备</label>
+          <div className="border border-gray-200 rounded px-3 py-2 max-h-28 overflow-y-auto flex flex-wrap gap-1.5">
+            {selectedRecords.map((r) => (
+              <span key={r.id} className="font-mono text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">{getDeviceSN(r.deviceId)}</span>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">结果 *</label>
+            <select className={inputClass} required {...f('result')}>
+              {resultOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">操作人</label>
+            <input type="text" className={inputClass} {...f('operator')} />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">记录时间</label>
+          <input type="text" className={inputClass} {...f('recordTime')} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+          <textarea rows={2} className={inputClass} {...f('notes')} />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">确认提交</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export default function Delivery() {
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
   const [activeTab, setActiveTab] = useState('出厂检验');
   const [showModal, setShowModal] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const [searchSN, setSearchSN] = useState('');
   const [filterProject, setFilterProject] = useState('');
   const [filterResult, setFilterResult] = useState('');
@@ -128,6 +188,57 @@ export default function Delivery() {
   const passCount = filteredRecords.filter((r) => r.result === passResult).length;
   const failCount = filteredRecords.filter((r) => r.result === failResult).length;
 
+  const resetSelection = () => setSelectedIds(new Set());
+  const toggleSelect = (recId) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    next.has(recId) ? next.delete(recId) : next.add(recId);
+    return next;
+  });
+  const allVisibleSelected = filteredRecords.length > 0 && filteredRecords.every((r) => selectedIds.has(r.id));
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) resetSelection();
+    else setSelectedIds(new Set(filteredRecords.map((r) => r.id)));
+  };
+
+  const selectedRecords = filteredRecords.filter((r) => selectedIds.has(r.id));
+
+  const handleBulkSubmit = (form) => {
+    selectedRecords.forEach((r) => {
+      dispatch({
+        type: 'ADD_DELIVERY_RECORD',
+        payload: {
+          id: `DELIV-${Date.now()}-${r.deviceId}`,
+          deviceId: r.deviceId,
+          projectId: r.projectId,
+          stage: activeTab,
+          result: form.result,
+          operator: form.operator,
+          recordTime: form.recordTime,
+          notes: form.notes,
+          address: r.address || '',
+        },
+      });
+    });
+    resetSelection();
+  };
+
+  const handleExport = () => {
+    const hasAddress = activeTab !== '出厂检验';
+    const headers = ['记录时间', '设备SN', '所属项目', '结果', '操作人', ...(hasAddress ? ['地址'] : []), '备注'];
+    const rows = filteredRecords.map((r) => [
+      r.recordTime, getDeviceSN(r.deviceId), r.projectId ? getProjectName(r.projectId) : '',
+      r.result, r.operator || '', ...(hasAddress ? [r.address || ''] : []), r.notes || '',
+    ]);
+    const csv = [headers, ...rows].map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `交付记录_${activeTab}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="p-6">
       <h1 className="text-xl font-bold text-gray-800 mb-4">交付流程</h1>
@@ -137,7 +248,7 @@ export default function Delivery() {
         {STAGES.map((stage) => {
           const count = deliveryRecords.filter((r) => r.stage === stage).length;
           return (
-            <button key={stage} onClick={() => { setActiveTab(stage); setSearchSN(''); setFilterProject(''); setFilterResult(''); }}
+            <button key={stage} onClick={() => { setActiveTab(stage); setSearchSN(''); setFilterProject(''); setFilterResult(''); setSelectedIds(new Set()); }}
               className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === stage ? 'border-slate-700 text-slate-800' : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}>
@@ -174,18 +285,44 @@ export default function Delivery() {
           <span className="text-green-600 font-medium">{passResult}: {passCount}</span>
           <span className="text-red-500 font-medium">{failResult}: {failCount}</span>
         </div>
-        {canDo('add_delivery') && (
-          <button onClick={() => setShowModal(true)}
-            className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
-            + 新增记录
+        <div className="flex items-center gap-2">
+          <button onClick={handleExport}
+            className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50">
+            批量导出
           </button>
-        )}
+          {canDo('add_delivery') && (
+            <button onClick={() => setShowModal(true)}
+              className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
+              + 新增记录
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="bg-slate-50 border border-slate-200 rounded shadow-sm px-4 py-2.5 mb-3 flex items-center gap-3">
+          <span className="text-sm font-medium text-slate-700">已选 {selectedIds.size} 条</span>
+          {canDo('add_delivery') && (
+            <button onClick={() => setShowBulkModal(true)}
+              className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
+              批量提交结果
+            </button>
+          )}
+          <button onClick={resetSelection}
+            className="px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded hover:bg-gray-50">
+            取消选择
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
+              <th className="px-4 py-2.5 w-8">
+                <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} disabled={filteredRecords.length === 0} />
+              </th>
               {['记录时间', '设备SN', '所属项目', '结果', '操作人', activeTab !== '出厂检验' ? '地址' : '', '备注'].filter(Boolean).map((h) => (
                 <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
               ))}
@@ -193,7 +330,10 @@ export default function Delivery() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filteredRecords.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50">
+              <tr key={r.id} className={`hover:bg-gray-50 ${selectedIds.has(r.id) ? 'bg-slate-50' : ''}`}>
+                <td className="px-4 py-2.5">
+                  <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} />
+                </td>
                 <td className="px-4 py-2.5 text-gray-400 text-xs">{r.recordTime}</td>
                 <td className="px-4 py-2.5 font-mono text-xs font-medium">
                   <Link to={`/devices/${r.deviceId}`} className="text-slate-700 hover:text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
@@ -212,7 +352,7 @@ export default function Delivery() {
               </tr>
             ))}
             {filteredRecords.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">暂无{activeTab}记录</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">暂无{activeTab}记录</td></tr>
             )}
           </tbody>
         </table>
@@ -226,6 +366,18 @@ export default function Delivery() {
           stage={activeTab}
           devices={allocatedDevices}
           projects={projects}
+        />
+      )}
+
+      {showBulkModal && (
+        <BulkSubmitModal
+          isOpen={showBulkModal}
+          onClose={() => setShowBulkModal(false)}
+          onSave={handleBulkSubmit}
+          stage={activeTab}
+          selectedRecords={selectedRecords}
+          getDeviceSN={getDeviceSN}
+          resultOptions={stageResultMap[activeTab]}
         />
       )}
     </div>

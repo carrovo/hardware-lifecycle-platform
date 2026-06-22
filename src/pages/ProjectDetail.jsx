@@ -74,11 +74,115 @@ function EditProjectModal({ isOpen, onClose, project, onSave }) {
   );
 }
 
+function AllocateDevicesModal({ isOpen, onClose, pendingDevices, getTypeName, onConfirm }) {
+  const [selected, setSelected] = useState(new Set());
+
+  const toggle = (devId) => setSelected((prev) => {
+    const next = new Set(prev);
+    next.has(devId) ? next.delete(devId) : next.add(devId);
+    return next;
+  });
+  const allSelected = pendingDevices.length > 0 && selected.size === pendingDevices.length;
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(pendingDevices.map((d) => d.id)));
+
+  const handleConfirm = () => {
+    onConfirm([...selected]);
+    setSelected(new Set());
+    onClose();
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="分配设备" size="lg">
+      <div className="space-y-4">
+        <p className="text-sm text-gray-500">从「待分配项目」设备中选择，确认后分配到当前项目。</p>
+        <div className="border border-gray-200 rounded overflow-hidden max-h-80 overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 sticky top-0">
+              <tr>
+                <th className="px-3 py-2 w-8">
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} disabled={pendingDevices.length === 0} />
+                </th>
+                {['设备SN', '整机类型', '装配人', '完成时间'].map((h) => (
+                  <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {pendingDevices.map((d) => (
+                <tr key={d.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => toggle(d.id)}>
+                  <td className="px-3 py-2"><input type="checkbox" checked={selected.has(d.id)} onChange={() => toggle(d.id)} onClick={(e) => e.stopPropagation()} /></td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-800 font-medium">{d.sn}</td>
+                  <td className="px-3 py-2 text-gray-600">{getTypeName(d.deviceTypeId)}</td>
+                  <td className="px-3 py-2 text-gray-600">{d.assembler}</td>
+                  <td className="px-3 py-2 text-gray-400 text-xs">{d.updatedAt}</td>
+                </tr>
+              ))}
+              {pendingDevices.length === 0 && (
+                <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-400">暂无待分配设备</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button onClick={handleConfirm} disabled={selected.size === 0}
+            className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800 disabled:opacity-40">
+            确认分配（{selected.size}）
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function TransferModal({ isOpen, onClose, device, projects, currentProjectId, onConfirm }) {
+  const [targetProjectId, setTargetProjectId] = useState('');
+  const [reason, setReason] = useState('');
+
+  const handleConfirm = (e) => {
+    e.preventDefault();
+    if (!targetProjectId) return;
+    onConfirm({ device, targetProjectId, reason });
+    setTargetProjectId('');
+    setReason('');
+    onClose();
+  };
+
+  const targets = projects.filter((p) => p.id !== currentProjectId && !p.voided);
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`转移设备：${device?.sn || ''}`}>
+      <form onSubmit={handleConfirm} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">目标项目 *</label>
+          <select value={targetProjectId} onChange={(e) => setTargetProjectId(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" required>
+            <option value="">-- 选择项目 --</option>
+            {targets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">转移原因</label>
+          <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button type="submit" className="px-4 py-2 text-sm text-white bg-amber-600 rounded hover:bg-amber-700">确认转移</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export default function ProjectDetail() {
   const { id } = useParams();
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showAllocateModal, setShowAllocateModal] = useState(false);
+  const [transferTarget, setTransferTarget] = useState(null);
+  const [expandedDeviceId, setExpandedDeviceId] = useState(null);
 
   const { projects, deviceAllocations, devices, deliveryRecords, deviceTypes } = state;
 
@@ -120,6 +224,83 @@ export default function ProjectDetail() {
       payload: { id, ...form, updatedAt: now },
     });
   };
+
+  const pendingDevices = devices.filter((d) => d.status === '待分配项目');
+  const getProjectName = (pid) => projects.find((p) => p.id === pid)?.name || pid;
+  const canAllocate = canDo('add_device_allocation') || canDo('add_project');
+
+  const now = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
+
+  const handleAllocate = (deviceIds) => {
+    const t = now();
+    deviceIds.forEach((devId) => {
+      const device = devices.find((d) => d.id === devId);
+      if (!device) return;
+      dispatch({
+        type: 'ADD_DEVICE_ALLOCATION',
+        payload: {
+          id: `ALLOC-${Date.now()}-${devId}`,
+          deviceId: devId,
+          projectId: id,
+          allocatedBy: state.currentUser,
+          allocatedAt: t,
+          notes: '',
+          type: '分配',
+          fromProjectId: null,
+        },
+      });
+      dispatch({ type: 'UPDATE_DEVICE', payload: { id: devId, status: '已分配项目', projectId: id, updatedAt: t } });
+      dispatch({
+        type: 'ADD_OPERATION_LOG',
+        payload: {
+          id: `LOG-${Date.now()}-${devId}`,
+          deviceId: devId,
+          operator: state.currentUser,
+          timestamp: t,
+          actionType: '分配至项目',
+          fromStatus: '待分配项目',
+          toStatus: '已分配项目',
+          notes: `分配至 ${project.name}`,
+        },
+      });
+    });
+  };
+
+  const handleTransfer = ({ device, targetProjectId, reason }) => {
+    const t = now();
+    dispatch({
+      type: 'ADD_DEVICE_ALLOCATION',
+      payload: {
+        id: `ALLOC-${Date.now()}-${device.id}`,
+        deviceId: device.id,
+        projectId: targetProjectId,
+        allocatedBy: state.currentUser,
+        allocatedAt: t,
+        notes: reason,
+        type: '转移',
+        fromProjectId: id,
+      },
+    });
+    dispatch({ type: 'UPDATE_DEVICE', payload: { id: device.id, projectId: targetProjectId, updatedAt: t } });
+    dispatch({
+      type: 'ADD_OPERATION_LOG',
+      payload: {
+        id: `LOG-${Date.now()}-${device.id}`,
+        deviceId: device.id,
+        operator: state.currentUser,
+        timestamp: t,
+        actionType: '项目转移',
+        fromStatus: project.name,
+        toStatus: getProjectName(targetProjectId),
+        notes: reason || `从 ${project.name} 转移至 ${getProjectName(targetProjectId)}`,
+      },
+    });
+  };
+
+  const getDeviceAllocHistory = (deviceId) =>
+    deviceAllocations
+      .filter((a) => a.deviceId === deviceId)
+      .sort((a, b) => (b.allocatedAt || '').localeCompare(a.allocatedAt || ''));
 
   return (
     <div className="p-6 space-y-6">
@@ -178,14 +359,21 @@ export default function ProjectDetail() {
         <p className="text-xs text-gray-400 mt-2">目标需求 {project.targetCount} 台，已分配 {allocated} 台，剩余 {Math.max(project.targetCount - allocated, 0)} 台</p>
       </div>
 
-      {/* Allocated Devices */}
+      {/* 设备管理 */}
       <div className="bg-white rounded shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-700">已分配设备（{allocatedDevices.length}台）</h2>
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-700">设备管理（{allocatedDevices.length}台）</h2>
+          {canAllocate && !project.voided && (
+            <button onClick={() => setShowAllocateModal(true)}
+              className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
+              + 分配设备
+            </button>
+          )}
         </div>
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
+              <th className="px-4 py-2.5 w-8" />
               {['设备SN', '整机类型', '当前状态', '分配时间', '操作'].map((h) => (
                 <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
               ))}
@@ -194,20 +382,68 @@ export default function ProjectDetail() {
           <tbody className="divide-y divide-gray-100">
             {allocatedDevices.map((d) => {
               const alloc = allocations.find((a) => a.deviceId === d.id);
+              const isExpanded = expandedDeviceId === d.id;
+              const history = getDeviceAllocHistory(d.id);
               return (
-                <tr key={d.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-mono text-xs text-gray-800 font-medium">{d.sn}</td>
-                  <td className="px-4 py-2.5 text-gray-600">{getTypeName(d.deviceTypeId)}</td>
-                  <td className="px-4 py-2.5"><StatusBadge status={d.status} /></td>
-                  <td className="px-4 py-2.5 text-gray-400 text-xs">{alloc?.allocatedAt || '—'}</td>
-                  <td className="px-4 py-2.5">
-                    <Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline text-xs">查看详情</Link>
-                  </td>
-                </tr>
+                <>
+                  <tr key={d.id} className={isExpanded ? 'bg-slate-50' : 'hover:bg-gray-50'}>
+                    <td className="px-4 py-2.5 text-gray-400 text-sm cursor-pointer w-8"
+                      onClick={() => setExpandedDeviceId(isExpanded ? null : d.id)}>
+                      {isExpanded ? '▼' : '▶'}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-gray-800 font-medium">
+                      <Link to={`/devices/${d.id}`} className="hover:text-blue-600 hover:underline">{d.sn}</Link>
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-600">{getTypeName(d.deviceTypeId)}</td>
+                    <td className="px-4 py-2.5"><StatusBadge status={d.status} /></td>
+                    <td className="px-4 py-2.5 text-gray-400 text-xs">{alloc?.allocatedAt || '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline text-xs mr-3">查看详情</Link>
+                      {canAllocate && !project.voided && (
+                        <button onClick={() => setTransferTarget(d)} className="text-amber-600 hover:underline text-xs">转移</button>
+                      )}
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr key={`${d.id}-history`}>
+                      <td colSpan={6} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
+                        <div className="px-12 py-4">
+                          <div className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">分配/转移记录</div>
+                          {history.length > 0 ? (
+                            <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
+                              <thead className="bg-gray-100">
+                                <tr>
+                                  {['时间', '类型', '目标项目', '操作人', '备注'].map((h) => (
+                                    <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {history.map((h) => (
+                                  <tr key={h.id} className="bg-white">
+                                    <td className="px-3 py-2 text-gray-400 text-xs">{h.allocatedAt}</td>
+                                    <td className="px-3 py-2">
+                                      <span className={`text-xs px-2 py-0.5 rounded-full border ${h.type === '转移' ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-blue-100 text-blue-700 border-blue-300'}`}>{h.type}</span>
+                                    </td>
+                                    <td className="px-3 py-2 text-gray-700">{getProjectName(h.projectId)}</td>
+                                    <td className="px-3 py-2 text-gray-600">{h.allocatedBy}</td>
+                                    <td className="px-3 py-2 text-gray-500 text-xs">{h.notes || '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          ) : (
+                            <div className="text-sm text-gray-400">暂无分配记录</div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
               );
             })}
             {allocatedDevices.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">暂无已分配设备</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">暂无已分配设备</td></tr>
             )}
           </tbody>
         </table>
@@ -260,6 +496,25 @@ export default function ProjectDetail() {
         project={project}
         onSave={handleSave}
       />
+
+      <AllocateDevicesModal
+        isOpen={showAllocateModal}
+        onClose={() => setShowAllocateModal(false)}
+        pendingDevices={pendingDevices}
+        getTypeName={getTypeName}
+        onConfirm={handleAllocate}
+      />
+
+      {transferTarget && (
+        <TransferModal
+          isOpen={!!transferTarget}
+          onClose={() => setTransferTarget(null)}
+          device={transferTarget}
+          projects={projects}
+          currentProjectId={id}
+          onConfirm={handleTransfer}
+        />
+      )}
     </div>
   );
 }

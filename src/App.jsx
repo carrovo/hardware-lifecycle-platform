@@ -13,12 +13,8 @@ import Devices from './pages/Devices';
 import DeviceDetail from './pages/DeviceDetail';
 import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
-import DeviceAllocation from './pages/DeviceAllocation';
 import Delivery from './pages/Delivery';
-import Operations from './pages/Operations';
-import Alerts from './pages/Alerts';
 import WorkOrders from './pages/WorkOrders';
-import Retirement from './pages/Retirement';
 import Users from './pages/Users';
 import Roles from './pages/Roles';
 
@@ -46,12 +42,12 @@ function AppRoutes() {
         <Route path="/devices/:id" element={<DeviceDetail />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id" element={<ProjectDetail />} />
-        <Route path="/device-allocation" element={<DeviceAllocation />} />
         <Route path="/delivery" element={<Delivery />} />
-        <Route path="/operations" element={<Operations />} />
-        <Route path="/alerts" element={<Alerts />} />
         <Route path="/work-orders" element={<WorkOrders />} />
-        <Route path="/retirement" element={<Retirement />} />
+        <Route path="/operations" element={<Navigate to="/devices" replace />} />
+        <Route path="/alerts" element={<Navigate to="/devices?tab=alerts" replace />} />
+        <Route path="/device-allocation" element={<Navigate to="/projects" replace />} />
+        <Route path="/retirement" element={<Navigate to="/devices" replace />} />
         <Route path="/users" element={<Users />} />
         <Route path="/roles" element={<Roles />} />
       </Routes>

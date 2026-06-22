@@ -3,34 +3,36 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import { FEISHU_USERS, ROLES_LIST } from '../data/mockData';
 
+const topLink = { label: '运营看板', path: '/dashboard' };
+
 const navGroups = [
   {
     label: '生产制造',
     items: [
-      { label: '生产看板', path: '/dashboard' },
-      { label: '设备列表', path: '/devices' },
       { label: '生产计划', path: '/production-plan' },
-      { label: '来料检验', path: '/materials' },
+      { label: '来料管理', path: '/materials' },
       { label: '整机装配', path: '/assembly' },
       { label: '测试中心', path: '/tests' },
+    ],
+  },
+  {
+    label: '设备管理',
+    items: [
+      { label: '设备列表', path: '/devices' },
       { label: '设备类型管理', path: '/device-types' },
     ],
   },
   {
-    label: '项目交付',
+    label: '项目管理',
     items: [
       { label: '项目列表', path: '/projects' },
-      { label: '设备分配', path: '/device-allocation' },
-      { label: '交付流程', path: '/delivery' },
+      { label: '交付验收', path: '/delivery' },
     ],
   },
   {
-    label: '长期维护',
+    label: '售后运维',
     items: [
-      { label: '在线运营', path: '/operations' },
-      { label: '告警中心', path: '/alerts' },
       { label: '维修工单', path: '/work-orders' },
-      { label: '退役管理', path: '/retirement' },
     ],
   },
   {
@@ -76,6 +78,20 @@ export default function Layout({ children }) {
 
         {/* Nav */}
         <nav className="flex-1 py-2 overflow-y-auto">
+          {canSeeNav(topLink.path) && (
+            <NavLink
+              to={topLink.path}
+              className={({ isActive }) =>
+                `flex items-center gap-2 px-4 py-2 text-sm transition-colors mb-2 ${
+                  isActive
+                    ? 'bg-slate-700 text-white font-medium'
+                    : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                }`
+              }
+            >
+              <span>{topLink.label}</span>
+            </NavLink>
+          )}
           {visibleGroups.map((group) => (
             <div key={group.label} className="mb-2">
               <div className="px-4 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">

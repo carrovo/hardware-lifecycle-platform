@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
+import StatusBadge from '../components/StatusBadge';
 
 const CATEGORIES = ['底盘', '机械臂', '电机', '末端', '全身相机', '预控'];
 
@@ -151,6 +153,14 @@ export default function DeviceTypes() {
   const getModuleName = (id) => state.moduleTypes.find((m) => m.id === id)?.name || id;
   const getModuleCategory = (id) => state.moduleTypes.find((m) => m.id === id)?.category || '';
 
+  const getAssembledDevices = (deviceTypeId) =>
+    state.devices.filter((d) => d.deviceTypeId === deviceTypeId);
+
+  // Count materials waiting to be assembled (待装配) that match this module type.
+  // Materials match a module type by shared category (e.g. "底盘", "机械臂").
+  const getPendingMaterialCount = (moduleType) =>
+    state.materials.filter((m) => m.status === '待装配' && m.category === moduleType.category).length;
+
   const toggleExpand = (id) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -291,6 +301,44 @@ export default function DeviceTypes() {
                             ) : (
                               <div className="text-sm text-gray-400">暂无槁位配置</div>
                             )}
+
+                            {/* 已装配整机 */}
+                            {(() => {
+                              const assembled = getAssembledDevices(dt.id);
+                              return (
+                                <div className="mt-5">
+                                  <div className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">
+                                    已装配整机（{assembled.length}）
+                                  </div>
+                                  {assembled.length > 0 ? (
+                                    <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
+                                      <thead className="bg-gray-100">
+                                        <tr>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">SN</th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">装配时间</th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">当前状态</th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">操作</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-100">
+                                        {assembled.map((d) => (
+                                          <tr key={d.id} className="bg-white">
+                                            <td className="px-3 py-2 font-mono text-xs text-gray-800 font-medium">{d.sn}</td>
+                                            <td className="px-3 py-2 text-gray-500 text-xs">{d.assemblyTime || '—'}</td>
+                                            <td className="px-3 py-2"><StatusBadge status={d.status} /></td>
+                                            <td className="px-3 py-2">
+                                              <Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline text-xs">查看详情</Link>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  ) : (
+                                    <div className="text-sm text-gray-400">暂无已装配整机</div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
                       </tr>
@@ -337,7 +385,17 @@ export default function DeviceTypes() {
                       className={`cursor-pointer border-t border-gray-100 transition-colors ${!mt.active ? 'opacity-60' : ''} ${isExpanded ? 'bg-slate-50' : 'hover:bg-gray-50'}`}>
                       <td className="px-4 py-2.5 text-gray-400 w-8">{isExpanded ? '▼' : '▶'}</td>
                       <td className="px-4 py-2.5 text-gray-500 font-mono text-xs">{mt.id}</td>
-                      <td className="px-4 py-2.5 font-medium text-gray-800">{mt.name}</td>
+                      <td className="px-4 py-2.5 font-medium text-gray-800">
+                        <span className="inline-flex items-center gap-1.5">
+                          {mt.name}
+                          {getPendingMaterialCount(mt) > 0 && (
+                            <span className="bg-green-100 text-green-700 border border-green-300 text-xs px-1.5 py-0.5 rounded-full font-normal"
+                              title="待装配物料数量">
+                              {getPendingMaterialCount(mt)} 待装配
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td className="px-4 py-2.5">
                         <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{mt.category}</span>
                       </td>

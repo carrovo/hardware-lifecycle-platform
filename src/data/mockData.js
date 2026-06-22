@@ -443,11 +443,11 @@ export const ROLE_NAV_PERMISSIONS = {
   '质检员':     ['/dashboard', '/materials', '/tests', '/devices'],
   '装配工':     ['/dashboard', '/assembly', '/devices', '/materials'],
   '测试员':     ['/dashboard', '/tests', '/devices'],
-  '运维工程师':  ['/dashboard', '/operations', '/alerts', '/work-orders', '/devices', '/delivery'],
-  '项目负责人':  ['/dashboard', '/projects', '/device-allocation', '/delivery', '/devices', '/production-plan', '/operations', '/alerts'],
-  '厂长':       ['/dashboard', '/materials', '/assembly', '/tests', '/devices', '/production-plan', '/device-types', '/projects', '/device-allocation', '/delivery', '/operations', '/alerts', '/work-orders', '/retirement'],
-  '维修工程师':  ['/dashboard', '/work-orders', '/devices', '/operations', '/alerts'],
-  '管理员':     ['/dashboard', '/materials', '/assembly', '/tests', '/devices', '/production-plan', '/device-types', '/projects', '/device-allocation', '/delivery', '/operations', '/alerts', '/work-orders', '/retirement', '/users', '/roles'],
+  '运维工程师':  ['/dashboard', '/work-orders', '/devices', '/delivery'],
+  '项目负责人':  ['/dashboard', '/projects', '/delivery', '/devices', '/production-plan'],
+  '厂长':       ['/dashboard', '/production-plan', '/materials', '/assembly', '/tests', '/devices', '/device-types', '/projects', '/delivery', '/work-orders'],
+  '维修工程师':  ['/dashboard', '/work-orders', '/devices'],
+  '管理员':     ['/dashboard', '/production-plan', '/materials', '/assembly', '/tests', '/devices', '/device-types', '/projects', '/delivery', '/work-orders', '/users', '/roles'],
 };
 
 export const ROLE_ACTION_PERMISSIONS = {
