@@ -1,10 +1,12 @@
-import { ROLES_LIST, ROLE_ACTION_PERMISSIONS, ROLE_NAV_PERMISSIONS } from '../data/mockData';
+import { ROLES_LIST, ROLE_NAV_PERMISSIONS } from '../data/mockData';
+import { useRole } from '../context/RoleContext';
 
 const ALL_ACTIONS = [
   'add_material_batch', 'add_assembly', 'add_test_record', 'void_test_record',
   'add_production_plan', 'add_project', 'add_device_allocation', 'add_delivery',
-  'add_work_order', 'add_retirement', 'add_device_type', 'add_module_type',
-  'edit_device_type', 'edit_module_type', 'void_project', 'manage_users', 'manage_roles',
+  'add_work_order', 'update_work_order', 'recheck_work_order', 'add_retirement',
+  'add_device_type', 'add_module_type', 'edit_device_type', 'edit_module_type',
+  'void_project', 'update_alert', 'manage_users', 'manage_roles',
 ];
 
 const ACTION_LABELS = {
@@ -17,21 +19,36 @@ const ACTION_LABELS = {
   'add_device_allocation': '设备分配',
   'add_delivery': '新增交付记录',
   'add_work_order': '新增维修工单',
+  'update_work_order': '更新工单状态',
+  'recheck_work_order': '工单复检',
   'add_retirement': '设备退役',
   'add_device_type': '新增整机类型',
   'add_module_type': '新增模块类型',
   'edit_device_type': '编辑整机类型',
   'edit_module_type': '编辑模块类型',
   'void_project': '作废项目',
+  'update_alert': '更新告警状态',
   'manage_users': '用户管理',
   'manage_roles': '角色管理',
 };
 
 export default function Roles() {
+  const { currentRole, actionPermissions, updateActionPermission } = useRole();
+  const isAdmin = currentRole === '管理员';
+
   return (
     <div className="p-6">
-      <h1 className="text-xl font-bold text-gray-800 mb-1">角色权限矩阵</h1>
-      <p className="text-sm text-gray-500 mb-6">各角色对功能操作的权限配置（只读展示）</p>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-xl font-bold text-gray-800">角色权限矩阵</h1>
+        {isAdmin && (
+          <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded">
+            管理员模式 · 可编辑权限
+          </span>
+        )}
+      </div>
+      <p className="text-sm text-gray-500 mb-6">
+        {isAdmin ? '点击复选框可修改各角色的操作权限' : '各角色对功能操作的权限配置（只读展示）'}
+      </p>
       <div className="bg-white rounded shadow-sm overflow-x-auto">
         <table className="text-xs w-full">
           <thead className="bg-gray-50">
@@ -47,12 +64,21 @@ export default function Roles() {
               <tr key={action} className="hover:bg-gray-50">
                 <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{ACTION_LABELS[action]}</td>
                 {ROLES_LIST.map((role) => {
-                  const has = (ROLE_ACTION_PERMISSIONS[role] || []).includes(action);
+                  const has = (actionPermissions[role] || []).includes(action);
                   return (
                     <td key={role} className="px-3 py-2 text-center">
-                      {has
-                        ? <span className="text-green-600 font-bold">✓</span>
-                        : <span className="text-gray-200">—</span>}
+                      {isAdmin ? (
+                        <input
+                          type="checkbox"
+                          checked={has}
+                          onChange={(e) => updateActionPermission(role, action, e.target.checked)}
+                          className="w-3.5 h-3.5 accent-blue-600 cursor-pointer"
+                        />
+                      ) : (
+                        has
+                          ? <span className="text-green-600 font-bold">✓</span>
+                          : <span className="text-gray-200">—</span>
+                      )}
                     </td>
                   );
                 })}

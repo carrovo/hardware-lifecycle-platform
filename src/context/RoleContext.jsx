@@ -5,12 +5,23 @@ const RoleContext = createContext(null);
 
 export function RoleProvider({ children }) {
   const [currentRole, setCurrentRole] = useState('管理员');
+  const [actionPermissions, setActionPermissions] = useState({ ...ROLE_ACTION_PERMISSIONS });
 
   const canSeeNav = (path) => (ROLE_NAV_PERMISSIONS[currentRole] || []).includes(path);
-  const canDo = (action) => (ROLE_ACTION_PERMISSIONS[currentRole] || []).includes(action);
+  const canDo = (action) => (actionPermissions[currentRole] || []).includes(action);
+
+  const updateActionPermission = (role, action, hasPermission) => {
+    setActionPermissions((prev) => {
+      const perms = prev[role] || [];
+      return {
+        ...prev,
+        [role]: hasPermission ? [...perms, action] : perms.filter((a) => a !== action),
+      };
+    });
+  };
 
   return (
-    <RoleContext.Provider value={{ currentRole, setCurrentRole, canSeeNav, canDo }}>
+    <RoleContext.Provider value={{ currentRole, setCurrentRole, canSeeNav, canDo, actionPermissions, updateActionPermission }}>
       {children}
     </RoleContext.Provider>
   );
