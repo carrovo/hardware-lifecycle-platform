@@ -1,4 +1,4 @@
-import { ROLES_LIST, ROLE_NAV_PERMISSIONS } from '../data/mockData';
+import { ROLES_LIST } from '../data/mockData';
 import { useRole } from '../context/RoleContext';
 
 const ALL_ACTIONS = [
@@ -33,7 +33,7 @@ const ACTION_LABELS = {
 };
 
 export default function Roles() {
-  const { currentRole, actionPermissions, updateActionPermission } = useRole();
+  const { currentRole, actionPermissions, updateActionPermission, navPermissions, updateNavPermission } = useRole();
   const isAdmin = currentRole === '管理员';
 
   return (
@@ -89,8 +89,9 @@ export default function Roles() {
       </div>
 
       <div className="mt-6 bg-white rounded shadow-sm overflow-x-auto">
-        <div className="px-4 py-3 border-b border-gray-100">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">导航菜单可见性</h2>
+          {isAdmin && <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded">管理员可编辑</span>}
         </div>
         <table className="text-xs w-full">
           <thead className="bg-gray-50">
@@ -109,7 +110,7 @@ export default function Roles() {
               ['/tests', '测试中心'],
               ['/devices', '设备列表'],
               ['/production-plan', '生产计划'],
-              ['/device-types', '设备类型'],
+              ['/device-types', '设备类型管理'],
               ['/projects', '项目列表'],
               ['/device-allocation', '设备分配'],
               ['/delivery', '交付流程'],
@@ -123,12 +124,21 @@ export default function Roles() {
               <tr key={path} className="hover:bg-gray-50">
                 <td className="px-4 py-2 text-gray-700">{label}</td>
                 {ROLES_LIST.map((role) => {
-                  const has = (ROLE_NAV_PERMISSIONS[role] || []).includes(path);
+                  const has = (navPermissions[role] || []).includes(path);
                   return (
                     <td key={role} className="px-3 py-2 text-center">
-                      {has
-                        ? <span className="text-green-600 font-bold">✓</span>
-                        : <span className="text-gray-200">—</span>}
+                      {isAdmin ? (
+                        <input
+                          type="checkbox"
+                          checked={has}
+                          onChange={(e) => updateNavPermission(role, path, e.target.checked)}
+                          className="w-3.5 h-3.5 accent-blue-600 cursor-pointer"
+                        />
+                      ) : (
+                        has
+                          ? <span className="text-green-600 font-bold">✓</span>
+                          : <span className="text-gray-200">—</span>
+                      )}
                     </td>
                   );
                 })}

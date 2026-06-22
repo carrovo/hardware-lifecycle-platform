@@ -76,6 +76,54 @@ export const materials = [
   { id: 'MAT-018', sn: 'SN-CHASSIS-003', category: '底盘', model: 'CH-2024-A', batchNo: 'BATCH-2024-008', supplier: '供应商A', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-10 09:00', status: '已占用', notes: '' },
   { id: 'MAT-019', sn: 'SN-ARM-004', category: '机械臂', model: 'ARM-2024-B', batchNo: 'BATCH-2024-008', supplier: '供应商B', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-10 09:30', status: '已占用', notes: '' },
   { id: 'MAT-020', sn: 'SN-ARM-005', category: '机械臂', model: 'ARM-2024-B', batchNo: 'BATCH-2024-008', supplier: '供应商B', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-10 09:45', status: '已占用', notes: '' },
+  // BATCH-009: 底盘, 务实科技
+  { id: 'MAT-021', sn: 'SN-CHASSIS-004', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-009', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-12 09:00', status: '待装配', notes: '' },
+  { id: 'MAT-022', sn: 'SN-CHASSIS-005', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-009', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-12 09:10', status: '待装配', notes: '' },
+  { id: 'MAT-023', sn: 'SN-CHASSIS-006', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-009', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-12 09:20', status: '待装配', notes: '' },
+  // BATCH-010: 机械臂, 务实科技
+  { id: 'MAT-024', sn: 'SN-ARM-006', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-010', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-14 10:00', status: '待装配', notes: '' },
+  { id: 'MAT-025', sn: 'SN-ARM-007', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-010', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-14 10:10', status: '待装配', notes: '' },
+  { id: 'MAT-026', sn: 'SN-ARM-008', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-010', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-14 10:20', status: '待装配', notes: '' },
+  // BATCH-011: 电机, 迈驰驱动
+  { id: 'MAT-027', sn: 'SN-MOTOR-007', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-011', supplier: '迈驰驱动', quantity: 1, inspectionResult: '不合格', inspector: '王五', inspectionTime: '2026-05-15 08:30', status: '退货换货', notes: '转子偏心，振动超标' },
+  { id: 'MAT-028', sn: 'SN-MOTOR-008', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-011', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-15 08:40', status: '待装配', notes: '' },
+  { id: 'MAT-029', sn: 'SN-MOTOR-009', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-011', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-05-15 08:50', status: '待装配', notes: '' },
+  // BATCH-012: 末端, 务实科技
+  { id: 'MAT-030', sn: 'SN-END-003', category: '末端', model: 'END-2026-D', batchNo: 'BATCH-2026-012', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-18 09:00', status: '待装配', notes: '' },
+  { id: 'MAT-031', sn: 'SN-END-004', category: '末端', model: 'END-2026-D', batchNo: 'BATCH-2026-012', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-18 09:10', status: '待装配', notes: '' },
+  // BATCH-013: 全身相机, 锐视传感器
+  { id: 'MAT-032', sn: 'SN-CAM-003', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-013', supplier: '锐视传感器', quantity: 1, inspectionResult: '特批使用', inspector: '张三', inspectionTime: '2026-05-20 10:00', status: '待装配', notes: '色差偏移轻微，特批使用' },
+  { id: 'MAT-033', sn: 'SN-CAM-004', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-013', supplier: '锐视传感器', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-05-20 10:10', status: '待装配', notes: '' },
+  // BATCH-014: 预控, 务实科技
+  { id: 'MAT-034', sn: 'SN-CTRL-003', category: '预控', model: 'CTRL-2026-F', batchNo: 'BATCH-2026-014', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-22 08:00', status: '待装配', notes: '' },
+  { id: 'MAT-035', sn: 'SN-CTRL-004', category: '预控', model: 'CTRL-2026-F', batchNo: 'BATCH-2026-014', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-05-22 08:10', status: '待装配', notes: '' },
+  // BATCH-015: 底盘, 务实科技 (不合格批次)
+  { id: 'MAT-036', sn: 'SN-CHASSIS-007', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-015', supplier: '务实科技', quantity: 1, inspectionResult: '不合格', inspector: '王五', inspectionTime: '2026-05-25 09:00', status: '退货换货', notes: '底盘焊缝开裂' },
+  { id: 'MAT-037', sn: 'SN-CHASSIS-008', category: '底盘', model: 'CH-2026-A', batchNo: 'BATCH-2026-015', supplier: '务实科技', quantity: 1, inspectionResult: '不合格', inspector: '王五', inspectionTime: '2026-05-25 09:10', status: '退货换货', notes: '底盘焊缝开裂' },
+  // BATCH-016: 机械臂, 务实科技 (特批使用)
+  { id: 'MAT-038', sn: 'SN-ARM-009', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-016', supplier: '务实科技', quantity: 1, inspectionResult: '特批使用', inspector: '赵六', inspectionTime: '2026-05-28 09:30', status: '待装配', notes: '关节间隙略大，特批低速场景使用' },
+  { id: 'MAT-039', sn: 'SN-ARM-010', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-016', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-28 09:40', status: '待装配', notes: '' },
+  { id: 'MAT-040', sn: 'SN-ARM-011', category: '机械臂', model: 'ARM-2026-B', batchNo: 'BATCH-2026-016', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-05-28 09:50', status: '待装配', notes: '' },
+  // BATCH-017: 电机, 迈驰驱动
+  { id: 'MAT-041', sn: 'SN-MOTOR-010', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-017', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-01 08:00', status: '待装配', notes: '' },
+  { id: 'MAT-042', sn: 'SN-MOTOR-011', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-017', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-01 08:10', status: '待装配', notes: '' },
+  { id: 'MAT-043', sn: 'SN-MOTOR-012', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-017', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-01 08:20', status: '待装配', notes: '' },
+  // BATCH-018: 末端, 锐视传感器 (不合格)
+  { id: 'MAT-044', sn: 'SN-END-005', category: '末端', model: 'END-2026-D', batchNo: 'BATCH-2026-018', supplier: '锐视传感器', quantity: 1, inspectionResult: '不合格', inspector: '李四', inspectionTime: '2026-06-03 10:00', status: '退货换货', notes: '传感器灵敏度不达标' },
+  // BATCH-019: 全身相机, 锐视传感器
+  { id: 'MAT-045', sn: 'SN-CAM-005', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-019', supplier: '锐视传感器', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-06-05 09:00', status: '待装配', notes: '' },
+  { id: 'MAT-046', sn: 'SN-CAM-006', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-019', supplier: '锐视传感器', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-06-05 09:10', status: '待装配', notes: '' },
+  { id: 'MAT-047', sn: 'SN-CAM-007', category: '全身相机', model: 'CAM-2026-E', batchNo: 'BATCH-2026-019', supplier: '锐视传感器', quantity: 1, inspectionResult: '合格', inspector: '王五', inspectionTime: '2026-06-05 09:20', status: '待装配', notes: '' },
+  // BATCH-020: 预控, 务实科技
+  { id: 'MAT-048', sn: 'SN-CTRL-005', category: '预控', model: 'CTRL-2026-F', batchNo: 'BATCH-2026-020', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-06-08 08:30', status: '待装配', notes: '' },
+  { id: 'MAT-049', sn: 'SN-CTRL-006', category: '预控', model: 'CTRL-2026-F', batchNo: 'BATCH-2026-020', supplier: '务实科技', quantity: 1, inspectionResult: '合格', inspector: '赵六', inspectionTime: '2026-06-08 08:40', status: '维修中', notes: '固件刷写失败，送修' },
+  // BATCH-021: 底盘, 迈驰驱动
+  { id: 'MAT-050', sn: 'SN-CHASSIS-009', category: '底盘', model: 'CH-2026-B', batchNo: 'BATCH-2026-021', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-10 09:00', status: '待装配', notes: '' },
+  { id: 'MAT-051', sn: 'SN-CHASSIS-010', category: '底盘', model: 'CH-2026-B', batchNo: 'BATCH-2026-021', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '张三', inspectionTime: '2026-06-10 09:10', status: '已报废', notes: '搬运中碰撞损坏，无法修复' },
+  // BATCH-022: 电机, 迈驰驱动
+  { id: 'MAT-052', sn: 'SN-MOTOR-013', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-022', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-06-15 08:00', status: '待装配', notes: '' },
+  { id: 'MAT-053', sn: 'SN-MOTOR-014', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-022', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-06-15 08:10', status: '待装配', notes: '' },
+  { id: 'MAT-054', sn: 'SN-MOTOR-015', category: '电机', model: 'MTR-2026-C', batchNo: 'BATCH-2026-022', supplier: '迈驰驱动', quantity: 1, inspectionResult: '合格', inspector: '李四', inspectionTime: '2026-06-15 08:20', status: '维修中', notes: '编码器故障，返厂维修' },
 ];
 
 export const devices = [
@@ -164,6 +212,20 @@ export const materialBatches = [
   { id: 'BATCH-006', batchNo: 'BATCH-2024-006', category: '预控', model: 'CTRL-2024-F', supplier: '供应商F', quantity: 2, inspector: '王五', inspectionTime: '2026-05-06 08:00', notes: '', items: [{ id: 'MAT-013', sn: 'SN-CTRL-001', result: '合格', status: '已占用', notes: '' }, { id: 'MAT-014', sn: 'SN-CTRL-002', result: '合格', status: '待装配', notes: '' }] },
   { id: 'BATCH-007', batchNo: 'BATCH-2024-007', category: '电机', model: 'MTR-2024-C', supplier: '供应商C', quantity: 3, inspector: '赵六', inspectionTime: '2026-05-07 09:00', notes: '', items: [{ id: 'MAT-015', sn: 'SN-MOTOR-004', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-016', sn: 'SN-MOTOR-005', result: '合格', status: '已占用', notes: '' }, { id: 'MAT-017', sn: 'SN-MOTOR-006', result: '合格', status: '已占用', notes: '' }] },
   { id: 'BATCH-008', batchNo: 'BATCH-2024-008', category: '底盘', model: 'CH-2024-A', supplier: '供应商A', quantity: 3, inspector: '张三', inspectionTime: '2026-05-10 09:00', notes: '', items: [{ id: 'MAT-018', sn: 'SN-CHASSIS-003', result: '合格', status: '已占用', notes: '' }, { id: 'MAT-019', sn: 'SN-ARM-004', result: '合格', status: '已占用', notes: '' }, { id: 'MAT-020', sn: 'SN-ARM-005', result: '合格', status: '已占用', notes: '' }] },
+  { id: 'BATCH-009', batchNo: 'BATCH-2026-009', category: '底盘', model: 'CH-2026-A', supplier: '务实科技', quantity: 3, inspector: '张三', inspectionTime: '2026-05-12 09:00', notes: '', items: [{ id: 'MAT-021', sn: 'SN-CHASSIS-004', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-022', sn: 'SN-CHASSIS-005', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-023', sn: 'SN-CHASSIS-006', result: '合格', status: '待装配', notes: '' }] },
+  { id: 'BATCH-010', batchNo: 'BATCH-2026-010', category: '机械臂', model: 'ARM-2026-B', supplier: '务实科技', quantity: 3, inspector: '李四', inspectionTime: '2026-05-14 10:00', notes: '', items: [{ id: 'MAT-024', sn: 'SN-ARM-006', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-025', sn: 'SN-ARM-007', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-026', sn: 'SN-ARM-008', result: '合格', status: '待装配', notes: '' }] },
+  { id: 'BATCH-011', batchNo: 'BATCH-2026-011', category: '电机', model: 'MTR-2026-C', supplier: '迈驰驱动', quantity: 3, inspector: '王五', inspectionTime: '2026-05-15 08:30', notes: '1件转子偏心，已退货', items: [{ id: 'MAT-027', sn: 'SN-MOTOR-007', result: '不合格', status: '退货换货', notes: '转子偏心，振动超标' }, { id: 'MAT-028', sn: 'SN-MOTOR-008', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-029', sn: 'SN-MOTOR-009', result: '合格', status: '待装配', notes: '' }] },
+  { id: 'BATCH-012', batchNo: 'BATCH-2026-012', category: '末端', model: 'END-2026-D', supplier: '务实科技', quantity: 2, inspector: '赵六', inspectionTime: '2026-05-18 09:00', notes: '', items: [{ id: 'MAT-030', sn: 'SN-END-003', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-031', sn: 'SN-END-004', result: '合格', status: '待装配', notes: '' }] },
+  { id: 'BATCH-013', batchNo: 'BATCH-2026-013', category: '全身相机', model: 'CAM-2026-E', supplier: '锐视传感器', quantity: 2, inspector: '张三', inspectionTime: '2026-05-20 10:00', notes: '1件色差偏移，特批使用', items: [{ id: 'MAT-032', sn: 'SN-CAM-003', result: '特批使用', status: '待装配', notes: '色差偏移轻微，特批低照度场景' }, { id: 'MAT-033', sn: 'SN-CAM-004', result: '合格', status: '待装配', notes: '' }] },
+  { id: 'BATCH-014', batchNo: 'BATCH-2026-014', category: '预控', model: 'CTRL-2026-F', supplier: '务实科技', quantity: 2, inspector: '李四', inspectionTime: '2026-05-22 08:00', notes: '', items: [{ id: 'MAT-034', sn: 'SN-CTRL-003', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-035', sn: 'SN-CTRL-004', result: '合格', status: '待装配', notes: '' }] },
+  { id: 'BATCH-015', batchNo: 'BATCH-2026-015', category: '底盘', model: 'CH-2026-A', supplier: '务实科技', quantity: 2, inspector: '王五', inspectionTime: '2026-05-25 09:00', notes: '整批不合格，焊缝开裂，退货处理', items: [{ id: 'MAT-036', sn: 'SN-CHASSIS-007', result: '不合格', status: '退货换货', notes: '底盘焊缝开裂' }, { id: 'MAT-037', sn: 'SN-CHASSIS-008', result: '不合格', status: '退货换货', notes: '底盘焊缝开裂' }] },
+  { id: 'BATCH-016', batchNo: 'BATCH-2026-016', category: '机械臂', model: 'ARM-2026-B', supplier: '务实科技', quantity: 3, inspector: '赵六', inspectionTime: '2026-05-28 09:30', notes: '1件关节间隙偏大，特批低速场景', items: [{ id: 'MAT-038', sn: 'SN-ARM-009', result: '特批使用', status: '待装配', notes: '关节间隙略大，特批低速场景使用' }, { id: 'MAT-039', sn: 'SN-ARM-010', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-040', sn: 'SN-ARM-011', result: '合格', status: '待装配', notes: '' }] },
+  { id: 'BATCH-017', batchNo: 'BATCH-2026-017', category: '电机', model: 'MTR-2026-C', supplier: '迈驰驱动', quantity: 3, inspector: '张三', inspectionTime: '2026-06-01 08:00', notes: '', items: [{ id: 'MAT-041', sn: 'SN-MOTOR-010', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-042', sn: 'SN-MOTOR-011', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-043', sn: 'SN-MOTOR-012', result: '合格', status: '待装配', notes: '' }] },
+  { id: 'BATCH-018', batchNo: 'BATCH-2026-018', category: '末端', model: 'END-2026-D', supplier: '锐视传感器', quantity: 1, inspector: '李四', inspectionTime: '2026-06-03 10:00', notes: '传感器灵敏度不达标，整批退货', items: [{ id: 'MAT-044', sn: 'SN-END-005', result: '不合格', status: '退货换货', notes: '传感器灵敏度不达标' }] },
+  { id: 'BATCH-019', batchNo: 'BATCH-2026-019', category: '全身相机', model: 'CAM-2026-E', supplier: '锐视传感器', quantity: 3, inspector: '王五', inspectionTime: '2026-06-05 09:00', notes: '', items: [{ id: 'MAT-045', sn: 'SN-CAM-005', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-046', sn: 'SN-CAM-006', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-047', sn: 'SN-CAM-007', result: '合格', status: '待装配', notes: '' }] },
+  { id: 'BATCH-020', batchNo: 'BATCH-2026-020', category: '预控', model: 'CTRL-2026-F', supplier: '务实科技', quantity: 2, inspector: '赵六', inspectionTime: '2026-06-08 08:30', notes: '1件固件刷写失败，送修', items: [{ id: 'MAT-048', sn: 'SN-CTRL-005', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-049', sn: 'SN-CTRL-006', result: '合格', status: '维修中', notes: '固件刷写失败，送修' }] },
+  { id: 'BATCH-021', batchNo: 'BATCH-2026-021', category: '底盘', model: 'CH-2026-B', supplier: '迈驰驱动', quantity: 2, inspector: '张三', inspectionTime: '2026-06-10 09:00', notes: '1件搬运损坏已报废', items: [{ id: 'MAT-050', sn: 'SN-CHASSIS-009', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-051', sn: 'SN-CHASSIS-010', result: '合格', status: '已报废', notes: '搬运中碰撞损坏，无法修复' }] },
+  { id: 'BATCH-022', batchNo: 'BATCH-2026-022', category: '电机', model: 'MTR-2026-C', supplier: '迈驰驱动', quantity: 3, inspector: '李四', inspectionTime: '2026-06-15 08:00', notes: '1件编码器故障，返厂维修', items: [{ id: 'MAT-052', sn: 'SN-MOTOR-013', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-053', sn: 'SN-MOTOR-014', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-054', sn: 'SN-MOTOR-015', result: '合格', status: '维修中', notes: '编码器故障，返厂维修' }] },
 ];
 
 // ============ Part2 & Part3 Data ============
@@ -197,12 +259,124 @@ export const deliveryRecords = [
 ];
 
 export const alerts = [
-  { id: 'ALERT-001', deviceId: 'DEV-010', projectId: 'PROJ-001', deviceSN: 'SN-DEV-010', alertTime: '2026-06-19 03:22', source: '系统自动', severity: '轻微', description: '电池电量低于20%，建议及时充电', status: '已处理', resolvedBy: '张三', resolvedAt: '2026-06-19 08:30', workOrderId: null },
-  { id: 'ALERT-002', deviceId: 'DEV-012', projectId: 'PROJ-003', deviceSN: 'SN-DEV-012', alertTime: '2026-06-20 14:15', source: '系统自动', severity: '严重', description: '关节3电机过热，温度达到92°C，超过阈值', status: '待处理', resolvedBy: null, resolvedAt: null, workOrderId: 'WO-001' },
-  { id: 'ALERT-003', deviceId: 'DEV-011', projectId: 'PROJ-002', deviceSN: 'SN-DEV-011', alertTime: '2026-06-20 22:40', source: '系统自动', severity: '轻微', description: '存储空间使用率超过70%，建议清理日志', status: '待处理', resolvedBy: null, resolvedAt: null, workOrderId: null },
-  { id: 'ALERT-004', deviceId: 'DEV-013', projectId: 'PROJ-001', deviceSN: 'SN-DEV-013', alertTime: '2026-06-21 01:05', source: '系统自动', severity: '严重', description: '预控模组通信中断超过5分钟', status: '待处理', resolvedBy: null, resolvedAt: null, workOrderId: 'WO-002' },
-  { id: 'ALERT-005', deviceId: 'DEV-010', projectId: 'PROJ-001', deviceSN: 'SN-DEV-010', alertTime: '2026-06-18 11:30', source: '人工上报', severity: '轻微', description: '末端执行器抓取精度下降，误差约±2mm', status: '已处理', resolvedBy: '李四', resolvedAt: '2026-06-18 16:00', workOrderId: null },
-  { id: 'ALERT-006', deviceId: 'DEV-012', projectId: 'PROJ-003', deviceSN: 'SN-DEV-012', alertTime: '2026-06-21 07:55', source: '人工上报', severity: '严重', description: '设备离线超过8小时，现场人员无法连接', status: '待处理', resolvedBy: null, resolvedAt: null, workOrderId: 'WO-003' },
+  {
+    id: 'ALERT-001', deviceId: 'DEV-010', projectId: 'PROJ-001', deviceSN: 'SN-DEV-010',
+    alertTime: '2026-06-19 03:22', source: '系统自动', severity: '轻微',
+    description: '电池电量低于20%，建议及时充电',
+    status: '已解决', workOrderId: null,
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    processLogs: [
+      { operator: '赵六', time: '2026-06-19 06:00', fromStatus: '待处理', toStatus: '处理中', notes: '已收到告警，安排现场充电' },
+      { operator: '赵六', time: '2026-06-19 08:30', fromStatus: '处理中', toStatus: '已解决', notes: '设备已充电完成，电量恢复至78%' },
+    ],
+  },
+  {
+    id: 'ALERT-002', deviceId: 'DEV-012', projectId: 'PROJ-003', deviceSN: 'SN-DEV-012',
+    alertTime: '2026-06-20 14:15', source: '系统自动', severity: '严重',
+    description: '关节3电机过热，温度达到92°C，超过阈值',
+    status: '工单处理中', workOrderId: 'WO-001',
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '陈厂长', role: '厂长' }],
+    processLogs: [
+      { operator: '赵六', time: '2026-06-20 14:30', fromStatus: '待处理', toStatus: '已生成工单', notes: '严重告警，已生成维修工单 WO-001' },
+    ],
+  },
+  {
+    id: 'ALERT-003', deviceId: 'DEV-011', projectId: 'PROJ-002', deviceSN: 'SN-DEV-011',
+    alertTime: '2026-06-20 22:40', source: '系统自动', severity: '轻微',
+    description: '存储空间使用率超过70%，建议清理日志',
+    status: '待处理', workOrderId: null,
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    processLogs: [],
+  },
+  {
+    id: 'ALERT-004', deviceId: 'DEV-013', projectId: 'PROJ-001', deviceSN: 'SN-DEV-013',
+    alertTime: '2026-06-21 01:05', source: '系统自动', severity: '严重',
+    description: '预控模组通信中断超过5分钟',
+    status: '已生成工单', workOrderId: 'WO-002',
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '陈厂长', role: '厂长' }],
+    processLogs: [
+      { operator: '赵六', time: '2026-06-21 01:10', fromStatus: '待处理', toStatus: '已生成工单', notes: '严重告警，已生成维修工单 WO-002' },
+    ],
+  },
+  {
+    id: 'ALERT-005', deviceId: 'DEV-010', projectId: 'PROJ-001', deviceSN: 'SN-DEV-010',
+    alertTime: '2026-06-18 11:30', source: '人工上报', severity: '轻微',
+    description: '末端执行器抓取精度下降，误差约±2mm',
+    status: '已解决', workOrderId: null,
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    processLogs: [
+      { operator: '李四', time: '2026-06-18 13:00', fromStatus: '待处理', toStatus: '处理中', notes: '已到现场，检查末端传感器' },
+      { operator: '李四', time: '2026-06-18 16:00', fromStatus: '处理中', toStatus: '已解决', notes: '重新标定末端执行器，精度恢复正常范围±0.8mm' },
+    ],
+  },
+  {
+    id: 'ALERT-006', deviceId: 'DEV-012', projectId: 'PROJ-003', deviceSN: 'SN-DEV-012',
+    alertTime: '2026-06-21 07:55', source: '人工上报', severity: '严重',
+    description: '设备离线超过8小时，现场人员无法连接',
+    status: '工单处理中', workOrderId: 'WO-003',
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '陈厂长', role: '厂长' }],
+    processLogs: [
+      { operator: '赵六', time: '2026-06-21 08:00', fromStatus: '待处理', toStatus: '已生成工单', notes: '设备完全离线，严重故障，已生成维修工单 WO-003' },
+    ],
+  },
+  {
+    id: 'ALERT-007', deviceId: 'DEV-011', projectId: 'PROJ-002', deviceSN: 'SN-DEV-011',
+    alertTime: '2026-06-21 06:10', source: '系统自动', severity: '轻微',
+    description: '导航模块定位漂移，偏差超过阈值0.3m',
+    status: '处理中', workOrderId: null,
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    processLogs: [
+      { operator: '赵六', time: '2026-06-21 07:00', fromStatus: '待处理', toStatus: '处理中', notes: '已远程连接，正在排查定位漂移原因，可能是地图数据老化' },
+    ],
+  },
+  {
+    id: 'ALERT-008', deviceId: 'DEV-013', projectId: 'PROJ-001', deviceSN: 'SN-DEV-013',
+    alertTime: '2026-06-20 18:30', source: '系统自动', severity: '轻微',
+    description: 'CPU使用率持续超过85%，任务响应延迟',
+    status: '处理中', workOrderId: null,
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    processLogs: [
+      { operator: '赵六', time: '2026-06-20 19:15', fromStatus: '待处理', toStatus: '处理中', notes: '已登录后台，发现后台日志服务异常占用CPU，正在清理' },
+    ],
+  },
+  {
+    id: 'ALERT-009', deviceId: 'DEV-010', projectId: 'PROJ-001', deviceSN: 'SN-DEV-010',
+    alertTime: '2026-06-22 02:05', source: '系统自动', severity: '轻微',
+    description: '机械臂关节润滑度不足，运行摩擦力增大',
+    status: '待处理', workOrderId: null,
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    processLogs: [],
+  },
+  {
+    id: 'ALERT-010', deviceId: 'DEV-012', projectId: 'PROJ-003', deviceSN: 'SN-DEV-012',
+    alertTime: '2026-06-22 07:40', source: '人工上报', severity: '严重',
+    description: '主控板过压保护触发，设备紧急停机，无法远程复位',
+    status: '待处理', workOrderId: null,
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '陈厂长', role: '厂长' }],
+    processLogs: [],
+  },
+  {
+    id: 'ALERT-011', deviceId: 'DEV-010', projectId: 'PROJ-001', deviceSN: 'SN-DEV-010',
+    alertTime: '2026-06-10 14:20', source: '系统自动', severity: '严重',
+    description: '关节2位置反馈异常，编码器读数跳变',
+    status: '已关闭', workOrderId: 'WO-004',
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '陈厂长', role: '厂长' }],
+    processLogs: [
+      { operator: '赵六', time: '2026-06-10 14:30', fromStatus: '待处理', toStatus: '已生成工单', notes: '编码器故障，严重级别，已生成工单 WO-004' },
+      { operator: '李四', time: '2026-06-18 17:00', fromStatus: '工单处理中', toStatus: '已关闭', notes: '对应工单 WO-004 已关闭，设备恢复正常' },
+    ],
+  },
+  {
+    id: 'ALERT-012', deviceId: 'DEV-011', projectId: 'PROJ-002', deviceSN: 'SN-DEV-011',
+    alertTime: '2026-06-15 08:55', source: '系统自动', severity: '严重',
+    description: '导航地图加载失败，设备反复尝试回原点',
+    status: '已关闭', workOrderId: 'WO-005',
+    notifiedUsers: [{ name: '赵六', role: '运维工程师' }, { name: '刘项目', role: '项目负责人' }],
+    processLogs: [
+      { operator: '赵六', time: '2026-06-15 09:00', fromStatus: '待处理', toStatus: '已生成工单', notes: '导航失效，严重影响运营，已生成工单 WO-005' },
+      { operator: '张三', time: '2026-06-15 14:00', fromStatus: '工单处理中', toStatus: '已关闭', notes: '对应工单 WO-005 已关闭，远程推送地图固件后恢复正常' },
+    ],
+  },
 ];
 
 export const workOrders = [
@@ -252,9 +426,9 @@ export const ROLE_NAV_PERMISSIONS = {
   '装配工':     ['/dashboard', '/assembly', '/devices', '/materials'],
   '测试员':     ['/dashboard', '/tests', '/devices'],
   '运维工程师':  ['/dashboard', '/operations', '/alerts', '/work-orders', '/devices', '/delivery'],
-  '项目负责人':  ['/dashboard', '/projects', '/device-allocation', '/delivery', '/devices', '/production-plan'],
+  '项目负责人':  ['/dashboard', '/projects', '/device-allocation', '/delivery', '/devices', '/production-plan', '/operations', '/alerts'],
   '厂长':       ['/dashboard', '/materials', '/assembly', '/tests', '/devices', '/production-plan', '/device-types', '/projects', '/device-allocation', '/delivery', '/operations', '/alerts', '/work-orders', '/retirement'],
-  '维修工程师':  ['/dashboard', '/work-orders', '/devices'],
+  '维修工程师':  ['/dashboard', '/work-orders', '/devices', '/operations', '/alerts'],
   '管理员':     ['/dashboard', '/materials', '/assembly', '/tests', '/devices', '/production-plan', '/device-types', '/projects', '/device-allocation', '/delivery', '/operations', '/alerts', '/work-orders', '/retirement', '/users', '/roles'],
 };
 

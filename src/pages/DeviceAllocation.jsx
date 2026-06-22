@@ -47,6 +47,9 @@ export default function DeviceAllocation() {
   const { state, dispatch } = useApp();
   const [activeTab, setActiveTab] = useState('待分配设备');
   const [allocateTarget, setAllocateTarget] = useState(null);
+  const [searchSN, setSearchSN] = useState('');
+  const [filterProject, setFilterProject] = useState('');
+  const [filterType, setFilterType] = useState('');
 
   const { devices, projects, deviceAllocations, deviceTypes } = state;
 
@@ -140,6 +143,26 @@ export default function DeviceAllocation() {
       )}
 
       {activeTab === '分配记录' && (
+        <>
+          <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 flex flex-wrap gap-3 items-center">
+            <input
+              type="text" placeholder="搜索设备SN…" value={searchSN}
+              onChange={(e) => setSearchSN(e.target.value)}
+              className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-slate-500 w-48" />
+            <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)}
+              className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-slate-500">
+              <option value="">全部项目</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
+              className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-slate-500">
+              <option value="">全部类型</option>
+              <option value="分配">分配</option>
+              <option value="转移">转移</option>
+            </select>
+            <button onClick={() => { setSearchSN(''); setFilterProject(''); setFilterType(''); }}
+              className="text-xs text-gray-400 hover:text-gray-600 underline">重置</button>
+          </div>
         <div className="bg-white rounded shadow-sm overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
@@ -150,7 +173,15 @@ export default function DeviceAllocation() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {[...deviceAllocations].reverse().map((a) => (
+              {[...deviceAllocations].reverse()
+                .filter((a) => {
+                  const sn = getDeviceSN(a.deviceId);
+                  const matchSN = !searchSN || sn.toLowerCase().includes(searchSN.toLowerCase());
+                  const matchProj = !filterProject || a.projectId === filterProject;
+                  const matchType = !filterType || a.type === filterType;
+                  return matchSN && matchProj && matchType;
+                })
+                .map((a) => (
                 <tr key={a.id} className="hover:bg-gray-50">
                   <td className="px-4 py-2.5 text-gray-400 font-mono text-xs">{a.id}</td>
                   <td className="px-4 py-2.5 font-mono text-xs text-gray-800 font-medium">{getDeviceSN(a.deviceId)}</td>
@@ -171,6 +202,7 @@ export default function DeviceAllocation() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {allocateTarget && (

@@ -9,11 +9,11 @@ const navGroups = [
     items: [
       { label: '生产看板', path: '/dashboard' },
       { label: '设备列表', path: '/devices' },
+      { label: '生产计划', path: '/production-plan' },
       { label: '来料检验', path: '/materials' },
       { label: '整机装配', path: '/assembly' },
       { label: '测试中心', path: '/tests' },
-      { label: '生产计划', path: '/production-plan' },
-      { label: '设备类型', path: '/device-types' },
+      { label: '设备类型管理', path: '/device-types' },
     ],
   },
   {

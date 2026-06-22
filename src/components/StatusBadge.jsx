@@ -26,12 +26,19 @@ const statusColorMap = {
   // Alert severity
   '轻微':     'bg-amber-100 text-amber-700 border-amber-300',
   '严重':     'bg-red-100 text-red-700 border-red-300',
+  // Material / module status
+  '维修中':   'bg-orange-100 text-orange-700 border-orange-300',
+  '已报废':   'bg-gray-200 text-gray-500 border-gray-300',
   // Alert / work order status
   '待处理':   'bg-orange-100 text-orange-700 border-orange-300',
   '处理中':   'bg-blue-100 text-blue-700 border-blue-300',
+  '已解决':   'bg-green-100 text-green-700 border-green-300',
+  '已生成工单': 'bg-blue-100 text-blue-700 border-blue-300',
+  '工单处理中': 'bg-indigo-100 text-indigo-700 border-indigo-300',
   '复检中':   'bg-purple-100 text-purple-700 border-purple-300',
   '已关闭':   'bg-gray-100 text-gray-500 border-gray-300',
   '已处理':   'bg-green-100 text-green-700 border-green-300',
+  '已作废':   'bg-gray-100 text-gray-400 border-gray-200',
   // Work order severity
   '高':  'bg-red-100 text-red-700 border-red-300',
   '中':  'bg-amber-100 text-amber-700 border-amber-300',

@@ -6,22 +6,29 @@ const RoleContext = createContext(null);
 export function RoleProvider({ children }) {
   const [currentRole, setCurrentRole] = useState('管理员');
   const [actionPermissions, setActionPermissions] = useState({ ...ROLE_ACTION_PERMISSIONS });
+  const [navPermissions, setNavPermissions] = useState(() =>
+    Object.fromEntries(Object.entries(ROLE_NAV_PERMISSIONS).map(([k, v]) => [k, [...v]]))
+  );
 
-  const canSeeNav = (path) => (ROLE_NAV_PERMISSIONS[currentRole] || []).includes(path);
+  const canSeeNav = (path) => (navPermissions[currentRole] || []).includes(path);
   const canDo = (action) => (actionPermissions[currentRole] || []).includes(action);
 
   const updateActionPermission = (role, action, hasPermission) => {
     setActionPermissions((prev) => {
       const perms = prev[role] || [];
-      return {
-        ...prev,
-        [role]: hasPermission ? [...perms, action] : perms.filter((a) => a !== action),
-      };
+      return { ...prev, [role]: hasPermission ? [...perms, action] : perms.filter((a) => a !== action) };
+    });
+  };
+
+  const updateNavPermission = (role, path, hasPermission) => {
+    setNavPermissions((prev) => {
+      const perms = prev[role] || [];
+      return { ...prev, [role]: hasPermission ? [...perms, path] : perms.filter((p) => p !== path) };
     });
   };
 
   return (
-    <RoleContext.Provider value={{ currentRole, setCurrentRole, canSeeNav, canDo, actionPermissions, updateActionPermission }}>
+    <RoleContext.Provider value={{ currentRole, setCurrentRole, canSeeNav, canDo, actionPermissions, updateActionPermission, navPermissions, updateNavPermission }}>
       {children}
     </RoleContext.Provider>
   );

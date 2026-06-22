@@ -83,6 +83,9 @@ export default function Delivery() {
   const { canDo } = useRole();
   const [activeTab, setActiveTab] = useState('出厂检验');
   const [showModal, setShowModal] = useState(false);
+  const [searchSN, setSearchSN] = useState('');
+  const [filterProject, setFilterProject] = useState('');
+  const [filterResult, setFilterResult] = useState('');
 
   const { deliveryRecords, devices, projects } = state;
 
@@ -91,7 +94,14 @@ export default function Delivery() {
   );
 
   const filteredRecords = [...deliveryRecords]
-    .filter((r) => r.stage === activeTab)
+    .filter((r) => {
+      if (r.stage !== activeTab) return false;
+      const sn = getDeviceSN(r.deviceId);
+      if (searchSN && !sn.toLowerCase().includes(searchSN.toLowerCase())) return false;
+      if (filterProject && r.projectId !== filterProject) return false;
+      if (filterResult && r.result !== filterResult) return false;
+      return true;
+    })
     .sort((a, b) => b.recordTime.localeCompare(a.recordTime));
 
   const getDeviceSN = (id) => devices.find((d) => d.id === id)?.sn || id;
@@ -127,7 +137,7 @@ export default function Delivery() {
         {STAGES.map((stage) => {
           const count = deliveryRecords.filter((r) => r.stage === stage).length;
           return (
-            <button key={stage} onClick={() => setActiveTab(stage)}
+            <button key={stage} onClick={() => { setActiveTab(stage); setSearchSN(''); setFilterProject(''); setFilterResult(''); }}
               className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === stage ? 'border-slate-700 text-slate-800' : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}>
@@ -136,6 +146,26 @@ export default function Delivery() {
             </button>
           );
         })}
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded shadow-sm px-4 py-3 mb-3 flex flex-wrap gap-3 items-center">
+        <input type="text" placeholder="搜索设备SN…" value={searchSN}
+          onChange={(e) => { setSearchSN(e.target.value); }}
+          className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-slate-500 w-44" />
+        <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)}
+          className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-slate-500">
+          <option value="">全部项目</option>
+          {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select value={filterResult} onChange={(e) => setFilterResult(e.target.value)}
+          className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-slate-500">
+          <option value="">全部结果</option>
+          {stageResultMap[activeTab].map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <button onClick={() => { setSearchSN(''); setFilterProject(''); setFilterResult(''); }}
+          className="text-xs text-gray-400 hover:text-gray-600 underline">重置</button>
+        <span className="ml-auto text-sm text-gray-400">共 {filteredRecords.length} 条</span>
       </div>
 
       {/* Stats + action */}

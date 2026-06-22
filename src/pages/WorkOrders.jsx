@@ -55,6 +55,69 @@ function AddWorkOrderModal({ isOpen, onClose, onSave, devices, currentUser }) {
   );
 }
 
+function EditWorkOrderModal({ isOpen, onClose, wo, onSave }) {
+  const [form, setForm] = useState({ description: wo?.description || '', severity: wo?.severity || '高', notes: wo?.notes || '' });
+  if (!wo) return null;
+  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+  const rate = wo.target > 0 ? Math.round((wo.actual / wo.target) * 100) : 0;
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`编辑工单 ${wo.id}`}>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">故障描述 *</label>
+          <textarea rows={3} className={inp} required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">严重程度</label>
+          <select className={inp} value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}>
+            <option>高</option><option>中</option><option>低</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+          <textarea rows={2} className={inp} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button onClick={() => { onSave(form); onClose(); }}
+            disabled={!form.description.trim()}
+            className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800 disabled:opacity-40">
+            保存修改
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function VoidWorkOrderModal({ isOpen, onClose, wo, onSave }) {
+  const [reason, setReason] = useState('');
+  if (!wo) return null;
+  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="作废工单">
+      <div className="space-y-4">
+        <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
+          工单作废后将灰显不计入统计，但仍可查看原始内容，此操作不可撤销。
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">作废原因 *</label>
+          <textarea rows={3} className={inp} required value={reason} onChange={(e) => setReason(e.target.value)}
+            placeholder="请填写作废原因" />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button onClick={() => { onSave(reason); onClose(); }}
+            disabled={!reason.trim()}
+            className="px-4 py-2 text-sm text-white bg-red-600 rounded hover:bg-red-700 disabled:opacity-40">
+            确认作废
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function StartProcessingModal({ isOpen, onClose, onConfirm, currentUser }) {
   const [assignee, setAssignee] = useState(currentUser);
   const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
@@ -228,6 +291,8 @@ function WorkOrderDetail({ wo, state, dispatch, currentUser, canDo }) {
   const [showStartModal, setShowStartModal] = useState(false);
   const [showRecheckModal, setShowRecheckModal] = useState(false);
   const [showAddReplModal, setShowAddReplModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showVoidModal, setShowVoidModal] = useState(false);
   const [recheckResult, setRecheckResult] = useState('');
   const [recheckNotes, setRecheckNotes] = useState('');
 
@@ -258,6 +323,14 @@ function WorkOrderDetail({ wo, state, dispatch, currentUser, canDo }) {
   const handleCloseOrder = () => {
     const t = now();
     dispatch({ type: 'UPDATE_WORK_ORDER', payload: { id: wo.id, status: '已关闭', recheckResult: '合格', closedAt: t, updatedAt: t } });
+  };
+
+  const handleEdit = (form) => {
+    dispatch({ type: 'UPDATE_WORK_ORDER', payload: { id: wo.id, ...form, updatedAt: now() } });
+  };
+
+  const handleVoid = (voidReason) => {
+    dispatch({ type: 'UPDATE_WORK_ORDER', payload: { id: wo.id, status: '已作废', voidReason, updatedAt: now() } });
   };
 
   const handleAddReplacement = ({ slotName, slotModuleTypeId, removedMaterialId, addedMaterialId, removedDisposition }) => {
@@ -347,6 +420,18 @@ function WorkOrderDetail({ wo, state, dispatch, currentUser, canDo }) {
                 提交复检
               </button>
             </>
+          )}
+          {['待处理', '处理中'].includes(wo.status) && canDo('update_work_order') && (
+            <button onClick={() => setShowEditModal(true)}
+              className="px-3 py-1.5 text-sm bg-white text-gray-700 border border-gray-300 rounded hover:bg-gray-50">
+              编辑
+            </button>
+          )}
+          {wo.status !== '已关闭' && wo.status !== '已作废' && canDo('update_work_order') && (
+            <button onClick={() => setShowVoidModal(true)}
+              className="px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded hover:bg-red-50">
+              作废工单
+            </button>
           )}
         </div>
       </div>
@@ -484,6 +569,10 @@ function WorkOrderDetail({ wo, state, dispatch, currentUser, canDo }) {
         <AddReplacementModal isOpen={showAddReplModal} onClose={() => setShowAddReplModal(false)}
           onConfirm={handleAddReplacement} device={device} deviceType={deviceType} materials={materials} />
       )}
+      <EditWorkOrderModal isOpen={showEditModal} onClose={() => setShowEditModal(false)}
+        wo={wo} onSave={handleEdit} />
+      <VoidWorkOrderModal isOpen={showVoidModal} onClose={() => setShowVoidModal(false)}
+        wo={wo} onSave={handleVoid} />
     </div>
   );
 }
@@ -528,7 +617,7 @@ export default function WorkOrders() {
     });
   };
 
-  const statusCounts = { '待处理': 0, '处理中': 0, '复检中': 0, '已关闭': 0 };
+  const statusCounts = { '待处理': 0, '处理中': 0, '复检中': 0, '已关闭': 0, '已作废': 0 };
   workOrders.forEach((w) => { if (statusCounts[w.status] !== undefined) statusCounts[w.status]++; });
 
   return (
@@ -545,7 +634,7 @@ export default function WorkOrders() {
 
       {/* Filter chips */}
       <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 flex flex-wrap gap-2 items-center">
-        {['全部', '待处理', '处理中', '复检中', '已关闭'].map((s) => (
+        {['全部', '待处理', '处理中', '复检中', '已关闭', '已作废'].map((s) => (
           <button key={s} onClick={() => setFilterStatus(s)}
             className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${
               filterStatus === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300'
@@ -576,11 +665,16 @@ export default function WorkOrders() {
                 <React.Fragment key={wo.id}>
                   <tr
                     onClick={() => setExpandedId(isExpanded ? null : wo.id)}
-                    className={`cursor-pointer border-t border-gray-100 transition-colors hover:bg-blue-50 ${isExpanded ? 'bg-slate-50' : ''}`}>
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-600">{wo.id}</td>
+                    className={`cursor-pointer border-t border-gray-100 transition-colors hover:bg-blue-50 ${isExpanded ? 'bg-slate-50' : ''} ${wo.status === '已作废' ? 'opacity-50' : ''}`}>
+                    <td className="px-4 py-2.5 font-mono text-xs text-gray-600">
+                      <span className={wo.status === '已作废' ? 'line-through' : ''}>{wo.id}</span>
+                    </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-gray-800 font-medium">{wo.deviceSN}</td>
                     <td className="px-4 py-2.5 text-gray-700 max-w-[200px]">
                       <div className="truncate">{wo.description}</div>
+                      {wo.status === '已作废' && wo.voidReason && (
+                        <div className="text-xs text-red-400 mt-0.5 truncate">作废原因：{wo.voidReason}</div>
+                      )}
                     </td>
                     <td className="px-4 py-2.5"><StatusBadge status={wo.severity} /></td>
                     <td className="px-4 py-2.5"><StatusBadge status={wo.status} /></td>

@@ -23,14 +23,57 @@ function DonutChart({ rate }) {
   );
 }
 
+function EditPlanModal({ isOpen, onClose, plan, onSave }) {
+  const [form, setForm] = useState({ target: plan?.target || 0, actual: plan?.actual || 0, project: plan?.project || '', bottleneck: plan?.bottleneck || '', notes: plan?.notes || '' });
+  if (!plan) return null;
+  const rate = form.target > 0 ? Math.round((form.actual / form.target) * 100) : 0;
+  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`编辑计划 ${plan.date}`}>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">关联项目/订单</label>
+          <input type="text" className={inp} value={form.project} onChange={(e) => setForm({ ...form, project: e.target.value })} />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">当日产能目标</label>
+            <input type="number" min="0" className={inp} value={form.target} onChange={(e) => setForm({ ...form, target: Number(e.target.value) })} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">实际完成 <span className="text-gray-400 font-normal">（自动计算字段）</span></label>
+            <input type="number" min="0" className={`${inp} bg-gray-50 text-gray-400`} readOnly value={form.actual} />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">达成率</label>
+          <div className={`${inp} bg-gray-50 text-gray-400`}>{rate}%</div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">瓶颈环节标记</label>
+          <input type="text" className={inp} value={form.bottleneck} onChange={(e) => setForm({ ...form, bottleneck: e.target.value })} placeholder="如：组装环节人手不足、零件缺货" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+          <textarea rows={2} className={inp} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button onClick={() => { onSave(form); onClose(); }} className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存修改</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function AddPlanModal({ isOpen, onClose, onSave, existingProjects }) {
-  const [form, setForm] = useState({ date: '2026-06-21', target: '', actual: '', project: '', notes: '' });
+  const [form, setForm] = useState({ date: '2026-06-21', target: '', actual: '', project: '', bottleneck: '', notes: '' });
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onSave(form);
     onClose();
-    setForm({ date: '2026-06-21', target: '', actual: '', project: '', notes: '' });
+    setForm({ date: '2026-06-21', target: '', actual: '', project: '', bottleneck: '', notes: '' });
   };
 
   return (
@@ -344,7 +387,7 @@ export default function ProductionPlan() {
                               <table className="w-full text-xs">
                                 <thead>
                                   <tr className="text-gray-500 border-b border-gray-200">
-                                    {['日期', '目标', '实际', '达成率', '备注', '操作'].map((h) => (
+                                    {['日期', '目标', '实际', '达成率', '瓶颈环节', '备注', '操作'].map((h) => (
                                       <th key={h} className="text-left py-1.5 pr-4 font-medium">{h}</th>
                                     ))}
                                   </tr>
@@ -352,44 +395,25 @@ export default function ProductionPlan() {
                                 <tbody>
                                   {data.plans.map((plan) => {
                                     const r = plan.target > 0 ? Math.round((plan.actual / plan.target) * 100) : 0;
-                                    const isEditing = editId === plan.id;
                                     return (
                                       <tr key={plan.id} className="border-b border-gray-100 last:border-0">
                                         <td className="py-1.5 pr-4 font-medium text-gray-700">{plan.date}</td>
-                                        <td className="py-1.5 pr-4">
-                                          {isEditing ? (
-                                            <input type="number" value={editValues.target}
-                                              onChange={(e) => setEditValues({ ...editValues, target: Number(e.target.value) })}
-                                              className="w-16 border border-gray-300 rounded px-1" />
-                                          ) : plan.target}
-                                        </td>
-                                        <td className="py-1.5 pr-4">
-                                          {isEditing ? (
-                                            <input type="number" value={editValues.actual}
-                                              onChange={(e) => setEditValues({ ...editValues, actual: Number(e.target.value) })}
-                                              className="w-16 border border-gray-300 rounded px-1" />
-                                          ) : plan.actual}
-                                        </td>
+                                        <td className="py-1.5 pr-4">{plan.target}</td>
+                                        <td className="py-1.5 pr-4">{plan.actual}</td>
                                         <td className="py-1.5 pr-4">
                                           <span className={`font-medium ${r >= 90 ? 'text-green-600' : r >= 70 ? 'text-amber-600' : 'text-red-500'}`}>
                                             {r}%
                                           </span>
                                         </td>
+                                        <td className="py-1.5 pr-4 text-gray-400">{plan.bottleneck || '—'}</td>
                                         <td className="py-1.5 pr-4 text-gray-400">{plan.notes || '—'}</td>
                                         <td className="py-1.5">
-                                          {isEditing ? (
-                                            <div className="flex gap-2">
-                                              <button onClick={() => handleEditSave(plan)} className="text-green-600 hover:underline">保存</button>
-                                              <button onClick={() => setEditId(null)} className="text-gray-400 hover:underline">取消</button>
-                                            </div>
-                                          ) : (
-                                            <div className="flex gap-2">
-                                              <button onClick={(e) => { e.stopPropagation(); setEditId(plan.id); setEditValues({ target: plan.target, actual: plan.actual }); }}
-                                                className="text-slate-600 hover:underline">编辑</button>
-                                              <button onClick={(e) => { e.stopPropagation(); handleDelete(plan.id); }}
-                                                className="text-red-400 hover:underline">删除</button>
-                                            </div>
-                                          )}
+                                          <div className="flex gap-2">
+                                            <button onClick={(e) => { e.stopPropagation(); setEditId(plan.id); setEditValues({ target: plan.target, actual: plan.actual, project: plan.project, bottleneck: plan.bottleneck || '', notes: plan.notes || '' }); }}
+                                              className="text-slate-600 hover:underline">编辑</button>
+                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(plan.id); }}
+                                              className="text-red-400 hover:underline">删除</button>
+                                          </div>
                                         </td>
                                       </tr>
                                     );
@@ -410,6 +434,12 @@ export default function ProductionPlan() {
       )}
 
       <AddPlanModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleAddPlan} existingProjects={existingProjects} />
+      <EditPlanModal
+        isOpen={!!editId}
+        onClose={() => setEditId(null)}
+        plan={editId ? plans.find((p) => p.id === editId) : null}
+        onSave={(form) => dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: editId, ...form } })}
+      />
     </div>
   );
 }
