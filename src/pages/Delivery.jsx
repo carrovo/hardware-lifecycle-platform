@@ -93,6 +93,9 @@ export default function Delivery() {
     ['已分配项目', '在线运营'].includes(d.status)
   );
 
+  const getDeviceSN = (id) => devices.find((d) => d.id === id)?.sn || id;
+  const getProjectName = (id) => projects.find((p) => p.id === id)?.name || id;
+
   const filteredRecords = [...deliveryRecords]
     .filter((r) => {
       if (r.stage !== activeTab) return false;
@@ -103,9 +106,6 @@ export default function Delivery() {
       return true;
     })
     .sort((a, b) => b.recordTime.localeCompare(a.recordTime));
-
-  const getDeviceSN = (id) => devices.find((d) => d.id === id)?.sn || id;
-  const getProjectName = (id) => projects.find((p) => p.id === id)?.name || id;
 
   const stageResultMap = {
     '出厂检验': ['合格', '不合格'],
