@@ -357,6 +357,12 @@ export default function DeviceDetail() {
             <div className="text-xs text-gray-400 mb-1">装配时间</div>
             <div className="text-sm text-gray-600">{device.assemblyTime}</div>
           </div>
+          {device.erpStorageOrderNo && (
+            <div>
+              <div className="text-xs text-gray-400 mb-1">产成品入库单号</div>
+              <div className="text-sm text-gray-600 font-mono">{device.erpStorageOrderNo}</div>
+            </div>
+          )}
           {device.photoName && (
             <div>
               <div className="text-xs text-gray-400 mb-1">现场照片</div>
@@ -405,49 +411,96 @@ export default function DeviceDetail() {
         )}
       </div>
 
-      {/* Test History */}
+      {/* Test History — grouped by station */}
       <div className="bg-white rounded shadow-sm p-5">
         <h2 className="text-base font-semibold text-gray-700 mb-4">测试历史</h2>
-        {testRecords.length > 0 ? (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {['测试类型', '结果', '测试员', '测试时间', '报告文件', '备注', canDo('void_test_record') ? '操作' : ''].filter(Boolean).map((h) => (
-                  <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {testRecords.map((t) => (
-                <tr key={t.id} className={`${t.voided ? 'bg-gray-50 opacity-60' : t.result === '不合格' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
-                  <td className={`px-4 py-2 ${t.voided ? 'line-through text-gray-400' : 'text-gray-700'}`}>{t.testType}</td>
-                  <td className="px-4 py-2">
-                    {t.voided
-                      ? <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">已作废</span>
-                      : <StatusBadge status={t.result === '合格' ? '合格' : '不合格'} />
-                    }
-                  </td>
-                  <td className={`px-4 py-2 ${t.voided ? 'text-gray-400' : 'text-gray-600'}`}>{t.operator}</td>
-                  <td className={`px-4 py-2 text-xs whitespace-nowrap ${t.voided ? 'line-through text-gray-400' : 'text-gray-500'}`}>{t.testTime}</td>
-                  <td className="px-4 py-2 text-gray-400 text-xs font-mono">{t.reportFile || '—'}</td>
-                  <td className="px-4 py-2 text-gray-400 text-xs">{t.notes || '—'}</td>
-                  {canDo('void_test_record') && (
-                    <td className="px-4 py-2">
-                      {t.voided ? (
-                        <div className="text-xs text-gray-400">
-                          <div>{t.voidedAt}</div>
-                          <div className="truncate max-w-[120px]" title={t.voidReason}>{t.voidReason}</div>
-                        </div>
-                      ) : (
-                        <VoidTestRecordInline record={t} onVoid={handleVoidTestRecord} />
+        {testRecords.length > 0 ? (() => {
+          // Group by stationKey (quality stations) or testType (legacy)
+          const STATION_LABELS = {
+            semi: '半成品检验',
+            init: '初测',
+            mid: '中测',
+            oqt: 'OQT终测',
+          };
+          const stationOrder = ['semi', 'init', 'mid', 'oqt'];
+          const grouped = {};
+          testRecords.forEach((t) => {
+            const key = t.stationKey || t.testType || '其他';
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(t);
+          });
+          // Sort groups: known stations first in order, then legacy by first appearance
+          const knownKeys = stationOrder.filter((k) => grouped[k]);
+          const otherKeys = Object.keys(grouped).filter((k) => !stationOrder.includes(k));
+          const orderedKeys = [...knownKeys, ...otherKeys];
+
+          return (
+            <div className="space-y-4">
+              {orderedKeys.map((key) => {
+                const recs = grouped[key];
+                const label = STATION_LABELS[key] || key;
+                const passCount = recs.filter((r) => !r.voided && r.result === '合格').length;
+                const ngCount = recs.filter((r) => !r.voided && r.result === '不合格').length;
+                return (
+                  <div key={key}>
+                    {/* Station header */}
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-sm font-semibold text-gray-700">{label}</span>
+                      {passCount > 0 && (
+                        <span className="inline-flex items-center border rounded font-medium text-xs px-2 py-0.5 bg-green-100 text-green-700 border-green-300">
+                          合格 {passCount}
+                        </span>
                       )}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
+                      {ngCount > 0 && (
+                        <span className="inline-flex items-center border rounded font-medium text-xs px-2 py-0.5 bg-red-100 text-red-700 border-red-300">
+                          不合格 {ngCount}
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400">{recs.length} 条记录</span>
+                    </div>
+                    <table className="w-full text-sm mb-1">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          {['结果', '测试员', '测试时间', '报告文件', '备注', canDo('void_test_record') ? '操作' : ''].filter(Boolean).map((h) => (
+                            <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {recs.map((t) => (
+                          <tr key={t.id} className={`${t.voided ? 'bg-gray-50 opacity-60' : t.result === '不合格' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+                            <td className="px-4 py-2">
+                              {t.voided
+                                ? <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">已作废</span>
+                                : <StatusBadge status={t.result === '合格' ? '合格' : '不合格'} />
+                              }
+                            </td>
+                            <td className={`px-4 py-2 ${t.voided ? 'text-gray-400' : 'text-gray-600'}`}>{t.operator}</td>
+                            <td className={`px-4 py-2 text-xs whitespace-nowrap ${t.voided ? 'line-through text-gray-400' : 'text-gray-500'}`}>{t.testTime}</td>
+                            <td className="px-4 py-2 text-gray-400 text-xs font-mono">{t.reportFile || '—'}</td>
+                            <td className="px-4 py-2 text-gray-400 text-xs">{t.notes || '—'}</td>
+                            {canDo('void_test_record') && (
+                              <td className="px-4 py-2">
+                                {t.voided ? (
+                                  <div className="text-xs text-gray-400">
+                                    <div>{t.voidedAt}</div>
+                                    <div className="truncate max-w-[120px]" title={t.voidReason}>{t.voidReason}</div>
+                                  </div>
+                                ) : (
+                                  <VoidTestRecordInline record={t} onVoid={handleVoidTestRecord} />
+                                )}
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })() : (
           <div className="text-sm text-gray-400">暂无测试记录</div>
         )}
       </div>

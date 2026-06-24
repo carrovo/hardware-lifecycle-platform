@@ -517,6 +517,39 @@ function WorkOrderDetail({ wo, state, dispatch, currentUser, canDo }) {
         )}
       </div>
 
+      {/* ── 附件 ── */}
+      <div>
+        <div className="text-sm font-semibold text-gray-700 mb-3">附件</div>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">问题描述文档</label>
+            <textarea
+              rows={2}
+              placeholder="填写附件描述或备注（选填）"
+              className="w-full border border-gray-200 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-slate-400 bg-white resize-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">日志文件</label>
+              <input
+                type="text"
+                placeholder="日志文件名（如 device-log-2026.txt）"
+                className="w-full border border-gray-200 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-slate-400 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">现场照片</label>
+              <input
+                type="text"
+                placeholder="图片文件名（如 site-photo.jpg）"
+                className="w-full border border-gray-200 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-slate-400 bg-white"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── 复检区域 (shown only in 复检中 status) ── */}
       {wo.status === '复检中' && (
         <div className="bg-purple-50 border border-purple-200 rounded p-4">

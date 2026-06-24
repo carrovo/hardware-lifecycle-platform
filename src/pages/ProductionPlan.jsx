@@ -24,7 +24,7 @@ function DonutChart({ rate }) {
 }
 
 function EditPlanModal({ isOpen, onClose, plan, onSave }) {
-  const [form, setForm] = useState({ target: plan?.target || 0, actual: plan?.actual || 0, project: plan?.project || '', bottleneck: plan?.bottleneck || '', notes: plan?.notes || '' });
+  const [form, setForm] = useState({ target: plan?.target || 0, actual: plan?.actual || 0, project: plan?.project || '', bottleneck: plan?.bottleneck || '', erpProductionOrderNo: plan?.erpProductionOrderNo || '', notes: plan?.notes || '' });
   if (!plan) return null;
   const rate = form.target > 0 ? Math.round((form.actual / form.target) * 100) : 0;
   const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
@@ -52,6 +52,10 @@ function EditPlanModal({ isOpen, onClose, plan, onSave }) {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">瓶颈环节标记</label>
           <input type="text" className={inp} value={form.bottleneck} onChange={(e) => setForm({ ...form, bottleneck: e.target.value })} placeholder="如：组装环节人手不足、零件缺货" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">ERP生产订单号</label>
+          <input type="text" className={inp} value={form.erpProductionOrderNo} onChange={(e) => setForm({ ...form, erpProductionOrderNo: e.target.value })} placeholder="ERP 生产订单号（选填）" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>

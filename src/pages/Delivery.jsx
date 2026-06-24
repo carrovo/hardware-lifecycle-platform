@@ -11,7 +11,7 @@ function AddDeliveryModal({ isOpen, onClose, onSave, stage, devices, projects })
   const [form, setForm] = useState({
     deviceId: '', projectId: '', result: stage === '出厂检验' ? '合格' : '通过',
     operator: '', recordTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
-    notes: '', address: '',
+    notes: '', address: '', erpAcceptanceNo: '', reportFileName: '', reportLink: '',
   });
 
   const resultOptions = stage === '出厂检验' ? ['合格', '不合格'] : ['通过', '未通过'];
@@ -20,7 +20,7 @@ function AddDeliveryModal({ isOpen, onClose, onSave, stage, devices, projects })
     e.preventDefault();
     onSave({ ...form, stage });
     onClose();
-    setForm({ deviceId: '', projectId: '', result: resultOptions[0], operator: '', recordTime: new Date().toISOString().slice(0, 16).replace('T', ' '), notes: '', address: '' });
+    setForm({ deviceId: '', projectId: '', result: resultOptions[0], operator: '', recordTime: new Date().toISOString().slice(0, 16).replace('T', ' '), notes: '', address: '', erpAcceptanceNo: '', reportFileName: '', reportLink: '' });
   };
 
   const f = (key) => ({ value: form[key], onChange: (e) => setForm({ ...form, [key]: e.target.value }) });
@@ -64,6 +64,21 @@ function AddDeliveryModal({ isOpen, onClose, onSave, stage, devices, projects })
             <label className="block text-sm font-medium text-gray-700 mb-1">安装地址</label>
             <input type="text" className={inputClass} {...f('address')} />
           </div>
+        )}
+        {stage === '客户验收' && (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ERP验收单号</label>
+              <input type="text" className={inputClass} placeholder="ERP 验收单号（选填）" {...f('erpAcceptanceNo')} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">验收报告</label>
+              <div className="space-y-2">
+                <input type="text" className={inputClass} placeholder="报告文件名（选填）" {...f('reportFileName')} />
+                <input type="text" className={inputClass} placeholder="报告链接（选填）" {...f('reportLink')} />
+              </div>
+            </div>
+          </>
         )}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>

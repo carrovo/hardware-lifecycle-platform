@@ -3,45 +3,12 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import { FEISHU_USERS, ROLES_LIST } from '../data/mockData';
 
-const topLink = { label: '运营看板', path: '/dashboard' };
-
-const navGroups = [
-  {
-    label: '生产制造',
-    items: [
-      { label: '生产计划', path: '/production-plan' },
-      { label: '来料管理', path: '/materials' },
-      { label: '整机装配', path: '/assembly' },
-      { label: '测试中心', path: '/tests' },
-    ],
-  },
-  {
-    label: '设备管理',
-    items: [
-      { label: '设备列表', path: '/devices' },
-      { label: '设备类型管理', path: '/device-types' },
-    ],
-  },
-  {
-    label: '项目管理',
-    items: [
-      { label: '项目列表', path: '/projects' },
-      { label: '交付验收', path: '/delivery' },
-    ],
-  },
-  {
-    label: '售后运维',
-    items: [
-      { label: '维修工单', path: '/work-orders' },
-    ],
-  },
-  {
-    label: '系统管理',
-    items: [
-      { label: '用户管理', path: '/users' },
-      { label: '角色权限', path: '/roles' },
-    ],
-  },
+const NAV_ITEMS = [
+  { label: '运营看板', path: '/dashboard' },
+  { label: '生产制造', path: '/manufacture' },
+  { label: '设备管理', path: '/devices' },
+  { label: '项目管理', path: '/projects' },
+  { label: '系统管理', path: '/system' },
 ];
 
 const ROLE_COLORS = {
@@ -62,9 +29,7 @@ export default function Layout({ children }) {
   const currentUser = FEISHU_USERS.find((u) => u.id === (state.currentUserId || 'u1')) || FEISHU_USERS[0];
   const roleColor = ROLE_COLORS[currentRole] || 'bg-slate-600';
 
-  const visibleGroups = navGroups
-    .map((g) => ({ ...g, items: g.items.filter((item) => canSeeNav(item.path)) }))
-    .filter((g) => g.items.length > 0);
+  const visibleItems = NAV_ITEMS.filter((item) => canSeeNav(item.path));
 
   return (
     <div className="flex min-h-screen w-full bg-gray-100">
@@ -78,41 +43,20 @@ export default function Layout({ children }) {
 
         {/* Nav */}
         <nav className="flex-1 py-2 overflow-y-auto">
-          {canSeeNav(topLink.path) && (
+          {visibleItems.map((item) => (
             <NavLink
-              to={topLink.path}
+              key={item.path}
+              to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-2 px-4 py-2 text-sm transition-colors mb-2 ${
+                `flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
                   isActive
                     ? 'bg-slate-700 text-white font-medium'
                     : 'text-slate-300 hover:bg-slate-700 hover:text-white'
                 }`
               }
             >
-              <span>{topLink.label}</span>
+              <span>{item.label}</span>
             </NavLink>
-          )}
-          {visibleGroups.map((group) => (
-            <div key={group.label} className="mb-2">
-              <div className="px-4 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                {group.label}
-              </div>
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                      isActive
-                        ? 'bg-slate-700 text-white font-medium'
-                        : 'text-slate-300 hover:bg-slate-700 hover:text-white'
-                    }`
-                  }
-                >
-                  <span>{item.label}</span>
-                </NavLink>
-              ))}
-            </div>
           ))}
         </nav>
 

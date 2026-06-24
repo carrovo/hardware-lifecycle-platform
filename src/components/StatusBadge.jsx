@@ -23,6 +23,12 @@ const statusColorMap = {
   '退役':     'bg-gray-200 text-gray-500 border-gray-300',
   // Device flow — anomaly (red)
   '返修中':    'bg-red-100 text-red-700 border-red-300',
+  // Quality station statuses
+  '半成品检验中': 'bg-blue-100 text-blue-700 border-blue-300',
+  '初测中':    'bg-blue-100 text-blue-700 border-blue-300',
+  '中测中':    'bg-amber-100 text-amber-700 border-amber-300',
+  'OQT终测中': 'bg-amber-100 text-amber-700 border-amber-300',
+  '生产返修中': 'bg-red-100 text-red-700 border-red-300',
   // Alert severity
   '轻微':     'bg-amber-100 text-amber-700 border-amber-300',
   '严重':     'bg-red-100 text-red-700 border-red-300',

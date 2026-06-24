@@ -76,6 +76,7 @@ function EditProjectModal({ isOpen, onClose, project, onSave }) {
 
 function AllocateDevicesModal({ isOpen, onClose, pendingDevices, getTypeName, onConfirm }) {
   const [selected, setSelected] = useState(new Set());
+  const [erpSalesOutboundNo, setErpSalesOutboundNo] = useState('');
 
   const toggle = (devId) => setSelected((prev) => {
     const next = new Set(prev);
@@ -86,8 +87,9 @@ function AllocateDevicesModal({ isOpen, onClose, pendingDevices, getTypeName, on
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(pendingDevices.map((d) => d.id)));
 
   const handleConfirm = () => {
-    onConfirm([...selected]);
+    onConfirm([...selected], erpSalesOutboundNo);
     setSelected(new Set());
+    setErpSalesOutboundNo('');
     onClose();
   };
 
@@ -122,6 +124,16 @@ function AllocateDevicesModal({ isOpen, onClose, pendingDevices, getTypeName, on
               )}
             </tbody>
           </table>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">ERP销售出库单号</label>
+          <input
+            type="text"
+            value={erpSalesOutboundNo}
+            onChange={(e) => setErpSalesOutboundNo(e.target.value)}
+            placeholder="ERP 销售出库单号（选填）"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500"
+          />
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
@@ -231,7 +243,7 @@ export default function ProjectDetail() {
 
   const now = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
 
-  const handleAllocate = (deviceIds) => {
+  const handleAllocate = (deviceIds, erpSalesOutboundNo) => {
     const t = now();
     deviceIds.forEach((devId) => {
       const device = devices.find((d) => d.id === devId);
@@ -247,6 +259,7 @@ export default function ProjectDetail() {
           notes: '',
           type: '分配',
           fromProjectId: null,
+          erpSalesOutboundNo: erpSalesOutboundNo || '',
         },
       });
       dispatch({ type: 'UPDATE_DEVICE', payload: { id: devId, status: '已分配项目', projectId: id, updatedAt: t } });

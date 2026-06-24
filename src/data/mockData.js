@@ -158,7 +158,7 @@ export const devices = [
   { id: 'DEV-004', sn: 'SN-DEV-004', deviceTypeId: 'DT-002', status: '终测中', assembler: '赵六', assemblyTime: '2026-06-10 08:00', photoName: 'assembly_dev004.jpg', usedMaterials: [{ materialId: 'MAT-013', moduleTypeId: 'MT-006' }], createdAt: '2026-06-10 08:00', updatedAt: '2026-06-17 08:00' },
   { id: 'DEV-005', sn: 'SN-DEV-005', deviceTypeId: 'DT-002', status: '待分配项目', assembler: '张三', assemblyTime: '2026-06-01 10:00', photoName: 'assembly_dev005.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-019', moduleTypeId: 'MT-002' }, { materialId: 'MAT-020', moduleTypeId: 'MT-002' }, { materialId: 'MAT-006', moduleTypeId: 'MT-003' }, { materialId: 'MAT-016', moduleTypeId: 'MT-003' }, { materialId: 'MAT-017', moduleTypeId: 'MT-003' }, { materialId: 'MAT-009', moduleTypeId: 'MT-004' }, { materialId: 'MAT-013', moduleTypeId: 'MT-006' }], createdAt: '2026-06-01 10:00', updatedAt: '2026-06-08 16:00' },
   { id: 'DEV-006', sn: 'SN-DEV-006', deviceTypeId: 'DT-001', status: '待分配项目', assembler: '李四', assemblyTime: '2026-05-28 09:00', photoName: 'assembly_dev006.jpg', usedMaterials: [{ materialId: 'MAT-001', moduleTypeId: 'MT-001' }, { materialId: 'MAT-003', moduleTypeId: 'MT-002' }, { materialId: 'MAT-018', moduleTypeId: 'MT-001' }, { materialId: 'MAT-011', moduleTypeId: 'MT-005' }], createdAt: '2026-05-28 09:00', updatedAt: '2026-06-05 10:00' },
-  { id: 'DEV-007', sn: 'SN-DEV-007', deviceTypeId: 'DT-001', status: '已分配项目', assembler: '王五', assemblyTime: '2026-05-20 10:00', photoName: 'assembly_dev007.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-004', moduleTypeId: 'MT-002' }], projectId: 'PROJ-001', createdAt: '2026-05-20 10:00', updatedAt: '2026-06-10 09:00' },
+  { id: 'DEV-007', sn: 'SN-DEV-007', deviceTypeId: 'DT-001', status: '已分配项目', assembler: '王五', assemblyTime: '2026-05-20 10:00', photoName: 'assembly_dev007.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-004', moduleTypeId: 'MT-002' }], projectId: 'PROJ-001', erpStorageOrderNo: 'WR-2026-088', createdAt: '2026-05-20 10:00', updatedAt: '2026-06-10 09:00' },
   { id: 'DEV-008', sn: 'SN-DEV-008', deviceTypeId: 'DT-002', status: '已分配项目', assembler: '赵六', assemblyTime: '2026-05-18 09:00', photoName: 'assembly_dev008.jpg', usedMaterials: [{ materialId: 'MAT-011', moduleTypeId: 'MT-005' }, { materialId: 'MAT-013', moduleTypeId: 'MT-006' }], projectId: 'PROJ-001', createdAt: '2026-05-18 09:00', updatedAt: '2026-06-10 09:30' },
   { id: 'DEV-009', sn: 'SN-DEV-009', deviceTypeId: 'DT-001', status: '已分配项目', assembler: '张三', assemblyTime: '2026-05-15 10:00', photoName: 'assembly_dev009.jpg', usedMaterials: [{ materialId: 'MAT-018', moduleTypeId: 'MT-001' }, { materialId: 'MAT-019', moduleTypeId: 'MT-002' }], projectId: 'PROJ-002', createdAt: '2026-05-15 10:00', updatedAt: '2026-06-12 10:00' },
   { id: 'DEV-010', sn: 'SN-DEV-010', deviceTypeId: 'DT-002', status: '在线运营', assembler: '李四', assemblyTime: '2026-04-20 09:00', photoName: 'assembly_dev010.jpg', usedMaterials: [{ materialId: 'MAT-016', moduleTypeId: 'MT-003' }, { materialId: 'MAT-017', moduleTypeId: 'MT-003' }], projectId: 'PROJ-001', batteryPercent: 87, storagePercent: 42, lastHeartbeat: '2026-06-21 08:55', online: true, createdAt: '2026-04-20 09:00', updatedAt: '2026-06-21 08:55' },
@@ -166,13 +166,13 @@ export const devices = [
   { id: 'DEV-012', sn: 'SN-DEV-012', deviceTypeId: 'DT-002', status: '在线运营', assembler: '赵六', assemblyTime: '2026-04-10 09:00', photoName: 'assembly_dev012.jpg', usedMaterials: [{ materialId: 'MAT-009', moduleTypeId: 'MT-004' }], projectId: 'PROJ-003', batteryPercent: 15, storagePercent: 88, lastHeartbeat: '2026-06-20 23:10', online: false, createdAt: '2026-04-10 09:00', updatedAt: '2026-06-20 23:10' },
   { id: 'DEV-013', sn: 'SN-DEV-013', deviceTypeId: 'DT-001', status: '在线运营', assembler: '张三', assemblyTime: '2026-03-25 10:00', photoName: 'assembly_dev013.jpg', usedMaterials: [], projectId: 'PROJ-001', batteryPercent: 93, storagePercent: 30, lastHeartbeat: '2026-06-21 09:02', online: true, createdAt: '2026-03-25 10:00', updatedAt: '2026-06-21 09:02' },
   // 装配中 (target 3: DEV-001, DEV-016, DEV-017)
-  { id: 'DEV-016', sn: 'SN-DEV-016', deviceTypeId: 'DT-001', status: '装配中', assembler: '李四', assemblyTime: '2026-06-19 09:00', photoName: 'assembly_dev016.jpg', usedMaterials: [], createdAt: '2026-06-19 09:00', updatedAt: '2026-06-19 09:00' },
-  { id: 'DEV-017', sn: 'SN-DEV-017', deviceTypeId: 'DT-002', status: '装配中', assembler: '王五', assemblyTime: '2026-06-20 10:30', photoName: 'assembly_dev017.jpg', usedMaterials: [], createdAt: '2026-06-20 10:30', updatedAt: '2026-06-20 10:30' },
+  { id: 'DEV-016', sn: 'SN-DEV-016', deviceTypeId: 'DT-001', status: '半成品检验中', assembler: '李四', assemblyTime: '2026-06-19 09:00', photoName: 'assembly_dev016.jpg', usedMaterials: [], createdAt: '2026-06-19 09:00', updatedAt: '2026-06-19 09:00' },
+  { id: 'DEV-017', sn: 'SN-DEV-017', deviceTypeId: 'DT-002', status: '初测中', assembler: '王五', assemblyTime: '2026-06-20 10:30', photoName: 'assembly_dev017.jpg', usedMaterials: [], createdAt: '2026-06-20 10:30', updatedAt: '2026-06-20 10:30' },
   // 功能测试中 (target 3: DEV-002, DEV-018, DEV-019)
-  { id: 'DEV-018', sn: 'SN-DEV-018', deviceTypeId: 'DT-001', status: '功能测试中', assembler: '赵六', assemblyTime: '2026-06-16 11:00', photoName: 'assembly_dev018.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-004', moduleTypeId: 'MT-002' }], createdAt: '2026-06-16 11:00', updatedAt: '2026-06-17 10:00' },
-  { id: 'DEV-019', sn: 'SN-DEV-019', deviceTypeId: 'DT-002', status: '功能测试中', assembler: '张三', assemblyTime: '2026-06-15 14:30', photoName: 'assembly_dev019.jpg', usedMaterials: [{ materialId: 'MAT-007', moduleTypeId: 'MT-003' }], createdAt: '2026-06-15 14:30', updatedAt: '2026-06-17 09:30' },
+  { id: 'DEV-018', sn: 'SN-DEV-018', deviceTypeId: 'DT-001', status: '中测中', assembler: '赵六', assemblyTime: '2026-06-16 11:00', photoName: 'assembly_dev018.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-004', moduleTypeId: 'MT-002' }], createdAt: '2026-06-16 11:00', updatedAt: '2026-06-17 10:00' },
+  { id: 'DEV-019', sn: 'SN-DEV-019', deviceTypeId: 'DT-002', status: 'OQT终测中', assembler: '张三', assemblyTime: '2026-06-15 14:30', photoName: 'assembly_dev019.jpg', usedMaterials: [{ materialId: 'MAT-007', moduleTypeId: 'MT-003' }], createdAt: '2026-06-15 14:30', updatedAt: '2026-06-17 09:30' },
   // 老化测试中 (target 2: DEV-003, DEV-020)
-  { id: 'DEV-020', sn: 'SN-DEV-020', deviceTypeId: 'DT-001', status: '老化测试中', assembler: '李四', assemblyTime: '2026-06-13 09:00', photoName: 'assembly_dev020.jpg', usedMaterials: [{ materialId: 'MAT-010', moduleTypeId: 'MT-004' }], createdAt: '2026-06-13 09:00', updatedAt: '2026-06-16 14:00' },
+  { id: 'DEV-020', sn: 'SN-DEV-020', deviceTypeId: 'DT-001', status: '生产返修中', assembler: '李四', assemblyTime: '2026-06-13 09:00', photoName: 'assembly_dev020.jpg', usedMaterials: [{ materialId: 'MAT-010', moduleTypeId: 'MT-004' }], createdAt: '2026-06-13 09:00', updatedAt: '2026-06-16 14:00' },
   // 终测中 (target 2: DEV-004, DEV-021)
   { id: 'DEV-021', sn: 'SN-DEV-021', deviceTypeId: 'DT-002', status: '终测中', assembler: '王五', assemblyTime: '2026-06-09 08:30', photoName: 'assembly_dev021.jpg', usedMaterials: [{ materialId: 'MAT-014', moduleTypeId: 'MT-006' }], createdAt: '2026-06-09 08:30', updatedAt: '2026-06-17 11:00' },
   // 待分配项目 (target 3: DEV-005, DEV-006, DEV-022)
@@ -205,6 +205,16 @@ export const testRecords = [
   { id: 'TEST-023', deviceId: 'DEV-009', testType: '终测', result: '合格', operator: '张三', testTime: '2026-05-23 09:00', reportFile: 'final_test_dev009.pdf', notes: '', status: '有效' },
   { id: 'TEST-024', deviceId: 'DEV-010', testType: '终测', result: '合格', operator: '李四', testTime: '2026-04-18 10:00', reportFile: 'final_test_dev010.pdf', notes: '', status: '有效' },
   { id: 'TEST-025', deviceId: 'DEV-011', testType: '终测', result: '合格', operator: '王五', testTime: '2026-04-13 10:00', reportFile: 'final_test_dev011.pdf', notes: '', status: '有效' },
+  // Quality station records
+  { id: 'TEST-S001', deviceId: 'DEV-001', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '张三', testTime: '2026-06-10 09:00', reportFile: 'semi_DEV001.pdf', reportLink: '', notes: '半成品检验通过', status: '有效' },
+  { id: 'TEST-S002', deviceId: 'DEV-002', stationKey: 'semi', stationResult: 'NG', testType: '功能测试', result: '不合格', operator: '张三', testTime: '2026-06-10 10:00', reportFile: '', reportLink: '', notes: 'PCB接口故障', ngReason: 'PCB接口虚焊', repairPerson: '李四', repairAction: '重新焊接PCB接口', estimatedCompletion: '2026-06-12', status: '有效' },
+  { id: 'TEST-S003', deviceId: 'DEV-016', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '张三', testTime: '2026-06-19 10:00', reportFile: 'semi_DEV016.pdf', reportLink: '', notes: '半成品检验通过', status: '有效' },
+  { id: 'TEST-I001', deviceId: 'DEV-001', stationKey: 'init', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '王五', testTime: '2026-06-11 09:00', reportFile: 'init_DEV001.pdf', reportLink: '', notes: '初测全部功能正常', status: '有效' },
+  { id: 'TEST-I002', deviceId: 'DEV-017', stationKey: 'init', stationResult: 'NG', testType: '功能测试', result: '不合格', operator: '王五', testTime: '2026-06-20 11:00', reportFile: '', reportLink: '', notes: '传感器响应异常', ngReason: '关节传感器信号中断', repairPerson: '赵六', repairAction: '更换关节传感器', estimatedCompletion: '2026-06-22', status: '有效' },
+  { id: 'TEST-M001', deviceId: 'DEV-001', stationKey: 'mid', stationResult: 'Pass', testType: '老化测试', result: '合格', operator: '王五', testTime: '2026-06-13 09:00', duration: '72小时', peakTemp: '68°C', anomalyCount: 0, reportFile: 'aging_DEV001.pdf', reportLink: '', notes: '老化测试通过', status: '有效' },
+  { id: 'TEST-M002', deviceId: 'DEV-018', stationKey: 'mid', stationResult: 'Pass', testType: '老化测试', result: '合格', operator: '王五', testTime: '2026-06-17 10:00', duration: '48小时', peakTemp: '71°C', anomalyCount: 0, reportFile: 'aging_DEV018.pdf', reportLink: '', notes: '中测通过', status: '有效' },
+  { id: 'TEST-O001', deviceId: 'DEV-001', stationKey: 'oqt', stationResult: 'Pass', testType: '终测', result: '合格', operator: '张三', testTime: '2026-06-14 15:00', reportFile: 'oqt_DEV001.pdf', reportLink: '', notes: 'OQT终测通过，质检员已签核', status: '有效' },
+  { id: 'TEST-O002', deviceId: 'DEV-019', stationKey: 'oqt', stationResult: 'NG', testType: '终测', result: '不合格', operator: '张三', testTime: '2026-06-16 09:00', reportFile: '', reportLink: '', notes: '末端精度超标', ngReason: '末端执行器精度超出允许误差', repairPerson: '李四', repairAction: '重新标定末端执行器', estimatedCompletion: '2026-06-18', status: '有效' },
 ];
 
 export const operationLogs = [
@@ -221,26 +231,26 @@ export const operationLogs = [
 ];
 
 export const productionPlans = [
-  { id: 'PLAN-001', date: '2026-06-01', target: 3, actual: 3, project: '项目A', notes: '' },
-  { id: 'PLAN-002', date: '2026-06-02', target: 4, actual: 3, project: '项目A', notes: '一台因零件缺货延期' },
-  { id: 'PLAN-003', date: '2026-06-03', target: 4, actual: 4, project: '项目B', notes: '' },
-  { id: 'PLAN-004', date: '2026-06-04', target: 5, actual: 5, project: '项目B', notes: '' },
-  { id: 'PLAN-005', date: '2026-06-05', target: 3, actual: 2, project: '项目A', notes: '设备故障影响产能' },
-  { id: 'PLAN-006', date: '2026-06-06', target: 4, actual: 4, project: '项目C', notes: '' },
-  { id: 'PLAN-007', date: '2026-06-09', target: 4, actual: 3, project: '项目C', notes: '' },
-  { id: 'PLAN-008', date: '2026-06-10', target: 5, actual: 4, project: '项目B', notes: '' },
-  { id: 'PLAN-009', date: '2026-06-11', target: 4, actual: 4, project: '项目A', notes: '' },
-  { id: 'PLAN-010', date: '2026-06-16', target: 3, actual: 2, project: '项目A', notes: '' },
-  { id: 'PLAN-011', date: '2026-06-17', target: 4, actual: 3, project: '项目B', notes: '加急补单' },
-  { id: 'PLAN-012', date: '2026-06-18', target: 2, actual: 1, project: '项目C', notes: '' },
-  { id: 'PLAN-013', date: '2026-06-21', target: 4, actual: 0, project: '项目A', notes: '' },
-  { id: 'PLAN-014', date: '2026-06-22', target: 3, actual: 0, project: '项目C', notes: '新增订单' },
+  { id: 'PLAN-001', date: '2026-06-01', target: 3, actual: 3, project: '智魔方项目', projectId: 'PROJ-001', notes: '', erpProductionOrderNo: 'MO-2026-015' },
+  { id: 'PLAN-002', date: '2026-06-02', target: 4, actual: 3, project: '智魔方项目', projectId: 'PROJ-001', notes: '一台因零件缺货延期' },
+  { id: 'PLAN-003', date: '2026-06-03', target: 4, actual: 4, project: '华熙生物项目', projectId: 'PROJ-002', notes: '' },
+  { id: 'PLAN-004', date: '2026-06-04', target: 5, actual: 5, project: '华熙生物项目', projectId: 'PROJ-002', notes: '' },
+  { id: 'PLAN-005', date: '2026-06-05', target: 3, actual: 2, project: '智魔方项目', projectId: 'PROJ-001', notes: '设备故障影响产能' },
+  { id: 'PLAN-006', date: '2026-06-06', target: 4, actual: 4, project: '机场项目', projectId: 'PROJ-003', notes: '' },
+  { id: 'PLAN-007', date: '2026-06-09', target: 4, actual: 3, project: '机场项目', projectId: 'PROJ-003', notes: '' },
+  { id: 'PLAN-008', date: '2026-06-10', target: 5, actual: 4, project: '华熙生物项目', projectId: 'PROJ-002', notes: '' },
+  { id: 'PLAN-009', date: '2026-06-11', target: 4, actual: 4, project: '智魔方项目', projectId: 'PROJ-001', notes: '' },
+  { id: 'PLAN-010', date: '2026-06-16', target: 3, actual: 2, project: '智魔方项目', projectId: 'PROJ-001', notes: '' },
+  { id: 'PLAN-011', date: '2026-06-17', target: 4, actual: 3, project: '华熙生物项目', projectId: 'PROJ-002', notes: '加急补单' },
+  { id: 'PLAN-012', date: '2026-06-18', target: 2, actual: 1, project: '机场项目', projectId: 'PROJ-003', notes: '' },
+  { id: 'PLAN-013', date: '2026-06-21', target: 4, actual: 0, project: '智魔方项目', projectId: 'PROJ-001', notes: '' },
+  { id: 'PLAN-014', date: '2026-06-22', target: 3, actual: 0, project: '机场项目', projectId: 'PROJ-003', notes: '新增订单' },
 ];
 
 export const materialBatches = [
-  { id: 'BATCH-001', batchNo: 'BATCH-2024-001', category: '底盘', model: 'CH-2024-A', supplier: '供应商A', quantity: 2, inspector: '张三', inspectionTime: '2026-05-01 09:30', notes: '', items: [{ id: 'MAT-001', sn: 'SN-CHASSIS-001', result: '合格', status: '已占用', notes: '' }, { id: 'MAT-002', sn: 'SN-CHASSIS-002', result: '合格', status: '已占用', notes: '' }] },
+  { id: 'BATCH-001', batchNo: 'BATCH-2024-001', category: '底盘', model: 'CH-2024-A', supplier: '供应商A', quantity: 2, inspector: '张三', inspectionTime: '2026-05-01 09:30', notes: '', erpPurchaseOrderNo: 'PO-2026-001', items: [{ id: 'MAT-001', sn: 'SN-CHASSIS-001', result: '合格', status: '已占用', notes: '' }, { id: 'MAT-002', sn: 'SN-CHASSIS-002', result: '合格', status: '已占用', notes: '' }] },
   { id: 'BATCH-002', batchNo: 'BATCH-2024-002', category: '机械臂', model: 'ARM-2024-B', supplier: '供应商B', quantity: 3, inspector: '李四', inspectionTime: '2026-05-02 10:00', notes: '', items: [{ id: 'MAT-003', sn: 'SN-ARM-001', result: '合格', status: '已占用', notes: '' }, { id: 'MAT-004', sn: 'SN-ARM-002', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-005', sn: 'SN-ARM-003', result: '不合格', status: '退货换货', notes: '外壳有裂纹' }] },
-  { id: 'BATCH-003', batchNo: 'BATCH-2024-003', category: '电机', model: 'MTR-2024-C', supplier: '供应商C', quantity: 3, inspector: '王五', inspectionTime: '2026-05-03 08:30', notes: '', items: [{ id: 'MAT-006', sn: 'SN-MOTOR-001', result: '合格', status: '已占用', notes: '' }, { id: 'MAT-007', sn: 'SN-MOTOR-002', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-008', sn: 'SN-MOTOR-003', result: '特批使用', status: '待装配', notes: '噪音略高，特批使用' }] },
+  { id: 'BATCH-003', batchNo: 'BATCH-2024-003', category: '电机', model: 'MTR-2024-C', supplier: '供应商C', quantity: 3, inspector: '王五', inspectionTime: '2026-05-03 08:30', notes: '', erpPurchaseOrderNo: 'PO-2026-002', items: [{ id: 'MAT-006', sn: 'SN-MOTOR-001', result: '合格', status: '已占用', notes: '' }, { id: 'MAT-007', sn: 'SN-MOTOR-002', result: '合格', status: '待装配', notes: '' }, { id: 'MAT-008', sn: 'SN-MOTOR-003', result: '特批使用', status: '待装配', notes: '噪音略高，特批使用' }] },
   { id: 'BATCH-004', batchNo: 'BATCH-2024-004', category: '末端', model: 'END-2024-D', supplier: '供应商D', quantity: 2, inspector: '张三', inspectionTime: '2026-05-04 09:00', notes: '', items: [{ id: 'MAT-009', sn: 'SN-END-001', result: '合格', status: '已占用', notes: '' }, { id: 'MAT-010', sn: 'SN-END-002', result: '合格', status: '待装配', notes: '' }] },
   { id: 'BATCH-005', batchNo: 'BATCH-2024-005', category: '全身相机', model: 'CAM-2024-E', supplier: '供应商E', quantity: 2, inspector: '李四', inspectionTime: '2026-05-05 10:00', notes: '', items: [{ id: 'MAT-011', sn: 'SN-CAM-001', result: '合格', status: '已占用', notes: '' }, { id: 'MAT-012', sn: 'SN-CAM-002', result: '不合格', status: '退货换货', notes: '图像传感器损坏' }] },
   { id: 'BATCH-006', batchNo: 'BATCH-2024-006', category: '预控', model: 'CTRL-2024-F', supplier: '供应商F', quantity: 2, inspector: '王五', inspectionTime: '2026-05-06 08:00', notes: '', items: [{ id: 'MAT-013', sn: 'SN-CTRL-001', result: '合格', status: '已占用', notes: '' }, { id: 'MAT-014', sn: 'SN-CTRL-002', result: '合格', status: '待装配', notes: '' }] },
@@ -453,14 +463,14 @@ export const ROLES_LIST = [
 ];
 
 export const ROLE_NAV_PERMISSIONS = {
-  '质检员':     ['/dashboard', '/materials', '/tests', '/devices', '/work-orders'],
-  '装配工':     ['/dashboard', '/assembly', '/devices', '/materials'],
-  '测试员':     ['/dashboard', '/tests', '/devices'],
-  '运维工程师':  ['/dashboard', '/work-orders', '/devices', '/delivery'],
-  '项目负责人':  ['/dashboard', '/projects', '/delivery', '/devices', '/production-plan'],
-  '厂长':       ['/dashboard', '/production-plan', '/materials', '/assembly', '/tests', '/devices', '/device-types', '/projects', '/delivery', '/work-orders'],
-  '维修工程师':  ['/dashboard', '/work-orders', '/devices'],
-  '管理员':     ['/dashboard', '/production-plan', '/materials', '/assembly', '/tests', '/devices', '/device-types', '/projects', '/delivery', '/work-orders', '/users', '/roles'],
+  '质检员':     ['/dashboard', '/manufacture', '/devices'],
+  '装配工':     ['/dashboard', '/manufacture', '/devices'],
+  '测试员':     ['/dashboard', '/manufacture', '/devices'],
+  '运维工程师':  ['/dashboard', '/devices', '/projects'],
+  '项目负责人':  ['/dashboard', '/projects', '/devices'],
+  '厂长':       ['/dashboard', '/manufacture', '/devices', '/projects'],
+  '维修工程师':  ['/dashboard', '/devices'],
+  '管理员':     ['/dashboard', '/manufacture', '/devices', '/projects', '/system'],
 };
 
 export const ROLE_ACTION_PERMISSIONS = {

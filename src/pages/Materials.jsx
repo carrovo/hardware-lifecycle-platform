@@ -30,7 +30,7 @@ function AddBatchModal({ isOpen, onClose, onSave }) {
   const [form, setForm] = useState({
     batchNo: '', category: '底盘', model: '', supplier: '',
     inspector: '', inspectionTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
-    notes: '',
+    erpPurchaseOrderNo: '', notes: '',
   });
   const [items, setItems] = useState([{ sn: '', result: '合格', notes: '' }]);
 
@@ -50,7 +50,7 @@ function AddBatchModal({ isOpen, onClose, onSave }) {
     onSave({ ...form, quantity: savedItems.length, items: savedItems });
     onClose();
     setForm({ batchNo: '', category: '底盘', model: '', supplier: '',
-      inspector: '', inspectionTime: new Date().toISOString().slice(0, 16).replace('T', ' '), notes: '' });
+      inspector: '', inspectionTime: new Date().toISOString().slice(0, 16).replace('T', ' '), erpPurchaseOrderNo: '', notes: '' });
     setItems([{ sn: '', result: '合格', notes: '' }]);
   };
 
@@ -76,9 +76,9 @@ function AddBatchModal({ isOpen, onClose, onSave }) {
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">供应商</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">供应商 *</label>
             <input type="text" value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })}
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" />
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" required />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">检验员</label>
@@ -88,6 +88,12 @@ function AddBatchModal({ isOpen, onClose, onSave }) {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">检验时间</label>
             <input type="text" value={form.inspectionTime} onChange={(e) => setForm({ ...form, inspectionTime: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">采购到货通知单号</label>
+            <input type="text" value={form.erpPurchaseOrderNo} onChange={(e) => setForm({ ...form, erpPurchaseOrderNo: e.target.value })}
+              placeholder="ERP 采购到货通知单号（选填）"
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" />
           </div>
         </div>
