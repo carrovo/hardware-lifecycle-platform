@@ -449,6 +449,96 @@ export const moduleReplacements = [
   },
 ];
 
+// ============ PRD v6.0 New Data ============
+
+export const labelCategories = [
+  { id: 'LC-001', name: '末端类型', options: ['夹爪末端', '焊接末端', '力矩末端'] },
+  { id: 'LC-002', name: '底盘类型', options: ['差速底盘', '全向底盘'] },
+  { id: 'LC-003', name: '控制器型号', options: ['NUC-i5', 'NUC-i7', 'Xavier NX'] },
+];
+
+export const productionWorkOrders = [
+  {
+    id: 'PWO-001', type: 'production', productionPlanId: 'PLAN-001', deviceId: 'DEV-003', deviceSN: 'SN-DEV-003',
+    description: '中测阶段发现散热异常，温度超标', severity: '高',
+    status: '处理中', assignedTo: '李四', createdAt: '2026-06-16 10:00', updatedAt: '2026-06-16 14:00',
+    repairActions: '更换散热模组，重新导热硅脂涂抹',
+    attachmentDesc: '温度传感器异常日志', logFile: 'thermal_log_DEV003.txt', imageFile: 'thermal_photo.jpg',
+    recheckPerson: '', recheckResult: '',
+    processLogs: [
+      { time: '2026-06-16 10:00', operator: '张三', fromStatus: '待处理', toStatus: '处理中', notes: '已承接，发现散热模组故障' },
+    ],
+  },
+  {
+    id: 'PWO-002', type: 'production', productionPlanId: 'PLAN-001', deviceId: 'DEV-020', deviceSN: 'SN-DEV-020',
+    description: 'OQT终测NG，末端执行器精度超标', severity: '中',
+    status: '复检中', assignedTo: '赵六', createdAt: '2026-06-16 09:00', updatedAt: '2026-06-18 10:00',
+    repairActions: '重新标定末端执行器', recheckPerson: '张三', recheckResult: '',
+    attachmentDesc: '', logFile: 'precision_log.txt', imageFile: '',
+    processLogs: [
+      { time: '2026-06-16 09:00', operator: '赵六', fromStatus: '待处理', toStatus: '处理中', notes: '已承接工单，开始返修' },
+      { time: '2026-06-18 10:00', operator: '赵六', fromStatus: '处理中', toStatus: '复检中', notes: '标定完成，提交复检', recheckPerson: '张三' },
+    ],
+  },
+];
+
+export const deliveryWorkOrders = [
+  {
+    id: 'DWO-001', type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010',
+    description: '现场安装时发现底盘运动偏差大', severity: '中',
+    status: '已关闭', assignedTo: '赵六', createdAt: '2026-06-12 14:00', updatedAt: '2026-06-14 16:00',
+    repairActions: '重新校准底盘里程计和陀螺仪参数', recheckPerson: '张三', recheckResult: '通过',
+    attachmentDesc: '现场安装日志', logFile: 'install_log.txt', imageFile: 'site_photo.jpg',
+    moduleReplacements: [],
+    processLogs: [
+      { time: '2026-06-12 14:00', operator: '赵六', fromStatus: '待处理', toStatus: '处理中', notes: '已承接工单' },
+      { time: '2026-06-13 10:00', operator: '赵六', fromStatus: '处理中', toStatus: '复检中', notes: '校准完成，提交复检', recheckPerson: '张三' },
+      { time: '2026-06-14 16:00', operator: '张三', fromStatus: '复检中', toStatus: '已关闭', notes: '复检通过，运动精度符合要求' },
+    ],
+  },
+  {
+    id: 'DWO-002', type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011',
+    description: '客户反映设备在低电量时异常重启', severity: '高',
+    status: '待处理', assignedTo: '', createdAt: '2026-06-20 09:00', updatedAt: '2026-06-20 09:00',
+    repairActions: '', recheckPerson: '', recheckResult: '',
+    attachmentDesc: '', logFile: '', imageFile: '',
+    moduleReplacements: [],
+    processLogs: [],
+  },
+];
+
+export const deliveryPlans = [
+  {
+    id: 'DP-001', name: '智魔方Q2交付计划', projectId: 'PROJ-001',
+    targetCount: 5, dueDate: '2026-07-31', status: '进行中',
+    records: {
+      factoryInspection: [
+        { id: 'FI-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', inspector: '赵六', time: '2026-06-08 10:00', result: '通过', reportFile: 'fi_DEV010.pdf', reportLink: '' },
+        { id: 'FI-002', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', inspector: '赵六', time: '2026-06-08 11:00', result: '通过', reportFile: '', reportLink: 'http://report.example.com/fi002' },
+        { id: 'FI-003', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', inspector: '张三', time: '2026-06-09 09:00', result: '通过', reportFile: 'fi_DEV013.pdf', reportLink: '' },
+      ],
+      siteInstall: [
+        { id: 'SI-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', technician: '赵六', address: '北京市朝阳区科技园A座', time: '2026-06-12 14:00', result: '通过', notes: '' },
+        { id: 'SI-002', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', technician: '赵六', address: '北京市朝阳区科技园B座', time: '2026-06-13 10:00', result: '通过', notes: '' },
+      ],
+      customerAccept: [
+        { id: 'CA-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', acceptor: '蔡八', time: '2026-06-15 15:00', result: '通过', erpOutboundNo: 'SO-2026-018', voucherDesc: '验收单照片.jpg' },
+      ],
+    },
+  },
+  {
+    id: 'DP-002', name: '华熙生物交付计划', projectId: 'PROJ-002',
+    targetCount: 3, dueDate: '2026-08-15', status: '进行中',
+    records: {
+      factoryInspection: [
+        { id: 'FI-004', deviceId: 'DEV-009', deviceSN: 'SN-DEV-009', inspector: '张三', time: '2026-06-18 10:00', result: '通过', reportFile: 'fi_DEV009.pdf', reportLink: '' },
+      ],
+      siteInstall: [],
+      customerAccept: [],
+    },
+  },
+];
+
 export const FEISHU_USERS = [
   { id: 'u1', name: '张三', avatar: 'Z', dept: '制造部', role: '装配工' },
   { id: 'u2', name: '李四', avatar: 'L', dept: '质检部', role: '质检员' },
@@ -463,14 +553,14 @@ export const ROLES_LIST = [
 ];
 
 export const ROLE_NAV_PERMISSIONS = {
-  '质检员':     ['/dashboard', '/manufacture', '/devices'],
-  '装配工':     ['/dashboard', '/manufacture', '/devices'],
-  '测试员':     ['/dashboard', '/manufacture', '/devices'],
-  '运维工程师':  ['/dashboard', '/devices', '/projects'],
-  '项目负责人':  ['/dashboard', '/projects', '/devices'],
-  '厂长':       ['/dashboard', '/manufacture', '/devices', '/projects'],
-  '维修工程师':  ['/dashboard', '/devices'],
-  '管理员':     ['/dashboard', '/manufacture', '/devices', '/projects', '/system'],
+  '质检员':     ['/home', '/projects', '/assets', '/after-sales'],
+  '装配工':     ['/home', '/projects', '/assets'],
+  '测试员':     ['/home', '/projects', '/assets'],
+  '运维工程师':  ['/home', '/dashboard', '/assets', '/after-sales'],
+  '维修工程师':  ['/home', '/after-sales', '/assets'],
+  '项目负责人':  ['/home', '/dashboard', '/projects', '/assets', '/after-sales'],
+  '厂长':       ['/home', '/dashboard', '/projects', '/assets', '/after-sales'],
+  '管理员':     ['/home', '/dashboard', '/projects', '/assets', '/after-sales', '/system'],
 };
 
 export const ROLE_ACTION_PERMISSIONS = {

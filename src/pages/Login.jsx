@@ -14,7 +14,7 @@ function AdminLoginModal({ isOpen, onClose }) {
     e.preventDefault();
     if (form.username === 'admin' && form.password === 'admin123') {
       localStorage.setItem('isLoggedIn', 'true');
-      navigate('/dashboard');
+      navigate('/home');
     } else {
       setError('用户名或密码错误');
     }
@@ -70,7 +70,7 @@ export default function Login() {
   const handleFeishuLogin = (e) => {
     e.preventDefault();
     localStorage.setItem('isLoggedIn', 'true');
-    navigate('/dashboard');
+    navigate('/home');
   };
 
   return (

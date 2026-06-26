@@ -15,6 +15,10 @@ import {
   workOrders as initWorkOrders,
   retirements as initRetirements,
   moduleReplacements as initModuleReplacements,
+  labelCategories as initLabelCategories,
+  productionWorkOrders as initProductionWorkOrders,
+  deliveryWorkOrders as initDeliveryWorkOrders,
+  deliveryPlans as initDeliveryPlans,
   FEISHU_USERS,
 } from '../data/mockData';
 
@@ -36,6 +40,10 @@ const initialState = {
   workOrders: initWorkOrders,
   retirements: initRetirements,
   moduleReplacements: initModuleReplacements,
+  labelCategories: initLabelCategories,
+  productionWorkOrders: initProductionWorkOrders,
+  deliveryWorkOrders: initDeliveryWorkOrders,
+  deliveryPlans: initDeliveryPlans,
   currentUser: '张三',
   currentUserId: 'u1',
 };
@@ -181,6 +189,53 @@ function appReducer(state, action) {
           d.id === action.payload.id ? { ...d, ...action.payload } : d
         ),
       };
+
+    case 'ADD_PRODUCTION_WORK_ORDER':
+      return { ...state, productionWorkOrders: [...state.productionWorkOrders, action.payload] };
+
+    case 'UPDATE_PRODUCTION_WORK_ORDER':
+      return {
+        ...state,
+        productionWorkOrders: state.productionWorkOrders.map((w) =>
+          w.id === action.payload.id ? { ...w, ...action.payload } : w
+        ),
+      };
+
+    case 'ADD_DELIVERY_WORK_ORDER':
+      return { ...state, deliveryWorkOrders: [...state.deliveryWorkOrders, action.payload] };
+
+    case 'UPDATE_DELIVERY_WORK_ORDER':
+      return {
+        ...state,
+        deliveryWorkOrders: state.deliveryWorkOrders.map((w) =>
+          w.id === action.payload.id ? { ...w, ...action.payload } : w
+        ),
+      };
+
+    case 'ADD_DELIVERY_PLAN':
+      return { ...state, deliveryPlans: [...state.deliveryPlans, action.payload] };
+
+    case 'UPDATE_DELIVERY_PLAN':
+      return {
+        ...state,
+        deliveryPlans: state.deliveryPlans.map((p) =>
+          p.id === action.payload.id ? { ...p, ...action.payload } : p
+        ),
+      };
+
+    case 'ADD_LABEL_CATEGORY':
+      return { ...state, labelCategories: [...state.labelCategories, action.payload] };
+
+    case 'UPDATE_LABEL_CATEGORY':
+      return {
+        ...state,
+        labelCategories: state.labelCategories.map((c) =>
+          c.id === action.payload.id ? { ...c, ...action.payload } : c
+        ),
+      };
+
+    case 'DELETE_LABEL_CATEGORY':
+      return { ...state, labelCategories: state.labelCategories.filter((c) => c.id !== action.payload) };
 
     default:
       return state;

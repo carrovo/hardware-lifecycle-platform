@@ -4,10 +4,11 @@ import { useRole } from '../context/RoleContext';
 import { FEISHU_USERS, ROLES_LIST } from '../data/mockData';
 
 const NAV_ITEMS = [
+  { label: '首页', path: '/home' },
   { label: '运营看板', path: '/dashboard' },
-  { label: '生产制造', path: '/manufacture' },
-  { label: '设备管理', path: '/devices' },
-  { label: '项目管理', path: '/projects' },
+  { label: '项目中心', path: '/projects' },
+  { label: '资产管理', path: '/assets' },
+  { label: '售后管理', path: '/after-sales' },
   { label: '系统管理', path: '/system' },
 ];
 

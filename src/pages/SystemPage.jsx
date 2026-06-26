@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import Users from './Users';
 import Roles from './Roles';
+import { useApp } from '../context/AppContext';
+import Modal from '../components/Modal';
 
 const TABS = [
-  { key: 'users', label: '用户管理' },
   { key: 'roles', label: '角色权限' },
+  { key: 'labels', label: '标签管理' },
   { key: 'notifications', label: '通知配置' },
 ];
 
@@ -150,10 +151,135 @@ function NotificationConfig() {
   );
 }
 
+/* ─────── Label Management ─────── */
+
+function AddCategoryModal({ isOpen, onClose, onSave }) {
+  const [name, setName] = useState('');
+  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="新增标签类别">
+      <div className="space-y-4">
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">类别名称 *</label>
+          <input type="text" className={inp} value={name} onChange={e => setName(e.target.value)} /></div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button onClick={() => { if (name.trim()) { onSave(name.trim()); onClose(); setName(''); } }}
+            disabled={!name.trim()} className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800 disabled:opacity-40">保存</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function AddOptionModal({ isOpen, onClose, onSave, categoryName }) {
+  const [value, setValue] = useState('');
+  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`新增选项 — ${categoryName}`}>
+      <div className="space-y-4">
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">选项值 *</label>
+          <input type="text" className={inp} value={value} onChange={e => setValue(e.target.value)} /></div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button onClick={() => { if (value.trim()) { onSave(value.trim()); onClose(); setValue(''); } }}
+            disabled={!value.trim()} className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800 disabled:opacity-40">保存</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function LabelManagement() {
+  const { state, dispatch } = useApp();
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [addOptionTarget, setAddOptionTarget] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  const categories = state.labelCategories || [];
+
+  const handleAddCategory = (name) => {
+    dispatch({ type: 'ADD_LABEL_CATEGORY', payload: { id: `LC-${Date.now()}`, name, options: [] } });
+  };
+
+  const handleAddOption = (categoryId, value) => {
+    const cat = categories.find(c => c.id === categoryId);
+    if (!cat) return;
+    dispatch({ type: 'UPDATE_LABEL_CATEGORY', payload: { ...cat, options: [...cat.options, value] } });
+  };
+
+  const handleDeleteOption = (categoryId, option) => {
+    const cat = categories.find(c => c.id === categoryId);
+    if (!cat) return;
+    dispatch({ type: 'UPDATE_LABEL_CATEGORY', payload: { ...cat, options: cat.options.filter(o => o !== option) } });
+  };
+
+  const handleDeleteCategory = (id) => {
+    dispatch({ type: 'DELETE_LABEL_CATEGORY', payload: id });
+    setDeleteConfirm(null);
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-gray-800">标签管理</h2>
+        <button onClick={() => setShowAddCategory(true)} className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
+          + 新增类别
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        {categories.map(cat => (
+          <div key={cat.id} className="bg-white rounded shadow-sm p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-semibold text-gray-800">{cat.name}</div>
+              <div className="flex gap-2">
+                <button onClick={() => setAddOptionTarget(cat)} className="px-3 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100">
+                  + 新增选项
+                </button>
+                <button onClick={() => setDeleteConfirm(cat)} className="px-3 py-1 text-xs text-red-600 border border-red-200 rounded hover:bg-red-50">
+                  删除类别
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {cat.options.map(opt => (
+                <div key={opt} className="flex items-center gap-1 bg-gray-100 rounded-full px-3 py-1">
+                  <span className="text-sm text-gray-700">{opt}</span>
+                  <button onClick={() => handleDeleteOption(cat.id, opt)} className="text-gray-400 hover:text-red-500 ml-1 text-xs leading-none">×</button>
+                </div>
+              ))}
+              {cat.options.length === 0 && <span className="text-sm text-gray-400">暂无选项，点击上方按钮添加</span>}
+            </div>
+          </div>
+        ))}
+        {categories.length === 0 && (
+          <div className="text-center py-12 text-gray-400">暂无标签类别，点击「新增类别」开始</div>
+        )}
+      </div>
+
+      <AddCategoryModal isOpen={showAddCategory} onClose={() => setShowAddCategory(false)} onSave={handleAddCategory} />
+      {addOptionTarget && (
+        <AddOptionModal isOpen={!!addOptionTarget} onClose={() => setAddOptionTarget(null)} onSave={v => handleAddOption(addOptionTarget.id, v)} categoryName={addOptionTarget.name} />
+      )}
+      {deleteConfirm && (
+        <Modal isOpen={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title="删除类别">
+          <div className="space-y-4">
+            <p className="text-sm text-gray-700">确认删除标签类别 <span className="font-semibold">「{deleteConfirm.name}」</span>？此操作不可撤销。</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+              <button onClick={() => handleDeleteCategory(deleteConfirm.id)} className="px-4 py-2 text-sm text-white bg-red-600 rounded hover:bg-red-700">确认删除</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 export default function SystemPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get('tab') || 'users';
-  const activeTab = TABS.some((t) => t.key === tab) ? tab : 'users';
+  const tab = searchParams.get('tab') || 'roles';
+  const activeTab = TABS.some((t) => t.key === tab) ? tab : 'roles';
 
   const setTab = (key) => {
     const next = new URLSearchParams(searchParams);
@@ -183,8 +309,8 @@ export default function SystemPage() {
       </div>
 
       {/* Content */}
-      {activeTab === 'users' && <Users />}
       {activeTab === 'roles' && <Roles />}
+      {activeTab === 'labels' && <LabelManagement />}
       {activeTab === 'notifications' && <NotificationConfig />}
     </div>
   );

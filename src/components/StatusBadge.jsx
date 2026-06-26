@@ -55,6 +55,16 @@ const statusColorMap = {
   // Record meta-status
   '有效': 'bg-green-100 text-green-700 border-green-300',
   '作废': 'bg-gray-100 text-gray-500 border-gray-300',
+  // v6 delivery/device statuses
+  '待入库':      'bg-teal-100 text-teal-700 border-teal-300',
+  '已入库':      'bg-teal-100 text-teal-700 border-teal-300',
+  '出厂检验中':  'bg-blue-100 text-blue-700 border-blue-300',
+  '现场安装调试中': 'bg-indigo-100 text-indigo-700 border-indigo-300',
+  '客户验收中':  'bg-purple-100 text-purple-700 border-purple-300',
+  // Plan/project statuses
+  '进行中': 'bg-blue-100 text-blue-700 border-blue-300',
+  '已完成': 'bg-green-100 text-green-700 border-green-300',
+  '已暂停': 'bg-gray-100 text-gray-500 border-gray-300',
 };
 
 export default function StatusBadge({ status, size = 'sm' }) {
