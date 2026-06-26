@@ -28,7 +28,7 @@ function ProgressBar({ activeNode, setActiveNode }) {
         {NODES.map((node, i) => (
           <div key={node.key} className="flex items-center flex-1">
             <button onClick={() => setActiveNode(node.key)}
-              className={`flex flex-col items-center gap-1.5 group flex-1`}>
+              className="flex flex-col items-center gap-1.5 group flex-1">
               <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
                 activeNode === node.key ? 'bg-slate-700 text-white ring-2 ring-slate-400' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
               }`}>{node.step}</div>
@@ -91,46 +91,253 @@ function MaterialPrepNode({ plan }) {
   );
 }
 
-/* ─────── Node 2: 整机装配 ─────── */
-function AssemblyRecordModal({ isOpen, onClose, onSave, plan }) {
+/* ─────── Node 2: 整机装配 — 4步引导式向导 ─────── */
+function GuidedAssemblyModal({ isOpen, onClose, onSave, plan }) {
   const { state } = useApp();
+  const [step, setStep] = useState(1);
+  const [selectedTypeId, setSelectedTypeId] = useState('');
+  const [slotSelections, setSlotSelections] = useState({});
   const [form, setForm] = useState({
-    sn: '', deviceTypeId: '', assembler: state.currentUser, assemblyTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
-    erpWorkOrderNo: '', notes: '',
+    assembler: state.currentUser,
+    assemblyTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
+    erpWorkOrderNo: '',
+    photo: '',
+    notes: '',
   });
+
   const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave({ ...form, id: `DEV-${Date.now()}`, status: '半成品检验中', projectId: plan.projectId, productionPlanId: plan.id, online: false, createdAt: form.assemblyTime, updatedAt: form.assemblyTime });
-    onClose();
-    setForm({ sn: '', deviceTypeId: '', assembler: state.currentUser, assemblyTime: new Date().toISOString().slice(0, 16).replace('T', ' '), erpWorkOrderNo: '', notes: '' });
+
+  const resetAll = () => {
+    setStep(1);
+    setSelectedTypeId('');
+    setSlotSelections({});
+    setForm({
+      assembler: state.currentUser,
+      assemblyTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
+      erpWorkOrderNo: '',
+      photo: '',
+      notes: '',
+    });
   };
+
+  const handleClose = () => { resetAll(); onClose(); };
+
+  const selectedType = state.deviceTypes.find(dt => dt.id === selectedTypeId);
+  const slots = selectedType?.slots || [];
+
+  const getAvailableMaterials = (slot) => {
+    const moduleType = state.moduleTypes.find(mt => mt.id === slot.moduleTypeId);
+    if (!moduleType) return [];
+    return (state.materials || []).filter(m => m.category === moduleType.category && m.status === '待装配');
+  };
+
+  const handleSubmit = () => {
+    const typeCode = (selectedType?.name || 'DEV').replace(/[^A-Za-z0-9一-龥]/g, '').slice(0, 4).toUpperCase();
+    const sn = `SN-${typeCode}-${Date.now().toString().slice(-6)}`;
+    onSave({
+      id: `DEV-${Date.now()}`,
+      sn,
+      deviceTypeId: selectedTypeId,
+      slotSelections,
+      ...form,
+    });
+    handleClose();
+  };
+
+  const STEP_LABELS = ['选整机类型', '选模块SN', '填写信息', '确认提交'];
+
+  if (!isOpen) return null;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="新建装配记录">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">整机SN *</label>
-            <input type="text" className={inp} required value={form.sn} onChange={e => setForm({ ...form, sn: e.target.value })} placeholder="如 SN-DEV-XXX" /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">整机类型 *</label>
-            <select className={inp} required value={form.deviceTypeId} onChange={e => setForm({ ...form, deviceTypeId: e.target.value })}>
-              <option value="">-- 选择整机类型 --</option>
-              {state.deviceTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
-            </select>
+    <Modal isOpen={isOpen} onClose={handleClose} title="新建装配记录" size="lg">
+      {/* Step indicator */}
+      <div className="flex items-center gap-1 mb-6 pb-5 border-b border-gray-100">
+        {STEP_LABELS.map((label, i) => (
+          <div key={i} className="flex items-center gap-1 flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all ${
+              step > i + 1 ? 'bg-green-500 text-white' : step === i + 1 ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-500'
+            }`}>
+              {step > i + 1 ? '✓' : i + 1}
+            </div>
+            <span className={`text-xs flex-shrink-0 ${step === i + 1 ? 'text-slate-700 font-medium' : step > i + 1 ? 'text-green-600' : 'text-gray-400'}`}>{label}</span>
+            {i < STEP_LABELS.length - 1 && <div className="flex-1 h-px bg-gray-200 mx-1" />}
           </div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">装配人</label>
-            <input type="text" className={inp} value={form.assembler} onChange={e => setForm({ ...form, assembler: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">装配时间</label>
-            <input type="text" className={inp} value={form.assemblyTime} onChange={e => setForm({ ...form, assemblyTime: e.target.value })} /></div>
+        ))}
+      </div>
+
+      {/* Step 1: 选整机类型 */}
+      {step === 1 && (
+        <div>
+          <p className="text-sm text-gray-500 mb-4">请选择要装配的整机类型</p>
+          <div className="grid grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+            {state.deviceTypes.map(dt => (
+              <button key={dt.id} onClick={() => setSelectedTypeId(dt.id)}
+                className={`p-4 rounded-xl border-2 text-left transition-all ${
+                  selectedTypeId === dt.id
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}>
+                <div className="font-semibold text-gray-800 text-sm mb-1">{dt.name}</div>
+                <div className="text-xs text-gray-400">{(dt.slots || []).length} 个槽位</div>
+                {dt.description && <div className="text-xs text-gray-500 mt-1 line-clamp-2">{dt.description}</div>}
+              </button>
+            ))}
+            {state.deviceTypes.length === 0 && (
+              <div className="col-span-2 py-8 text-center text-gray-400 text-sm">暂无整机类型，请先在系统设置中添加</div>
+            )}
+          </div>
+          <div className="flex justify-end mt-6">
+            <button onClick={() => setStep(2)} disabled={!selectedTypeId}
+              className="px-5 py-2 text-sm bg-slate-700 text-white rounded hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed">
+              下一步 →
+            </button>
+          </div>
         </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">ERP工单号</label>
-          <input type="text" className={inp} value={form.erpWorkOrderNo} onChange={e => setForm({ ...form, erpWorkOrderNo: e.target.value })} /></div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
-          <textarea rows={2} className={inp} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-          <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存</button>
+      )}
+
+      {/* Step 2: 按槽位选模块SN */}
+      {step === 2 && (
+        <div>
+          <p className="text-sm text-gray-500 mb-4">为 <strong className="text-gray-700">{selectedType?.name}</strong> 的各槽位选择模块</p>
+          {slots.length === 0 ? (
+            <div className="text-center py-10 text-gray-400 text-sm bg-gray-50 rounded-lg">
+              该整机类型未配置槽位，可直接跳过此步骤
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {slots.map(slot => {
+                const availMaterials = getAvailableMaterials(slot);
+                const moduleType = state.moduleTypes.find(mt => mt.id === slot.moduleTypeId);
+                const selected = slotSelections[slot.id];
+                return (
+                  <div key={slot.id} className={`flex items-center gap-3 p-3 rounded-lg border ${selected ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}>
+                    <div className="w-36 flex-shrink-0">
+                      <div className="text-sm font-medium text-gray-700">{slot.slotName}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{moduleType?.name || slot.moduleTypeId || '未知模块类型'}</div>
+                    </div>
+                    <select
+                      className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm bg-white"
+                      value={selected || ''}
+                      onChange={e => setSlotSelections({ ...slotSelections, [slot.id]: e.target.value })}
+                    >
+                      <option value="">— 选择模块SN（{availMaterials.length} 件可用）—</option>
+                      {availMaterials.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.sn || m.id}{m.model ? ` — ${m.model}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {selected && <span className="text-green-600 text-sm flex-shrink-0">✓</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex justify-between mt-6">
+            <button onClick={() => setStep(1)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">← 上一步</button>
+            <button onClick={() => setStep(3)} className="px-5 py-2 text-sm bg-slate-700 text-white rounded hover:bg-slate-800">下一步 →</button>
+          </div>
         </div>
-      </form>
+      )}
+
+      {/* Step 3: 填写信息 */}
+      {step === 3 && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">装配人 *</label>
+              <input type="text" className={inp} required value={form.assembler}
+                onChange={e => setForm({ ...form, assembler: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">装配时间</label>
+              <input type="text" className={inp} value={form.assemblyTime}
+                onChange={e => setForm({ ...form, assemblyTime: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">ERP工单号</label>
+            <input type="text" className={inp} value={form.erpWorkOrderNo}
+              onChange={e => setForm({ ...form, erpWorkOrderNo: e.target.value })}
+              placeholder="如 WO-2026-XXX" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">现场照片 <span className="font-normal text-gray-400">（选填）</span></label>
+            <input type="text" className={inp} value={form.photo}
+              onChange={e => setForm({ ...form, photo: e.target.value })}
+              placeholder="填写照片文件名，如 assembly-photo.jpg" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+            <textarea rows={2} className={inp} value={form.notes}
+              onChange={e => setForm({ ...form, notes: e.target.value })} />
+          </div>
+          <div className="flex justify-between pt-2">
+            <button onClick={() => setStep(2)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">← 上一步</button>
+            <button onClick={() => setStep(4)} disabled={!form.assembler}
+              className="px-5 py-2 text-sm bg-slate-700 text-white rounded hover:bg-slate-800 disabled:opacity-40">
+              下一步 →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 4: 确认提交 */}
+      {step === 4 && (
+        <div>
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 mb-5">
+            <h3 className="text-sm font-semibold text-blue-800 mb-4">装配信息确认</h3>
+            <div className="space-y-2.5 text-sm">
+              <div className="flex gap-3">
+                <span className="w-24 text-gray-500 flex-shrink-0">整机类型</span>
+                <span className="font-medium text-gray-800">{selectedType?.name}</span>
+              </div>
+              <div className="flex gap-3">
+                <span className="w-24 text-gray-500 flex-shrink-0">装配人</span>
+                <span className="text-gray-800">{form.assembler}</span>
+              </div>
+              <div className="flex gap-3">
+                <span className="w-24 text-gray-500 flex-shrink-0">装配时间</span>
+                <span className="text-gray-800">{form.assemblyTime}</span>
+              </div>
+              {form.erpWorkOrderNo && (
+                <div className="flex gap-3">
+                  <span className="w-24 text-gray-500 flex-shrink-0">ERP工单号</span>
+                  <span className="text-gray-800 font-mono">{form.erpWorkOrderNo}</span>
+                </div>
+              )}
+            </div>
+
+            {slots.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-blue-200">
+                <div className="text-xs font-medium text-gray-600 mb-2">槽位配置（{Object.values(slotSelections).filter(Boolean).length}/{slots.length} 已选）</div>
+                <div className="space-y-1">
+                  {slots.map(slot => {
+                    const selMaterial = (state.materials || []).find(m => m.id === slotSelections[slot.id]);
+                    return (
+                      <div key={slot.id} className="flex items-center gap-3 text-xs">
+                        <span className="w-24 text-gray-500 flex-shrink-0">{slot.slotName}</span>
+                        {selMaterial
+                          ? <span className="text-green-700 font-medium">✓ {selMaterial.sn || selMaterial.id}{selMaterial.model ? ` (${selMaterial.model})` : ''}</span>
+                          : <span className="text-gray-400">（未选择）</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="text-xs text-gray-400 bg-gray-50 rounded-lg p-3 mb-5">
+            提交后将自动生成整机SN，并将已选模块状态标记为「已占用」
+          </div>
+
+          <div className="flex justify-between">
+            <button onClick={() => setStep(3)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">← 上一步</button>
+            <button onClick={handleSubmit} className="px-6 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 font-medium">确认提交</button>
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -142,12 +349,41 @@ function AssemblyNode({ plan }) {
 
   const devices = state.devices.filter(d => d.productionPlanId === plan.id);
 
-  const handleSave = (form) => {
+  const handleSave = (formData) => {
     const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    dispatch({ type: 'ADD_DEVICE', payload: { ...form, updatedAt: now } });
+    const { slotSelections, ...deviceFields } = formData;
+
+    dispatch({
+      type: 'ADD_DEVICE',
+      payload: {
+        ...deviceFields,
+        status: '半成品检验中',
+        projectId: plan.projectId,
+        productionPlanId: plan.id,
+        online: false,
+        createdAt: deviceFields.assemblyTime,
+        updatedAt: now,
+      },
+    });
+
+    Object.values(slotSelections || {}).forEach(materialId => {
+      if (materialId) {
+        dispatch({ type: 'UPDATE_MATERIAL', payload: { id: materialId, status: '已占用' } });
+      }
+    });
+
     dispatch({
       type: 'ADD_OPERATION_LOG',
-      payload: { id: `LOG-${Date.now()}`, deviceId: form.id, operator: form.assembler, timestamp: now, actionType: '整机装配', fromStatus: null, toStatus: '半成品检验中', notes: '完成装配，进入质检流程' },
+      payload: {
+        id: `LOG-${Date.now()}`,
+        deviceId: deviceFields.id,
+        operator: deviceFields.assembler,
+        timestamp: now,
+        actionType: '整机装配',
+        fromStatus: null,
+        toStatus: '半成品检验中',
+        notes: `完成装配（${state.deviceTypes.find(dt => dt.id === deviceFields.deviceTypeId)?.name || ''}），进入质检流程`,
+      },
     });
   };
 
@@ -192,7 +428,7 @@ function AssemblyNode({ plan }) {
           </tbody>
         </table>
       </div>
-      <AssemblyRecordModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleSave} plan={plan} />
+      <GuidedAssemblyModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleSave} plan={plan} />
     </div>
   );
 }
@@ -506,7 +742,6 @@ export default function ProductionPlanDetail() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <button onClick={() => navigate('/projects?tab=production')} className="text-gray-400 hover:text-gray-600 mt-1 text-sm">← 返回</button>
         <div className="flex-1">
@@ -523,10 +758,8 @@ export default function ProductionPlanDetail() {
         </div>
       </div>
 
-      {/* Workflow progress */}
       <ProgressBar activeNode={activeNode} setActiveNode={setActiveNode} />
 
-      {/* Node content */}
       {activeNode === 'materialPrep' && <MaterialPrepNode plan={plan} />}
       {activeNode === 'assembly' && <AssemblyNode plan={plan} />}
       {activeNode === 'quality' && <QualityNode plan={plan} />}
