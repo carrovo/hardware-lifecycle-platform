@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
+import TabBar from '../components/TabBar';
 
 const TABS = [
   { key: 'list', label: '项目列表' },
@@ -189,7 +190,7 @@ function ProductionPlanTab() {
   const { projects } = state;
   const getProjectName = (id) => projects.find(p => p.id === id)?.name || '—';
 
-  const plans = state.productionPlans || [];
+  const plans = state.workflowProductionPlans || [];
 
   return (
     <div>
@@ -418,16 +419,7 @@ export default function ProjectsCenter() {
 
   return (
     <div>
-      <div className="border-b border-gray-200 bg-white px-6">
-        <div className="flex gap-0">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === t.key ? 'border-slate-700 text-slate-800' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <TabBar tabs={TABS} activeTab={activeTab} onChange={setTab} />
       <div className="p-6">
         {activeTab === 'list' && <ProjectListTab />}
         {activeTab === 'production' && <ProductionPlanTab />}

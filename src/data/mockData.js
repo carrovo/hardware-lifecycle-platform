@@ -152,31 +152,36 @@ export const materials = [
 ];
 
 export const devices = [
-  { id: 'DEV-001', sn: 'SN-DEV-001', deviceTypeId: 'DT-001', status: '装配中', assembler: '张三', assemblyTime: '2026-06-18 10:00', photoName: 'assembly_dev001.jpg', usedMaterials: [], createdAt: '2026-06-18 10:00', updatedAt: '2026-06-18 10:00' },
-  { id: 'DEV-002', sn: 'SN-DEV-002', deviceTypeId: 'DT-001', status: '功能测试中', assembler: '李四', assemblyTime: '2026-06-16 14:00', photoName: 'assembly_dev002.jpg', usedMaterials: [{ materialId: 'MAT-001', moduleTypeId: 'MT-001' }, { materialId: 'MAT-003', moduleTypeId: 'MT-002' }], createdAt: '2026-06-16 14:00', updatedAt: '2026-06-17 09:00' },
-  { id: 'DEV-003', sn: 'SN-DEV-003', deviceTypeId: 'DT-001', status: '老化测试中', assembler: '王五', assemblyTime: '2026-06-14 09:00', photoName: 'assembly_dev003.jpg', usedMaterials: [{ materialId: 'MAT-006', moduleTypeId: 'MT-003' }, { materialId: 'MAT-009', moduleTypeId: 'MT-004' }], createdAt: '2026-06-14 09:00', updatedAt: '2026-06-16 15:00' },
-  { id: 'DEV-004', sn: 'SN-DEV-004', deviceTypeId: 'DT-002', status: '终测中', assembler: '赵六', assemblyTime: '2026-06-10 08:00', photoName: 'assembly_dev004.jpg', usedMaterials: [{ materialId: 'MAT-013', moduleTypeId: 'MT-006' }], createdAt: '2026-06-10 08:00', updatedAt: '2026-06-17 08:00' },
-  { id: 'DEV-005', sn: 'SN-DEV-005', deviceTypeId: 'DT-002', status: '待分配项目', assembler: '张三', assemblyTime: '2026-06-01 10:00', photoName: 'assembly_dev005.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-019', moduleTypeId: 'MT-002' }, { materialId: 'MAT-020', moduleTypeId: 'MT-002' }, { materialId: 'MAT-006', moduleTypeId: 'MT-003' }, { materialId: 'MAT-016', moduleTypeId: 'MT-003' }, { materialId: 'MAT-017', moduleTypeId: 'MT-003' }, { materialId: 'MAT-009', moduleTypeId: 'MT-004' }, { materialId: 'MAT-013', moduleTypeId: 'MT-006' }], createdAt: '2026-06-01 10:00', updatedAt: '2026-06-08 16:00' },
-  { id: 'DEV-006', sn: 'SN-DEV-006', deviceTypeId: 'DT-001', status: '待分配项目', assembler: '李四', assemblyTime: '2026-05-28 09:00', photoName: 'assembly_dev006.jpg', usedMaterials: [{ materialId: 'MAT-001', moduleTypeId: 'MT-001' }, { materialId: 'MAT-003', moduleTypeId: 'MT-002' }, { materialId: 'MAT-018', moduleTypeId: 'MT-001' }, { materialId: 'MAT-011', moduleTypeId: 'MT-005' }], createdAt: '2026-05-28 09:00', updatedAt: '2026-06-05 10:00' },
-  { id: 'DEV-007', sn: 'SN-DEV-007', deviceTypeId: 'DT-001', status: '已分配项目', assembler: '王五', assemblyTime: '2026-05-20 10:00', photoName: 'assembly_dev007.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-004', moduleTypeId: 'MT-002' }], projectId: 'PROJ-001', erpStorageOrderNo: 'WR-2026-088', createdAt: '2026-05-20 10:00', updatedAt: '2026-06-10 09:00' },
-  { id: 'DEV-008', sn: 'SN-DEV-008', deviceTypeId: 'DT-002', status: '已分配项目', assembler: '赵六', assemblyTime: '2026-05-18 09:00', photoName: 'assembly_dev008.jpg', usedMaterials: [{ materialId: 'MAT-011', moduleTypeId: 'MT-005' }, { materialId: 'MAT-013', moduleTypeId: 'MT-006' }], projectId: 'PROJ-001', createdAt: '2026-05-18 09:00', updatedAt: '2026-06-10 09:30' },
-  { id: 'DEV-009', sn: 'SN-DEV-009', deviceTypeId: 'DT-001', status: '已分配项目', assembler: '张三', assemblyTime: '2026-05-15 10:00', photoName: 'assembly_dev009.jpg', usedMaterials: [{ materialId: 'MAT-018', moduleTypeId: 'MT-001' }, { materialId: 'MAT-019', moduleTypeId: 'MT-002' }], projectId: 'PROJ-002', createdAt: '2026-05-15 10:00', updatedAt: '2026-06-12 10:00' },
-  { id: 'DEV-010', sn: 'SN-DEV-010', deviceTypeId: 'DT-002', status: '在线运营', assembler: '李四', assemblyTime: '2026-04-20 09:00', photoName: 'assembly_dev010.jpg', usedMaterials: [{ materialId: 'MAT-016', moduleTypeId: 'MT-003' }, { materialId: 'MAT-017', moduleTypeId: 'MT-003' }], projectId: 'PROJ-001', batteryPercent: 87, storagePercent: 42, lastHeartbeat: '2026-06-21 08:55', online: true, createdAt: '2026-04-20 09:00', updatedAt: '2026-06-21 08:55' },
-  { id: 'DEV-011', sn: 'SN-DEV-011', deviceTypeId: 'DT-001', status: '在线运营', assembler: '王五', assemblyTime: '2026-04-15 10:00', photoName: 'assembly_dev011.jpg', usedMaterials: [{ materialId: 'MAT-006', moduleTypeId: 'MT-003' }], projectId: 'PROJ-002', batteryPercent: 62, storagePercent: 71, lastHeartbeat: '2026-06-21 07:30', online: true, createdAt: '2026-04-15 10:00', updatedAt: '2026-06-21 07:30' },
-  { id: 'DEV-012', sn: 'SN-DEV-012', deviceTypeId: 'DT-002', status: '在线运营', assembler: '赵六', assemblyTime: '2026-04-10 09:00', photoName: 'assembly_dev012.jpg', usedMaterials: [{ materialId: 'MAT-009', moduleTypeId: 'MT-004' }], projectId: 'PROJ-003', batteryPercent: 15, storagePercent: 88, lastHeartbeat: '2026-06-20 23:10', online: false, createdAt: '2026-04-10 09:00', updatedAt: '2026-06-20 23:10' },
-  { id: 'DEV-013', sn: 'SN-DEV-013', deviceTypeId: 'DT-001', status: '在线运营', assembler: '张三', assemblyTime: '2026-03-25 10:00', photoName: 'assembly_dev013.jpg', usedMaterials: [], projectId: 'PROJ-001', batteryPercent: 93, storagePercent: 30, lastHeartbeat: '2026-06-21 09:02', online: true, createdAt: '2026-03-25 10:00', updatedAt: '2026-06-21 09:02' },
-  // 装配中 (target 3: DEV-001, DEV-016, DEV-017)
-  { id: 'DEV-016', sn: 'SN-DEV-016', deviceTypeId: 'DT-001', status: '半成品检验中', assembler: '李四', assemblyTime: '2026-06-19 09:00', photoName: 'assembly_dev016.jpg', usedMaterials: [], createdAt: '2026-06-19 09:00', updatedAt: '2026-06-19 09:00' },
-  { id: 'DEV-017', sn: 'SN-DEV-017', deviceTypeId: 'DT-002', status: '初测中', assembler: '王五', assemblyTime: '2026-06-20 10:30', photoName: 'assembly_dev017.jpg', usedMaterials: [], createdAt: '2026-06-20 10:30', updatedAt: '2026-06-20 10:30' },
-  // 功能测试中 (target 3: DEV-002, DEV-018, DEV-019)
-  { id: 'DEV-018', sn: 'SN-DEV-018', deviceTypeId: 'DT-001', status: '中测中', assembler: '赵六', assemblyTime: '2026-06-16 11:00', photoName: 'assembly_dev018.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-004', moduleTypeId: 'MT-002' }], createdAt: '2026-06-16 11:00', updatedAt: '2026-06-17 10:00' },
-  { id: 'DEV-019', sn: 'SN-DEV-019', deviceTypeId: 'DT-002', status: 'OQT终测中', assembler: '张三', assemblyTime: '2026-06-15 14:30', photoName: 'assembly_dev019.jpg', usedMaterials: [{ materialId: 'MAT-007', moduleTypeId: 'MT-003' }], createdAt: '2026-06-15 14:30', updatedAt: '2026-06-17 09:30' },
-  // 老化测试中 (target 2: DEV-003, DEV-020)
-  { id: 'DEV-020', sn: 'SN-DEV-020', deviceTypeId: 'DT-001', status: '生产返修中', assembler: '李四', assemblyTime: '2026-06-13 09:00', photoName: 'assembly_dev020.jpg', usedMaterials: [{ materialId: 'MAT-010', moduleTypeId: 'MT-004' }], createdAt: '2026-06-13 09:00', updatedAt: '2026-06-16 14:00' },
-  // 终测中 (target 2: DEV-004, DEV-021)
-  { id: 'DEV-021', sn: 'SN-DEV-021', deviceTypeId: 'DT-002', status: '终测中', assembler: '王五', assemblyTime: '2026-06-09 08:30', photoName: 'assembly_dev021.jpg', usedMaterials: [{ materialId: 'MAT-014', moduleTypeId: 'MT-006' }], createdAt: '2026-06-09 08:30', updatedAt: '2026-06-17 11:00' },
-  // 待分配项目 (target 3: DEV-005, DEV-006, DEV-022)
-  { id: 'DEV-022', sn: 'SN-DEV-022', deviceTypeId: 'DT-001', status: '待分配项目', assembler: '赵六', assemblyTime: '2026-06-02 10:00', photoName: 'assembly_dev022.jpg', usedMaterials: [{ materialId: 'MAT-018', moduleTypeId: 'MT-001' }, { materialId: 'MAT-019', moduleTypeId: 'MT-002' }, { materialId: 'MAT-016', moduleTypeId: 'MT-003' }], createdAt: '2026-06-02 10:00', updatedAt: '2026-06-09 16:00' },
+  { id: 'DEV-001', sn: 'SN-DEV-001', deviceTypeId: 'DT-001', status: '装配中', assembler: '张三', assemblyTime: '2026-06-18 10:00', photoName: 'assembly_dev001.jpg', usedMaterials: [], productionPlanId: 'WPP-002', createdAt: '2026-06-18 10:00', updatedAt: '2026-06-18 10:00' },
+  { id: 'DEV-002', sn: 'SN-DEV-002', deviceTypeId: 'DT-001', status: '功能测试中', assembler: '李四', assemblyTime: '2026-06-16 14:00', photoName: 'assembly_dev002.jpg', usedMaterials: [{ materialId: 'MAT-001', moduleTypeId: 'MT-001' }, { materialId: 'MAT-003', moduleTypeId: 'MT-002' }], productionPlanId: 'WPP-002', createdAt: '2026-06-16 14:00', updatedAt: '2026-06-17 09:00' },
+  { id: 'DEV-003', sn: 'SN-DEV-003', deviceTypeId: 'DT-001', status: '老化测试中', assembler: '王五', assemblyTime: '2026-06-14 09:00', photoName: 'assembly_dev003.jpg', usedMaterials: [{ materialId: 'MAT-006', moduleTypeId: 'MT-003' }, { materialId: 'MAT-009', moduleTypeId: 'MT-004' }], productionPlanId: 'WPP-002', createdAt: '2026-06-14 09:00', updatedAt: '2026-06-16 15:00' },
+  { id: 'DEV-004', sn: 'SN-DEV-004', deviceTypeId: 'DT-002', status: '终测中', assembler: '赵六', assemblyTime: '2026-06-10 08:00', photoName: 'assembly_dev004.jpg', usedMaterials: [{ materialId: 'MAT-013', moduleTypeId: 'MT-006' }], productionPlanId: 'WPP-005', createdAt: '2026-06-10 08:00', updatedAt: '2026-06-17 08:00' },
+  { id: 'DEV-005', sn: 'SN-DEV-005', deviceTypeId: 'DT-002', status: '待分配项目', assembler: '张三', assemblyTime: '2026-06-01 10:00', photoName: 'assembly_dev005.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-019', moduleTypeId: 'MT-002' }, { materialId: 'MAT-020', moduleTypeId: 'MT-002' }, { materialId: 'MAT-006', moduleTypeId: 'MT-003' }, { materialId: 'MAT-016', moduleTypeId: 'MT-003' }, { materialId: 'MAT-017', moduleTypeId: 'MT-003' }, { materialId: 'MAT-009', moduleTypeId: 'MT-004' }, { materialId: 'MAT-013', moduleTypeId: 'MT-006' }], productionPlanId: 'WPP-005', createdAt: '2026-06-01 10:00', updatedAt: '2026-06-08 16:00' },
+  { id: 'DEV-006', sn: 'SN-DEV-006', deviceTypeId: 'DT-001', status: '待分配项目', assembler: '李四', assemblyTime: '2026-05-28 09:00', photoName: 'assembly_dev006.jpg', usedMaterials: [{ materialId: 'MAT-001', moduleTypeId: 'MT-001' }, { materialId: 'MAT-003', moduleTypeId: 'MT-002' }, { materialId: 'MAT-018', moduleTypeId: 'MT-001' }, { materialId: 'MAT-011', moduleTypeId: 'MT-005' }], productionPlanId: 'WPP-007', createdAt: '2026-05-28 09:00', updatedAt: '2026-06-05 10:00' },
+  { id: 'DEV-007', sn: 'SN-DEV-007', deviceTypeId: 'DT-001', status: '已分配项目', assembler: '王五', assemblyTime: '2026-05-20 10:00', photoName: 'assembly_dev007.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-004', moduleTypeId: 'MT-002' }], projectId: 'PROJ-001', productionPlanId: 'WPP-001', erpStorageOrderNo: 'WR-2026-088', createdAt: '2026-05-20 10:00', updatedAt: '2026-06-10 09:00' },
+  { id: 'DEV-008', sn: 'SN-DEV-008', deviceTypeId: 'DT-002', status: '已分配项目', assembler: '赵六', assemblyTime: '2026-05-18 09:00', photoName: 'assembly_dev008.jpg', usedMaterials: [{ materialId: 'MAT-011', moduleTypeId: 'MT-005' }, { materialId: 'MAT-013', moduleTypeId: 'MT-006' }], projectId: 'PROJ-001', productionPlanId: 'WPP-001', createdAt: '2026-05-18 09:00', updatedAt: '2026-06-10 09:30' },
+  { id: 'DEV-009', sn: 'SN-DEV-009', deviceTypeId: 'DT-001', status: '已分配项目', assembler: '张三', assemblyTime: '2026-05-15 10:00', photoName: 'assembly_dev009.jpg', usedMaterials: [{ materialId: 'MAT-018', moduleTypeId: 'MT-001' }, { materialId: 'MAT-019', moduleTypeId: 'MT-002' }], projectId: 'PROJ-002', productionPlanId: 'WPP-004', createdAt: '2026-05-15 10:00', updatedAt: '2026-06-12 10:00' },
+  { id: 'DEV-010', sn: 'SN-DEV-010', deviceTypeId: 'DT-002', status: '在线运营', assembler: '李四', assemblyTime: '2026-04-20 09:00', photoName: 'assembly_dev010.jpg', usedMaterials: [{ materialId: 'MAT-016', moduleTypeId: 'MT-003' }, { materialId: 'MAT-017', moduleTypeId: 'MT-003' }], projectId: 'PROJ-001', productionPlanId: 'WPP-001', batteryPercent: 87, storagePercent: 42, lastHeartbeat: '2026-06-21 08:55', online: true, createdAt: '2026-04-20 09:00', updatedAt: '2026-06-21 08:55' },
+  { id: 'DEV-011', sn: 'SN-DEV-011', deviceTypeId: 'DT-001', status: '在线运营', assembler: '王五', assemblyTime: '2026-04-15 10:00', photoName: 'assembly_dev011.jpg', usedMaterials: [{ materialId: 'MAT-006', moduleTypeId: 'MT-003' }], projectId: 'PROJ-002', productionPlanId: 'WPP-004', batteryPercent: 62, storagePercent: 71, lastHeartbeat: '2026-06-21 07:30', online: true, createdAt: '2026-04-15 10:00', updatedAt: '2026-06-21 07:30' },
+  { id: 'DEV-012', sn: 'SN-DEV-012', deviceTypeId: 'DT-002', status: '在线运营', assembler: '赵六', assemblyTime: '2026-04-10 09:00', photoName: 'assembly_dev012.jpg', usedMaterials: [{ materialId: 'MAT-009', moduleTypeId: 'MT-004' }], projectId: 'PROJ-003', productionPlanId: 'WPP-006', batteryPercent: 15, storagePercent: 88, lastHeartbeat: '2026-06-20 23:10', online: false, createdAt: '2026-04-10 09:00', updatedAt: '2026-06-20 23:10' },
+  { id: 'DEV-013', sn: 'SN-DEV-013', deviceTypeId: 'DT-001', status: '在线运营', assembler: '张三', assemblyTime: '2026-03-25 10:00', photoName: 'assembly_dev013.jpg', usedMaterials: [], projectId: 'PROJ-001', productionPlanId: 'WPP-001', batteryPercent: 93, storagePercent: 30, lastHeartbeat: '2026-06-21 09:02', online: true, createdAt: '2026-03-25 10:00', updatedAt: '2026-06-21 09:02' },
+  // 装配中 / 检验中 (WPP-002)
+  { id: 'DEV-016', sn: 'SN-DEV-016', deviceTypeId: 'DT-001', status: '半成品检验中', assembler: '李四', assemblyTime: '2026-06-19 09:00', photoName: 'assembly_dev016.jpg', usedMaterials: [], productionPlanId: 'WPP-002', createdAt: '2026-06-19 09:00', updatedAt: '2026-06-19 09:00' },
+  { id: 'DEV-017', sn: 'SN-DEV-017', deviceTypeId: 'DT-002', status: '初测中', assembler: '王五', assemblyTime: '2026-06-20 10:30', photoName: 'assembly_dev017.jpg', usedMaterials: [], productionPlanId: 'WPP-002', createdAt: '2026-06-20 10:30', updatedAt: '2026-06-20 10:30' },
+  // 中测中/OQT终测中 (WPP-005)
+  { id: 'DEV-018', sn: 'SN-DEV-018', deviceTypeId: 'DT-001', status: '中测中', assembler: '赵六', assemblyTime: '2026-06-16 11:00', photoName: 'assembly_dev018.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-004', moduleTypeId: 'MT-002' }], productionPlanId: 'WPP-005', createdAt: '2026-06-16 11:00', updatedAt: '2026-06-17 10:00' },
+  { id: 'DEV-019', sn: 'SN-DEV-019', deviceTypeId: 'DT-002', status: 'OQT终测中', assembler: '张三', assemblyTime: '2026-06-15 14:30', photoName: 'assembly_dev019.jpg', usedMaterials: [{ materialId: 'MAT-007', moduleTypeId: 'MT-003' }], productionPlanId: 'WPP-005', createdAt: '2026-06-15 14:30', updatedAt: '2026-06-17 09:30' },
+  // 生产返修中 (WPP-007)
+  { id: 'DEV-020', sn: 'SN-DEV-020', deviceTypeId: 'DT-001', status: '生产返修中', assembler: '李四', assemblyTime: '2026-06-13 09:00', photoName: 'assembly_dev020.jpg', usedMaterials: [{ materialId: 'MAT-010', moduleTypeId: 'MT-004' }], productionPlanId: 'WPP-007', createdAt: '2026-06-13 09:00', updatedAt: '2026-06-16 14:00' },
+  // 终测中 (WPP-007)
+  { id: 'DEV-021', sn: 'SN-DEV-021', deviceTypeId: 'DT-002', status: '终测中', assembler: '王五', assemblyTime: '2026-06-09 08:30', photoName: 'assembly_dev021.jpg', usedMaterials: [{ materialId: 'MAT-014', moduleTypeId: 'MT-006' }], productionPlanId: 'WPP-007', createdAt: '2026-06-09 08:30', updatedAt: '2026-06-17 11:00' },
+  // 待分配项目 (WPP-006 completed devices)
+  { id: 'DEV-022', sn: 'SN-DEV-022', deviceTypeId: 'DT-001', status: '待分配项目', assembler: '赵六', assemblyTime: '2026-06-02 10:00', photoName: 'assembly_dev022.jpg', usedMaterials: [{ materialId: 'MAT-018', moduleTypeId: 'MT-001' }, { materialId: 'MAT-019', moduleTypeId: 'MT-002' }, { materialId: 'MAT-016', moduleTypeId: 'MT-003' }], productionPlanId: 'WPP-006', createdAt: '2026-06-02 10:00', updatedAt: '2026-06-09 16:00' },
+  // Additional completed devices for WPP-001 / WPP-006
+  { id: 'DEV-023', sn: 'SN-DEV-023', deviceTypeId: 'DT-002', status: '已分配项目', assembler: '张三', assemblyTime: '2026-05-22 09:00', photoName: 'assembly_dev023.jpg', usedMaterials: [], projectId: 'PROJ-003', productionPlanId: 'WPP-006', createdAt: '2026-05-22 09:00', updatedAt: '2026-06-08 10:00' },
+  { id: 'DEV-024', sn: 'SN-DEV-024', deviceTypeId: 'DT-001', status: '在线运营', assembler: '李四', assemblyTime: '2026-05-10 09:00', photoName: 'assembly_dev024.jpg', usedMaterials: [], projectId: 'PROJ-003', productionPlanId: 'WPP-006', batteryPercent: 74, storagePercent: 55, lastHeartbeat: '2026-06-22 08:10', online: true, createdAt: '2026-05-10 09:00', updatedAt: '2026-06-22 08:10' },
+  { id: 'DEV-025', sn: 'SN-DEV-025', deviceTypeId: 'DT-002', status: '在线运营', assembler: '王五', assemblyTime: '2026-04-28 10:00', photoName: 'assembly_dev025.jpg', usedMaterials: [], projectId: 'PROJ-001', productionPlanId: 'WPP-001', batteryPercent: 91, storagePercent: 18, lastHeartbeat: '2026-06-22 09:00', online: true, createdAt: '2026-04-28 10:00', updatedAt: '2026-06-22 09:00' },
+  { id: 'DEV-026', sn: 'SN-DEV-026', deviceTypeId: 'DT-001', status: '已分配项目', assembler: '赵六', assemblyTime: '2026-05-18 08:30', photoName: 'assembly_dev026.jpg', usedMaterials: [], projectId: 'PROJ-002', productionPlanId: 'WPP-004', createdAt: '2026-05-18 08:30', updatedAt: '2026-06-13 09:00' },
 ];
 
 export const testRecords = [
@@ -215,6 +220,38 @@ export const testRecords = [
   { id: 'TEST-M002', deviceId: 'DEV-018', stationKey: 'mid', stationResult: 'Pass', testType: '老化测试', result: '合格', operator: '王五', testTime: '2026-06-17 10:00', duration: '48小时', peakTemp: '71°C', anomalyCount: 0, reportFile: 'aging_DEV018.pdf', reportLink: '', notes: '中测通过', status: '有效' },
   { id: 'TEST-O001', deviceId: 'DEV-001', stationKey: 'oqt', stationResult: 'Pass', testType: '终测', result: '合格', operator: '张三', testTime: '2026-06-14 15:00', reportFile: 'oqt_DEV001.pdf', reportLink: '', notes: 'OQT终测通过，质检员已签核', status: '有效' },
   { id: 'TEST-O002', deviceId: 'DEV-019', stationKey: 'oqt', stationResult: 'NG', testType: '终测', result: '不合格', operator: '张三', testTime: '2026-06-16 09:00', reportFile: '', reportLink: '', notes: '末端精度超标', ngReason: '末端执行器精度超出允许误差', repairPerson: '李四', repairAction: '重新标定末端执行器', estimatedCompletion: '2026-06-18', status: '有效' },
+  // Expanded station records — 7-day span (2026-06-16 to 2026-06-22), covering all 4 stations
+  // semi
+  { id: 'TEST-S004', deviceId: 'DEV-004', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '李四', testTime: '2026-06-16 09:30', reportFile: 'semi_DEV004.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-S005', deviceId: 'DEV-005', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '李四', testTime: '2026-06-16 10:30', reportFile: 'semi_DEV005.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-S006', deviceId: 'DEV-006', stationKey: 'semi', stationResult: 'NG', testType: '功能测试', result: '不合格', operator: '张三', testTime: '2026-06-17 09:00', reportFile: '', reportLink: '', notes: '传感器通信异常', ngReason: 'IMU传感器初始化失败', repairPerson: '王五', repairAction: '更换IMU模组', estimatedCompletion: '2026-06-19', status: '有效' },
+  { id: 'TEST-S007', deviceId: 'DEV-018', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '李四', testTime: '2026-06-17 10:00', reportFile: 'semi_DEV018.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-S008', deviceId: 'DEV-019', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '张三', testTime: '2026-06-18 09:00', reportFile: 'semi_DEV019.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-S009', deviceId: 'DEV-020', stationKey: 'semi', stationResult: 'NG', testType: '功能测试', result: '不合格', operator: '王五', testTime: '2026-06-18 10:30', reportFile: '', reportLink: '', notes: '关节力矩超标', ngReason: '关节3力矩传感器读数偏差', repairPerson: '赵六', repairAction: '重新校准力矩传感器', estimatedCompletion: '2026-06-20', status: '有效' },
+  { id: 'TEST-S010', deviceId: 'DEV-021', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '李四', testTime: '2026-06-19 09:30', reportFile: 'semi_DEV021.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-S011', deviceId: 'DEV-022', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '张三', testTime: '2026-06-20 09:00', reportFile: 'semi_DEV022.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-S012', deviceId: 'DEV-023', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '李四', testTime: '2026-06-21 09:30', reportFile: 'semi_DEV023.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-S013', deviceId: 'DEV-026', stationKey: 'semi', stationResult: 'NG', testType: '功能测试', result: '不合格', operator: '王五', testTime: '2026-06-22 09:00', reportFile: '', reportLink: '', notes: '末端电气连接异常', ngReason: '末端执行器接线虚连', repairPerson: '赵六', repairAction: '重新压接末端连接器', estimatedCompletion: '2026-06-24', status: '有效' },
+  // init
+  { id: 'TEST-I003', deviceId: 'DEV-004', stationKey: 'init', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '王五', testTime: '2026-06-17 09:00', reportFile: 'init_DEV004.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-I004', deviceId: 'DEV-005', stationKey: 'init', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '王五', testTime: '2026-06-17 10:30', reportFile: 'init_DEV005.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-I005', deviceId: 'DEV-018', stationKey: 'init', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '赵六', testTime: '2026-06-18 09:30', reportFile: 'init_DEV018.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-I006', deviceId: 'DEV-019', stationKey: 'init', stationResult: 'NG', testType: '功能测试', result: '不合格', operator: '张三', testTime: '2026-06-19 10:00', reportFile: '', reportLink: '', notes: '图像处理单元无响应', ngReason: '头部RGBD相机初始化失败', repairPerson: '李四', repairAction: '更换头部相机模块', estimatedCompletion: '2026-06-21', status: '有效' },
+  { id: 'TEST-I007', deviceId: 'DEV-021', stationKey: 'init', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '王五', testTime: '2026-06-20 09:00', reportFile: 'init_DEV021.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-I008', deviceId: 'DEV-022', stationKey: 'init', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '赵六', testTime: '2026-06-21 10:00', reportFile: 'init_DEV022.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-I009', deviceId: 'DEV-023', stationKey: 'init', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '张三', testTime: '2026-06-22 09:30', reportFile: 'init_DEV023.pdf', reportLink: '', notes: '', status: '有效' },
+  // mid
+  { id: 'TEST-M003', deviceId: 'DEV-004', stationKey: 'mid', stationResult: 'Pass', testType: '老化测试', result: '合格', operator: '李四', testTime: '2026-06-18 09:00', duration: '48小时', peakTemp: '70°C', anomalyCount: 0, reportFile: 'aging_DEV004.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-M004', deviceId: 'DEV-005', stationKey: 'mid', stationResult: 'NG', testType: '老化测试', result: '不合格', operator: '王五', testTime: '2026-06-18 14:00', duration: '24小时', peakTemp: '88°C', anomalyCount: 4, reportFile: '', reportLink: '', notes: '散热不足导致温度超标', ngReason: '老化24h峰值温度88°C超阈值', repairPerson: '赵六', repairAction: '更换散热风扇并重新涂抹导热硅脂', estimatedCompletion: '2026-06-20', status: '有效' },
+  { id: 'TEST-M005', deviceId: 'DEV-019', stationKey: 'mid', stationResult: 'Pass', testType: '老化测试', result: '合格', operator: '李四', testTime: '2026-06-19 08:00', duration: '48小时', peakTemp: '72°C', anomalyCount: 1, reportFile: 'aging_DEV019.pdf', reportLink: '', notes: '轻微温度波动，在允许范围', status: '有效' },
+  { id: 'TEST-M006', deviceId: 'DEV-021', stationKey: 'mid', stationResult: 'Pass', testType: '老化测试', result: '合格', operator: '王五', testTime: '2026-06-20 08:00', duration: '48小时', peakTemp: '69°C', anomalyCount: 0, reportFile: 'aging_DEV021.pdf', reportLink: '', notes: '', status: '有效' },
+  { id: 'TEST-M007', deviceId: 'DEV-022', stationKey: 'mid', stationResult: 'NG', testType: '老化测试', result: '不合格', operator: '赵六', testTime: '2026-06-21 09:00', duration: '24小时', peakTemp: '83°C', anomalyCount: 2, reportFile: '', reportLink: '', notes: '驱动电机温升过快', ngReason: '左驱电机连续运行热阻偏高', repairPerson: '张三', repairAction: '清洁电机散热片，检查风道', estimatedCompletion: '2026-06-23', status: '有效' },
+  { id: 'TEST-M008', deviceId: 'DEV-023', stationKey: 'mid', stationResult: 'Pass', testType: '老化测试', result: '合格', operator: '李四', testTime: '2026-06-22 08:00', duration: '48小时', peakTemp: '71°C', anomalyCount: 0, reportFile: 'aging_DEV023.pdf', reportLink: '', notes: '', status: '有效' },
+  // oqt
+  { id: 'TEST-O003', deviceId: 'DEV-004', stationKey: 'oqt', stationResult: 'Pass', testType: '终测', result: '合格', operator: '张三', testTime: '2026-06-19 15:00', reportFile: 'oqt_DEV004.pdf', reportLink: '', notes: 'OQT通过，末端精度±0.5mm', status: '有效' },
+  { id: 'TEST-O004', deviceId: 'DEV-021', stationKey: 'oqt', stationResult: 'Pass', testType: '终测', result: '合格', operator: '赵六', testTime: '2026-06-21 14:00', reportFile: 'oqt_DEV021.pdf', reportLink: '', notes: 'OQT终测通过', status: '有效' },
+  { id: 'TEST-O005', deviceId: 'DEV-022', stationKey: 'oqt', stationResult: 'NG', testType: '终测', result: '不合格', operator: '张三', testTime: '2026-06-22 10:00', reportFile: '', reportLink: '', notes: '导航定位误差超标', ngReason: '静止定位误差±8cm超过±5cm限值', repairPerson: '王五', repairAction: '重新建立地图，校准轮式里程计', estimatedCompletion: '2026-06-24', status: '有效' },
+  { id: 'TEST-O006', deviceId: 'DEV-023', stationKey: 'oqt', stationResult: 'Pass', testType: '终测', result: '合格', operator: '李四', testTime: '2026-06-22 14:00', reportFile: 'oqt_DEV023.pdf', reportLink: '', notes: 'OQT全项通过', status: '有效' },
 ];
 
 export const operationLogs = [
@@ -245,6 +282,59 @@ export const productionPlans = [
   { id: 'PLAN-012', date: '2026-06-18', target: 2, actual: 1, project: '机场项目', projectId: 'PROJ-003', notes: '' },
   { id: 'PLAN-013', date: '2026-06-21', target: 4, actual: 0, project: '智魔方项目', projectId: 'PROJ-001', notes: '' },
   { id: 'PLAN-014', date: '2026-06-22', target: 3, actual: 0, project: '机场项目', projectId: 'PROJ-003', notes: '新增订单' },
+];
+
+// Workflow-based production plans (used by ProductionPlanDetail)
+export const workflowProductionPlans = [
+  {
+    id: 'WPP-001', name: '智魔方Q1批次生产', projectId: 'PROJ-001',
+    targetCount: 5, status: '已完成', endDate: '2026-06-10',
+    createdAt: '2026-05-15 09:00', erpProductionOrderNo: 'MO-2026-015',
+    materialBatchIds: ['BATCH-001', 'BATCH-002', 'BATCH-003'],
+    notes: '智魔方园区A厂房首批交付',
+  },
+  {
+    id: 'WPP-002', name: '智魔方Q2补单生产', projectId: 'PROJ-001',
+    targetCount: 3, status: '进行中', endDate: '2026-07-15',
+    createdAt: '2026-06-10 10:00', erpProductionOrderNo: 'MO-2026-031',
+    materialBatchIds: ['BATCH-009', 'BATCH-010'],
+    notes: '',
+  },
+  {
+    id: 'WPP-003', name: '智魔方B厂房备货', projectId: 'PROJ-001',
+    targetCount: 2, status: '待开始', endDate: '2026-08-01',
+    createdAt: '2026-06-20 14:00', erpProductionOrderNo: '',
+    materialBatchIds: [],
+    notes: 'B厂房扩产备货',
+  },
+  {
+    id: 'WPP-004', name: '华熙生物首批生产', projectId: 'PROJ-002',
+    targetCount: 3, status: '已完成', endDate: '2026-06-12',
+    createdAt: '2026-05-20 10:00', erpProductionOrderNo: 'MO-2026-022',
+    materialBatchIds: ['BATCH-004', 'BATCH-005', 'BATCH-006'],
+    notes: '医疗级洁净要求',
+  },
+  {
+    id: 'WPP-005', name: '华熙生物扩产订单', projectId: 'PROJ-002',
+    targetCount: 4, status: '进行中', endDate: '2026-07-31',
+    createdAt: '2026-06-15 09:00', erpProductionOrderNo: 'MO-2026-038',
+    materialBatchIds: ['BATCH-016', 'BATCH-017'],
+    notes: '二期扩产',
+  },
+  {
+    id: 'WPP-006', name: '机场航站楼首批', projectId: 'PROJ-003',
+    targetCount: 4, status: '已完成', endDate: '2026-06-05',
+    createdAt: '2026-06-01 10:00', erpProductionOrderNo: 'MO-2026-028',
+    materialBatchIds: ['BATCH-007', 'BATCH-008'],
+    notes: 'IP65防护需求，已通过民航认证',
+  },
+  {
+    id: 'WPP-007', name: '机场追加订单', projectId: 'PROJ-003',
+    targetCount: 3, status: '进行中', endDate: '2026-07-20',
+    createdAt: '2026-06-18 14:00', erpProductionOrderNo: 'MO-2026-042',
+    materialBatchIds: ['BATCH-019', 'BATCH-020'],
+    notes: '追加T3航站楼部署',
+  },
 ];
 
 export const materialBatches = [
@@ -459,7 +549,7 @@ export const labelCategories = [
 
 export const productionWorkOrders = [
   {
-    id: 'PWO-001', type: 'production', productionPlanId: 'PLAN-001', deviceId: 'DEV-003', deviceSN: 'SN-DEV-003',
+    id: 'PWO-001', type: 'production', productionPlanId: 'WPP-002', deviceId: 'DEV-003', deviceSN: 'SN-DEV-003',
     description: '中测阶段发现散热异常，温度超标', severity: '高',
     status: '处理中', assignedTo: '李四', createdAt: '2026-06-16 10:00', updatedAt: '2026-06-16 14:00',
     repairActions: '更换散热模组，重新导热硅脂涂抹',
@@ -470,7 +560,7 @@ export const productionWorkOrders = [
     ],
   },
   {
-    id: 'PWO-002', type: 'production', productionPlanId: 'PLAN-001', deviceId: 'DEV-020', deviceSN: 'SN-DEV-020',
+    id: 'PWO-002', type: 'production', productionPlanId: 'WPP-002', deviceId: 'DEV-020', deviceSN: 'SN-DEV-020',
     description: 'OQT终测NG，末端执行器精度超标', severity: '中',
     status: '复检中', assignedTo: '赵六', createdAt: '2026-06-16 09:00', updatedAt: '2026-06-18 10:00',
     repairActions: '重新标定末端执行器', recheckPerson: '张三', recheckResult: '',
@@ -479,6 +569,67 @@ export const productionWorkOrders = [
       { time: '2026-06-16 09:00', operator: '赵六', fromStatus: '待处理', toStatus: '处理中', notes: '已承接工单，开始返修' },
       { time: '2026-06-18 10:00', operator: '赵六', fromStatus: '处理中', toStatus: '复检中', notes: '标定完成，提交复检', recheckPerson: '张三' },
     ],
+  },
+  {
+    id: 'PWO-003', type: 'production', productionPlanId: 'WPP-005', deviceId: 'DEV-005', deviceSN: 'SN-DEV-005',
+    description: '半成品检验NG，PCB接口虚焊导致通信丢包', severity: '高',
+    status: '待处理', assignedTo: '', createdAt: '2026-06-17 09:30', updatedAt: '2026-06-17 09:30',
+    repairActions: '', recheckPerson: '', recheckResult: '',
+    attachmentDesc: '', logFile: '', imageFile: '',
+    processLogs: [],
+  },
+  {
+    id: 'PWO-004', type: 'production', productionPlanId: 'WPP-005', deviceId: 'DEV-019', deviceSN: 'SN-DEV-019',
+    description: '初测NG，头部RGBD相机无法初始化', severity: '中',
+    status: '处理中', assignedTo: '王五', createdAt: '2026-06-19 10:30', updatedAt: '2026-06-19 14:00',
+    repairActions: '更换头部相机模块，重新烧录固件',
+    attachmentDesc: '', logFile: 'camera_log.txt', imageFile: '',
+    recheckPerson: '', recheckResult: '',
+    processLogs: [
+      { time: '2026-06-19 10:30', operator: '王五', fromStatus: '待处理', toStatus: '处理中', notes: '已承接，确认是相机模块硬件故障' },
+    ],
+  },
+  {
+    id: 'PWO-005', type: 'production', productionPlanId: 'WPP-007', deviceId: 'DEV-020', deviceSN: 'SN-DEV-020',
+    description: '半成品检验NG，关节力矩传感器读数漂移', severity: '低',
+    status: '已关闭', assignedTo: '张三', createdAt: '2026-06-18 11:00', updatedAt: '2026-06-20 16:00',
+    repairActions: '重新校准力矩传感器零点，更新传感器参数',
+    recheckPerson: '李四', recheckResult: '通过',
+    attachmentDesc: '', logFile: 'torque_log.txt', imageFile: '',
+    processLogs: [
+      { time: '2026-06-18 11:00', operator: '张三', fromStatus: '待处理', toStatus: '处理中', notes: '已承接，开始校准' },
+      { time: '2026-06-19 14:00', operator: '张三', fromStatus: '处理中', toStatus: '复检中', notes: '校准完成，提交复检', recheckPerson: '李四' },
+      { time: '2026-06-20 16:00', operator: '李四', fromStatus: '复检中', toStatus: '已关闭', notes: '复检通过，力矩读数稳定' },
+    ],
+  },
+  {
+    id: 'PWO-006', type: 'production', productionPlanId: 'WPP-007', deviceId: 'DEV-022', deviceSN: 'SN-DEV-022',
+    description: '中测NG，驱动电机散热异常，连续运行温升过快', severity: '高',
+    status: '待处理', assignedTo: '', createdAt: '2026-06-21 09:30', updatedAt: '2026-06-21 09:30',
+    repairActions: '', recheckPerson: '', recheckResult: '',
+    attachmentDesc: '', logFile: '', imageFile: '',
+    processLogs: [],
+  },
+  {
+    id: 'PWO-007', type: 'production', productionPlanId: 'WPP-002', deviceId: 'DEV-016', deviceSN: 'SN-DEV-016',
+    description: '半成品检验发现机壳轻微变形，不影响功能但超出公差', severity: '低',
+    status: '已关闭', assignedTo: '李四', createdAt: '2026-06-19 14:00', updatedAt: '2026-06-21 10:00',
+    repairActions: '更换机壳外壳，重新装配紧固件',
+    recheckPerson: '王五', recheckResult: '通过',
+    attachmentDesc: '机壳测量报告', logFile: '', imageFile: 'housing_photo.jpg',
+    processLogs: [
+      { time: '2026-06-19 14:00', operator: '李四', fromStatus: '待处理', toStatus: '处理中', notes: '确认机壳变形，需更换' },
+      { time: '2026-06-20 10:00', operator: '李四', fromStatus: '处理中', toStatus: '复检中', notes: '已更换机壳，提交复检' },
+      { time: '2026-06-21 10:00', operator: '王五', fromStatus: '复检中', toStatus: '已关闭', notes: '外观尺寸符合公差要求' },
+    ],
+  },
+  {
+    id: 'PWO-008', type: 'production', productionPlanId: 'WPP-007', deviceId: 'DEV-021', deviceSN: 'SN-DEV-021',
+    description: 'OQT终测NG，导航静态定位误差超出±5cm限值', severity: '中',
+    status: '待处理', assignedTo: '', createdAt: '2026-06-22 10:30', updatedAt: '2026-06-22 10:30',
+    repairActions: '', recheckPerson: '', recheckResult: '',
+    attachmentDesc: '', logFile: '', imageFile: '',
+    processLogs: [],
   },
 ];
 
@@ -500,6 +651,74 @@ export const deliveryWorkOrders = [
     id: 'DWO-002', type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011',
     description: '客户反映设备在低电量时异常重启', severity: '高',
     status: '待处理', assignedTo: '', createdAt: '2026-06-20 09:00', updatedAt: '2026-06-20 09:00',
+    repairActions: '', recheckPerson: '', recheckResult: '',
+    attachmentDesc: '', logFile: '', imageFile: '',
+    moduleReplacements: [],
+    processLogs: [],
+  },
+  {
+    id: 'DWO-003', type: 'delivery', deliveryPlanId: 'DP-002', deviceId: 'DEV-009', deviceSN: 'SN-DEV-009',
+    description: '出厂检验发现EMC测试部分指标临界，需补测', severity: '低',
+    status: '已关闭', assignedTo: '张三', createdAt: '2026-06-18 10:30', updatedAt: '2026-06-19 17:00',
+    repairActions: '增加屏蔽贴片，重新进行EMC测试', recheckPerson: '李四', recheckResult: '通过',
+    attachmentDesc: 'EMC测试报告', logFile: 'emc_report.pdf', imageFile: '',
+    moduleReplacements: [],
+    processLogs: [
+      { time: '2026-06-18 10:30', operator: '张三', fromStatus: '待处理', toStatus: '处理中', notes: '确认EMC问题，联系整改方案' },
+      { time: '2026-06-19 09:00', operator: '张三', fromStatus: '处理中', toStatus: '复检中', notes: '已添加屏蔽措施，送检' },
+      { time: '2026-06-19 17:00', operator: '李四', fromStatus: '复检中', toStatus: '已关闭', notes: 'EMC复测全项通过' },
+    ],
+  },
+  {
+    id: 'DWO-004', type: 'delivery', deliveryPlanId: 'DP-002', deviceId: 'DEV-026', deviceSN: 'SN-DEV-026',
+    description: '现场安装调试时发现网络连接不稳定，丢包率高', severity: '中',
+    status: '处理中', assignedTo: '王五', createdAt: '2026-06-21 14:00', updatedAt: '2026-06-22 09:00',
+    repairActions: '排查网络模块固件版本，尝试更新至最新版本',
+    recheckPerson: '', recheckResult: '',
+    attachmentDesc: '', logFile: 'network_log.txt', imageFile: '',
+    moduleReplacements: [],
+    processLogs: [
+      { time: '2026-06-21 14:00', operator: '王五', fromStatus: '待处理', toStatus: '处理中', notes: '到场排查，发现网络模块固件需升级' },
+    ],
+  },
+  {
+    id: 'DWO-005', type: 'delivery', deliveryPlanId: 'DP-003', deviceId: 'DEV-023', deviceSN: 'SN-DEV-023',
+    description: '客户验收时发现设备外观有划伤，不影响功能但客户要求处理', severity: '低',
+    status: '处理中', assignedTo: '赵六', createdAt: '2026-06-20 16:00', updatedAt: '2026-06-21 10:00',
+    repairActions: '安排外观修复，局部喷漆后重新验收',
+    recheckPerson: '', recheckResult: '',
+    attachmentDesc: '外观划伤照片', logFile: '', imageFile: 'scratch_photo.jpg',
+    moduleReplacements: [],
+    processLogs: [
+      { time: '2026-06-20 16:00', operator: '赵六', fromStatus: '待处理', toStatus: '处理中', notes: '确认划伤位置，安排修复' },
+    ],
+  },
+  {
+    id: 'DWO-006', type: 'delivery', deliveryPlanId: 'DP-003', deviceId: 'DEV-024', deviceSN: 'SN-DEV-024',
+    description: '出厂检验防护等级测试不通过，IP65密封性不足', severity: '高',
+    status: '复检中', assignedTo: '张三', recheckPerson: '王五', createdAt: '2026-06-19 10:00', updatedAt: '2026-06-22 14:00',
+    repairActions: '重新检查密封圈，更换防护等级不足部位的密封件',
+    recheckResult: '',
+    attachmentDesc: 'IP防护测试报告', logFile: 'ip65_test.pdf', imageFile: '',
+    moduleReplacements: [],
+    processLogs: [
+      { time: '2026-06-19 10:00', operator: '张三', fromStatus: '待处理', toStatus: '处理中', notes: '拆检发现底部密封圈老化，安排更换' },
+      { time: '2026-06-21 16:00', operator: '张三', fromStatus: '处理中', toStatus: '复检中', notes: '密封件更换完成，提交王五复检' },
+    ],
+  },
+  {
+    id: 'DWO-007', type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013',
+    description: '现场安装后客户反馈设备启动时间过长，超过30秒', severity: '低',
+    status: '待处理', assignedTo: '', createdAt: '2026-06-22 08:00', updatedAt: '2026-06-22 08:00',
+    repairActions: '', recheckPerson: '', recheckResult: '',
+    attachmentDesc: '', logFile: '', imageFile: '',
+    moduleReplacements: [],
+    processLogs: [],
+  },
+  {
+    id: 'DWO-008', type: 'delivery', deliveryPlanId: 'DP-002', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011',
+    description: '客户验收阶段发现机器人在特定场景下避障失灵', severity: '高',
+    status: '待处理', assignedTo: '', createdAt: '2026-06-22 11:00', updatedAt: '2026-06-22 11:00',
     repairActions: '', recheckPerson: '', recheckResult: '',
     attachmentDesc: '', logFile: '', imageFile: '',
     moduleReplacements: [],
@@ -532,9 +751,29 @@ export const deliveryPlans = [
     records: {
       factoryInspection: [
         { id: 'FI-004', deviceId: 'DEV-009', deviceSN: 'SN-DEV-009', inspector: '张三', time: '2026-06-18 10:00', result: '通过', reportFile: 'fi_DEV009.pdf', reportLink: '' },
+        { id: 'FI-005', deviceId: 'DEV-026', deviceSN: 'SN-DEV-026', inspector: '张三', time: '2026-06-18 11:00', result: '通过', reportFile: 'fi_DEV026.pdf', reportLink: '' },
       ],
-      siteInstall: [],
+      siteInstall: [
+        { id: 'SI-003', deviceId: 'DEV-009', deviceSN: 'SN-DEV-009', technician: '赵六', address: '北京市通州区华熙生物园区A楼', time: '2026-06-20 09:00', result: '通过', notes: '洁净环境安装顺利' },
+      ],
       customerAccept: [],
+    },
+  },
+  {
+    id: 'DP-003', name: '机场T3航站楼交付计划', projectId: 'PROJ-003',
+    targetCount: 4, dueDate: '2026-08-30', status: '进行中',
+    records: {
+      factoryInspection: [
+        { id: 'FI-006', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', inspector: '王五', time: '2026-04-09 11:00', result: '通过', reportFile: 'fi_DEV012.pdf', reportLink: '' },
+        { id: 'FI-007', deviceId: 'DEV-023', deviceSN: 'SN-DEV-023', inspector: '王五', time: '2026-06-10 10:00', result: '通过', reportFile: 'fi_DEV023.pdf', reportLink: '' },
+        { id: 'FI-008', deviceId: 'DEV-024', deviceSN: 'SN-DEV-024', inspector: '张三', time: '2026-06-19 09:00', result: '不通过', reportFile: '', reportLink: '', notes: 'IP65防护不足，已生成工单DWO-006' },
+      ],
+      siteInstall: [
+        { id: 'SI-004', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', technician: '王五', address: '首都国际机场T1航站楼B区', time: '2026-04-11 10:00', result: '通过', notes: '巡检路线已配置' },
+      ],
+      customerAccept: [
+        { id: 'CA-002', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', acceptor: '运营负责人', time: '2026-04-15 14:00', result: '通过', erpOutboundNo: 'SO-2026-022', voucherDesc: '机场验收证明.pdf' },
+      ],
     },
   },
 ];

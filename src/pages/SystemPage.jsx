@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import Roles from './Roles';
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
+import TabBar from '../components/TabBar';
 
 const TABS = [
   { key: 'roles', label: '角色权限' },
@@ -289,24 +290,7 @@ export default function SystemPage() {
 
   return (
     <div>
-      {/* Hub Tab nav */}
-      <div className="border-b border-gray-200 bg-white px-6">
-        <div className="flex gap-0">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === t.key
-                  ? 'border-slate-700 text-slate-800'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <TabBar tabs={TABS} activeTab={activeTab} onChange={setTab} />
 
       {/* Content */}
       {activeTab === 'roles' && <Roles />}

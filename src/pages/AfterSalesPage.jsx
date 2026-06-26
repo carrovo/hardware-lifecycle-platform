@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
+import TabBar from '../components/TabBar';
 import { FEISHU_USERS } from '../data/mockData';
 
 const TABS = [
@@ -290,19 +291,14 @@ export default function AfterSalesPage() {
 
   return (
     <div>
-      <div className="border-b border-gray-200 bg-white px-6">
-        <div className="flex gap-0">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === t.key ? 'border-slate-700 text-slate-800' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              {t.label}
-              {t.key === 'production' && productionWOs.filter(w => w.status === '待处理').length > 0 && (
-                <span className="ml-1.5 bg-red-100 text-red-700 text-xs px-1.5 py-0.5 rounded-full">{productionWOs.filter(w => w.status === '待处理').length}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+      <TabBar
+        tabs={TABS.map(t => ({
+          ...t,
+          badge: t.key === 'production' ? productionWOs.filter(w => w.status === '待处理').length : 0,
+        }))}
+        activeTab={activeTab}
+        onChange={setTab}
+      />
       <div className="p-6">
         {activeTab === 'production' && (
           <WorkOrderTable workOrders={productionWOs} actionType="production" state={state} dispatch={dispatch} currentUser={state.currentUser} canDo={canDo} />

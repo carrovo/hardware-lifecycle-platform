@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
+import TabBar from '../components/TabBar';
 
 const NODES = [
   { key: 'materialPrep', label: '来料准备', step: 1 },
@@ -308,17 +309,19 @@ function QualityNode({ plan }) {
 
   return (
     <div>
-      <div className="flex gap-0 border-b border-gray-200 bg-white mb-4">
-        {STATIONS.map(s => {
-          const count = state.testRecords.filter(r => r.stationKey === s.key && planDevices.some(d => d.id === r.deviceId)).length;
-          return (
-            <button key={s.key} onClick={() => setActiveStation(s.key)}
-              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeStation === s.key ? 'border-slate-700 text-slate-800' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              {s.label} <span className="ml-1 bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded-full">{count}</span>
-            </button>
-          );
-        })}
-        <div className="ml-auto pr-2 flex items-center">
+      <div className="flex items-end border-b border-gray-200 bg-white mb-4">
+        <div className="flex gap-1">
+          {STATIONS.map(s => {
+            const count = state.testRecords.filter(r => r.stationKey === s.key && planDevices.some(d => d.id === r.deviceId)).length;
+            return (
+              <button key={s.key} onClick={() => setActiveStation(s.key)}
+                className={`px-4 py-2.5 text-sm border-b-2 transition-colors rounded-t ${activeStation === s.key ? 'border-blue-600 text-blue-600 font-medium' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
+                {s.label} <span className="ml-1 bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded-full">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="ml-auto pr-2 pb-1 flex items-center">
           {canDo('add_test_record') && (
             <button onClick={() => setShowModal(true)} className="px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-800">
               + 新增记录
@@ -487,7 +490,7 @@ export default function ProductionPlanDetail() {
   const { state } = useApp();
   const [activeNode, setActiveNode] = useState('materialPrep');
 
-  const plan = state.productionPlans?.find(p => p.id === id);
+  const plan = [...(state.workflowProductionPlans || []), ...(state.productionPlans || [])].find(p => p.id === id);
 
   if (!plan) {
     return (

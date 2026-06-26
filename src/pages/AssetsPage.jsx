@@ -6,6 +6,7 @@ import Materials from './Materials';
 import DeviceTypes from './DeviceTypes';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
+import TabBar from '../components/TabBar';
 import { Link, useNavigate } from 'react-router-dom';
 
 const TABS = [
@@ -458,15 +459,12 @@ function DevicesTab() {
 
   return (
     <div>
-      <div className="flex gap-0 border-b border-gray-200 mb-6">
-        {DEVICE_SUB_TABS.map(tab => (
-          <button key={tab.key} onClick={() => setSubTab(tab.key)}
-            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeSubTab === tab.key ? 'border-slate-700 text-slate-800' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-            {tab.label}
-            {tab.key === 'alerts' && pendingAlerts > 0 && <span className="ml-1.5 bg-red-100 text-red-700 text-xs px-1.5 py-0.5 rounded-full">{pendingAlerts}</span>}
-          </button>
-        ))}
-      </div>
+      <TabBar
+        tabs={DEVICE_SUB_TABS.map(t => ({ ...t, badge: t.key === 'alerts' ? pendingAlerts : 0 }))}
+        activeTab={activeSubTab}
+        onChange={setSubTab}
+        className="-mx-6 -mt-6 mb-6"
+      />
       {activeSubTab === 'all' && <AllDevicesSubTab state={state} />}
       {activeSubTab === 'alerts' && <AlertsSubTab state={state} dispatch={dispatch} currentRole={currentRole} />}
     </div>
@@ -488,16 +486,7 @@ export default function AssetsPage() {
 
   return (
     <div>
-      <div className="border-b border-gray-200 bg-white px-6">
-        <div className="flex gap-0">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === t.key ? 'border-slate-700 text-slate-800' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <TabBar tabs={TABS} activeTab={activeTab} onChange={setTab} />
       <div className="p-6">
         {activeTab === 'materials' && <Materials />}
         {activeTab === 'devices' && <DevicesTab />}

@@ -19,6 +19,7 @@ import {
   productionWorkOrders as initProductionWorkOrders,
   deliveryWorkOrders as initDeliveryWorkOrders,
   deliveryPlans as initDeliveryPlans,
+  workflowProductionPlans as initWorkflowProductionPlans,
   FEISHU_USERS,
 } from '../data/mockData';
 
@@ -44,6 +45,7 @@ const initialState = {
   productionWorkOrders: initProductionWorkOrders,
   deliveryWorkOrders: initDeliveryWorkOrders,
   deliveryPlans: initDeliveryPlans,
+  workflowProductionPlans: initWorkflowProductionPlans,
   currentUser: '张三',
   currentUserId: 'u1',
 };

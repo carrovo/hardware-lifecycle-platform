@@ -1,286 +1,327 @@
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
 
-const NOW_DATE = new Date('2026-06-22');
-const TODAY_STR = '2026-06-22';
+const NOW_DATE = new Date('2026-06-26');
+const THIS_MONTH = '2026-06';
 
-function daysSince(dateStr) {
-  if (!dateStr) return 0;
-  const d = new Date(dateStr.replace(' ', 'T'));
-  return Math.floor((NOW_DATE - d) / 86400000);
+function monthWarehouseCount(devices) {
+  return devices.filter(d => {
+    const s = d.status;
+    return (
+      s === '待分配项目' || s === '已分配项目' || s === '在线运营' || s === '出厂检验中' ||
+      s === '现场安装调试中' || s === '客户验收中' || s === '待入库' || s === '已入库'
+    ) && (d.assemblyTime || '').slice(0, 7) === THIS_MONTH;
+  }).length;
 }
 
-const PRODUCTION_STAGES = [
-  { key: '装配中',    color: 'bg-blue-400',   label: '装配中' },
-  { key: '功能测试中', color: 'bg-violet-400', label: '功能测试中' },
-  { key: '老化测试中', color: 'bg-amber-400',  label: '老化测试中' },
-  { key: '终测中',    color: 'bg-orange-400',  label: '终测中' },
-];
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  return Math.ceil((d - NOW_DATE) / 86400000);
+}
+
+function timeProgressPct(createdAt, endDate) {
+  if (!createdAt || !endDate) return 0;
+  const start = new Date(createdAt.replace(' ', 'T'));
+  const end = new Date(endDate);
+  const total = end - start;
+  if (total <= 0) return 100;
+  const elapsed = NOW_DATE - start;
+  return Math.min(Math.round((elapsed / total) * 100), 100);
+}
+
+/* Sparkline data: per-day pass rate for last 7 days per station */
+function buildSparklineData(testRecords, stationKey) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(NOW_DATE);
+    d.setDate(d.getDate() - i);
+    const ds = d.toISOString().slice(0, 10);
+    const dayRecords = testRecords.filter(r => r.stationKey === stationKey && r.testTime && r.testTime.slice(0, 10) === ds);
+    const total = dayRecords.length;
+    const pass = dayRecords.filter(r => r.stationResult === 'Pass').length;
+    days.push({
+      date: ds.slice(5),
+      rate: total > 0 ? Math.round((pass / total) * 100) : null,
+    });
+  }
+  return days;
+}
+
+const STATION_LABELS = {
+  semi: '半成品检验',
+  init: '初测',
+  mid: '中测',
+  oqt: 'OQT终测',
+};
+
+const SEV_CHIP = {
+  '严重': 'bg-red-100 text-red-700 border-red-300',
+  '高':   'bg-red-100 text-red-700 border-red-300',
+  '中':   'bg-amber-100 text-amber-700 border-amber-300',
+  '低':   'bg-blue-100 text-blue-700 border-blue-300',
+  '轻微': 'bg-amber-100 text-amber-700 border-amber-300',
+};
+
+function KpiCard({ value, label, sub, path, accent }) {
+  const navigate = useNavigate();
+  return (
+    <button onClick={() => navigate(path)}
+      className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-left hover:shadow-md transition-all group border-t-4 ${accent}`}>
+      <div className="text-4xl font-bold text-gray-900 group-hover:text-slate-700">{value}</div>
+      <div className="text-sm font-medium text-gray-700 mt-2">{label}</div>
+      {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
+    </button>
+  );
+}
+
+function Sparkline({ data }) {
+  const filled = data.map(d => ({ ...d, rate: d.rate ?? undefined }));
+  return (
+    <ResponsiveContainer width="100%" height={40}>
+      <LineChart data={filled} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+        <Line type="monotone" dataKey="rate" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls />
+        <Tooltip
+          formatter={(v) => v != null ? `${v}%` : '—'}
+          labelFormatter={(l) => l}
+          contentStyle={{ fontSize: 11 }}
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
 
 export default function Dashboard() {
   const { state } = useApp();
   const navigate = useNavigate();
-  const { devices, projects, alerts, workOrders, deliveryRecords, deviceAllocations } = state;
+  const {
+    projects, devices, alerts, productionWorkOrders, deliveryWorkOrders,
+    workflowProductionPlans = [], testRecords = [], deviceAllocations = [],
+  } = state;
 
-  /* ---- Top stat cards ---- */
-  const todayAssembled = devices.filter((d) => (d.assemblyTime || '').slice(0, 10) === TODAY_STR).length;
-  const onlineCount = devices.filter((d) => d.status === '在线运营' && d.online === true).length;
-  const pendingAssign = devices.filter((d) => d.status === '待分配项目').length;
-  const pendingAlerts = alerts.filter((a) => a.status === '待处理').length;
-  const inProgressWO = workOrders.filter((w) => w.status === '处理中').length;
-  const activeProjects = projects.filter((p) => !p.voided).length;
+  /* ─── KPI Cards ─── */
+  const activeProjects = projects.filter(p => !p.voided && p.status !== '已完成');
+  const activeProjectCount = activeProjects.length;
 
-  const cards = [
-    { label: '今日新增整机', value: todayAssembled, path: '/assembly', color: 'border-blue-500' },
-    { label: '当前在线设备', value: onlineCount, path: '/devices?tab=online', color: 'border-emerald-500' },
-    { label: '待分配设备', value: pendingAssign, path: '/devices?status=待分配项目', color: 'border-green-500' },
-    { label: '未处理告警', value: pendingAlerts, path: '/devices?tab=alerts', color: 'border-red-500' },
-    { label: '进行中工单', value: inProgressWO, path: '/work-orders', color: 'border-orange-500' },
-    { label: '项目交付进度', value: activeProjects, path: '/projects', color: 'border-indigo-500' },
-  ];
+  const totalTarget = workflowProductionPlans.reduce((s, p) => s + (p.targetCount || 0), 0);
+  const monthWarehouse = monthWarehouseCount(devices);
+  const warehousePct = totalTarget > 0 ? Math.round((monthWarehouse / totalTarget) * 100) : 0;
 
-  /* ---- Section 1: 生产制造状态 ---- */
-  const productionCounts = {};
-  PRODUCTION_STAGES.forEach((s) => { productionCounts[s.key] = 0; });
-  devices.forEach((d) => { if (productionCounts[d.status] !== undefined) productionCounts[d.status]++; });
-  const productionTotal = Object.values(productionCounts).reduce((a, b) => a + b, 0);
+  const allWOs = [...(productionWorkOrders || []), ...(deliveryWorkOrders || [])];
+  const pendingWOCount = allWOs.filter(w => w.status === '待处理' || w.status === '处理中').length;
 
-  const overdueProduction = devices
-    .filter((d) => PRODUCTION_STAGES.some((s) => s.key === d.status))
-    .map((d) => ({ ...d, days: daysSince(d.updatedAt || d.assemblyTime) }))
-    .filter((d) => d.days > 7)
-    .sort((a, b) => b.days - a.days);
+  const pendingAlertCount = (alerts || []).filter(a => a.status === '待处理' || a.status === '处理中').length;
 
-  /* ---- Section 2: 设备运营状态 ---- */
-  const operating = devices.filter((d) => d.status === '在线运营');
-  const opOnline = operating.filter((d) => d.online).length;
-  const opOffline = operating.length - opOnline;
-  const unresolvedAlerts = alerts
-    .filter((a) => !['已解决', '已关闭'].includes(a.status))
-    .sort((a, b) => b.alertTime.localeCompare(a.alertTime));
-
-  /* ---- Section 3: 项目交付状态 ---- */
-  const projectProgress = projects.filter((p) => !p.voided).map((p) => {
-    const allocatedIds = [...new Set(deviceAllocations.filter((a) => a.projectId === p.id).map((a) => a.deviceId))];
-    const allocated = allocatedIds.filter((devId) => devices.some((d) => d.id === devId)).length;
-    const acceptedIds = new Set(
-      deliveryRecords
-        .filter((r) => r.projectId === p.id && r.stage === '客户验收' && r.result === '通过')
-        .map((r) => r.deviceId)
-    );
-    const delivered = acceptedIds.size;
-    return { ...p, allocated, delivered };
+  /* ─── Block 1: 项目进展 ─── */
+  const projectProgress = projects.filter(p => !p.voided).map(p => {
+    const warehousedCount = devices.filter(d => {
+      const finished = ['待分配项目', '已分配项目', '在线运营', '出厂检验中', '现场安装调试中', '客户验收中', '待入库', '已入库'];
+      return finished.includes(d.status) && deviceAllocations.some(a => a.projectId === p.id && a.deviceId === d.id);
+    }).length;
+    const planDevices = devices.filter(d => {
+      return (workflowProductionPlans.filter(wp => wp.projectId === p.id)).some(wp => wp.id === d.productionPlanId) ||
+        deviceAllocations.some(a => a.projectId === p.id && a.deviceId === d.id);
+    });
+    const warehoused = new Set(
+      planDevices.filter(d => {
+        const finished = ['待分配项目', '已分配项目', '在线运营', '出厂检验中', '现场安装调试中', '客户验收中', '待入库', '已入库'];
+        return finished.includes(d.status);
+      }).map(d => d.id)
+    ).size;
+    const target = p.targetCount || 0;
+    const pct = target > 0 ? Math.min(Math.round((warehoused / target) * 100), 100) : 0;
+    const daysLeft = daysUntil(p.dueDate || null);
+    const timePct = timeProgressPct(p.createdAt, p.dueDate);
+    const atRisk = pct < timePct && timePct > 30;
+    return { ...p, warehoused, target, pct, daysLeft, timePct, atRisk };
   });
 
-  /* ---- Section 4: 维修状态 ---- */
-  const thisMonth = TODAY_STR.slice(0, 7);
-  const isThisMonth = (s) => (s || '').slice(0, 7) === thisMonth;
-  const woNew = workOrders.filter((w) => isThisMonth(w.createdAt)).length;
-  const woCompleted = workOrders.filter((w) => isThisMonth(w.closedAt) && ['已关闭', '已完成'].includes(w.status)).length;
-  const woInProgress = workOrders.filter((w) => w.status === '处理中').length;
-  const overdueWO = workOrders
-    .filter((w) => w.status === '待处理' && daysSince(w.createdAt) > 3)
-    .sort((a, b) => daysSince(b.createdAt) - daysSince(a.createdAt));
+  /* ─── Block 2: 质量情况 ─── */
+  const stationKeys = ['semi', 'init', 'mid', 'oqt'];
+  const stationStats = stationKeys.map(key => {
+    const recs = testRecords.filter(r => r.stationKey === key);
+    const total = recs.length;
+    const pass = recs.filter(r => r.stationResult === 'Pass').length;
+    const rate = total > 0 ? Math.round((pass / total) * 100) : null;
+    return { key, label: STATION_LABELS[key], total, pass, rate, sparkData: buildSparklineData(testRecords, key) };
+  });
 
-  const sevBadge = (sev) => sev === '严重' || sev === '高'
-    ? 'bg-red-100 text-red-700 border-red-300'
-    : 'bg-amber-100 text-amber-700 border-amber-300';
+  const incomingTotal = devices.length;
+  const qualifiedDevices = devices.filter(d => {
+    const finished = ['待分配项目', '已分配项目', '在线运营', '出厂检验中', '现场安装调试中', '客户验收中'];
+    return finished.includes(d.status);
+  }).length;
+  const incomingRate = incomingTotal > 0 ? Math.round((qualifiedDevices / incomingTotal) * 100) : 0;
+
+  const ngDeviceIds = new Set(testRecords.filter(r => r.stationResult === 'NG' && r.ngReason).map(r => r.deviceId));
+  const unresolvedNGDevices = [...ngDeviceIds].filter(id => {
+    const d = devices.find(dd => dd.id === id);
+    return d && ['生产返修中', '半成品检验中', '初测中', '中测中', 'OQT终测中', '功能测试中'].includes(d.status);
+  }).length;
+
+  /* ─── Block 3: 异常与待处理 ─── */
+  const pendingWOs = allWOs
+    .filter(w => w.status === '待处理' || w.status === '处理中')
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 5);
+
+  const pendingAlerts = (alerts || [])
+    .filter(a => a.status === '待处理' || a.status === '处理中')
+    .sort((a, b) => b.alertTime.localeCompare(a.alertTime))
+    .slice(0, 5);
 
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-xl font-bold text-gray-800">运营看板</h1>
 
-      {/* Top stat cards */}
-      <div className="grid grid-cols-6 gap-4">
-        {cards.map(({ label, value, path, color }) => (
-          <button key={label} onClick={() => navigate(path)}
-            className={`bg-gray-50 border border-gray-100 rounded-xl p-4 text-left border-l-4 ${color} hover:shadow-sm hover:border-slate-300 transition-all group`}>
-            <div className="text-3xl font-semibold text-gray-900 group-hover:text-slate-700">{value}</div>
-            <div className="text-sm text-gray-500 mt-1">{label}</div>
-          </button>
-        ))}
+      {/* KPI Cards */}
+      <div className="grid grid-cols-4 gap-4">
+        <KpiCard
+          value={activeProjectCount}
+          label="进行中的项目"
+          sub={`共 ${projects.length} 个项目`}
+          path="/projects"
+          accent="border-blue-500"
+        />
+        <KpiCard
+          value={`${monthWarehouse} / ${totalTarget}`}
+          label="本月完成整机 / 目标"
+          sub={totalTarget > 0 ? `完成率 ${warehousePct}%` : ''}
+          path="/assets"
+          accent="border-green-500"
+        />
+        <KpiCard
+          value={pendingWOCount}
+          label="未处理售后工单"
+          sub="待处理 + 处理中"
+          path="/after-sales"
+          accent="border-orange-500"
+        />
+        <KpiCard
+          value={pendingAlertCount}
+          label="未处理健康告警"
+          sub="待处理 + 处理中"
+          path="/assets?tab=devices&subtab=alerts"
+          accent="border-red-500"
+        />
       </div>
 
-      {/* Section 1: 生产制造状态 */}
-      <div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">生产制造状态</h2>
-        <div className="grid grid-cols-2 gap-4">
-          {/* In-progress breakdown */}
-          <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-5">
-            <div className="text-xs font-semibold text-gray-500 mb-3">在制整机分布（共 {productionTotal} 台）</div>
-            {productionTotal > 0 ? (
-              <>
-                <div className="flex h-8 rounded-full overflow-hidden gap-px mb-3">
-                  {PRODUCTION_STAGES.map((s) => {
-                    const count = productionCounts[s.key];
-                    if (count === 0) return null;
-                    const pct = Math.round((count / productionTotal) * 100);
-                    return (
-                      <button key={s.key} onClick={() => navigate(`/devices?status=${encodeURIComponent(s.key)}`)}
-                        className={`${s.color} flex items-center justify-center text-white text-xs font-medium hover:brightness-110 transition-all`}
-                        style={{ width: `${pct}%` }} title={`${s.label}: ${count}台`}>
-                        {pct > 14 ? count : ''}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  {PRODUCTION_STAGES.map((s) => (
-                    <div key={s.key} className="flex items-center gap-1.5 text-xs text-gray-600">
-                      <div className={`w-2.5 h-2.5 rounded-full ${s.color}`} />
-                      <span>{s.label}</span>
-                      <span className="font-semibold text-gray-800">{productionCounts[s.key]}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="text-sm text-gray-400 py-4 text-center">暂无在制整机</div>
-            )}
-          </div>
-
-          {/* Overdue devices */}
-          <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-5">
-            <div className="text-xs font-semibold text-gray-500 mb-3">超期整机（&gt;7天未更新）</div>
-            {overdueProduction.length > 0 ? (
-              <div className="space-y-1.5">
-                {overdueProduction.slice(0, 6).map((d) => (
-                  <button key={d.id} onClick={() => navigate(`/devices/${d.id}`)}
-                    className="w-full flex items-center justify-between text-xs py-1 px-1 hover:bg-amber-50 rounded transition-colors group">
-                    <span className="font-mono text-gray-700 group-hover:text-slate-800">{d.sn}</span>
-                    <span className="flex items-center gap-2">
-                      <span className="bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-full">{d.status}</span>
-                      <span className="text-amber-600 font-medium">{d.days}天</span>
+      {/* Block 1: 项目进展 */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-800">项目进展</h2>
+          <button onClick={() => navigate('/projects')} className="text-xs text-blue-600 hover:underline">查看全部</button>
+        </div>
+        <div className="divide-y divide-gray-50">
+          {projectProgress.map(p => (
+            <button key={p.id} onClick={() => navigate(`/projects/${p.id}`)}
+              className="w-full px-5 py-4 text-left hover:bg-gray-50 transition-colors">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="font-medium text-gray-800 text-sm">{p.name}</span>
+                {p.atRisk && (
+                  <span className="bg-red-100 text-red-700 border border-red-300 text-xs px-2 py-0.5 rounded-full">延期风险</span>
+                )}
+                <span className="ml-auto text-xs text-gray-400">
+                  {p.warehoused}/{p.target} 台入库
+                  {p.daysLeft != null && (
+                    <span className={p.daysLeft < 14 ? ' text-amber-600 font-medium' : ''}>
+                      {' · '}{p.daysLeft > 0 ? `${p.daysLeft}天后截止` : `已逾期${Math.abs(p.daysLeft)}天`}
                     </span>
-                  </button>
-                ))}
+                  )}
+                </span>
               </div>
-            ) : (
-              <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                <span>✓</span><span>无超期整机</span>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-2 rounded-full transition-all ${p.pct >= 100 ? 'bg-green-500' : p.atRisk ? 'bg-red-400' : 'bg-blue-500'}`}
+                  style={{ width: `${Math.max(p.pct, 2)}%` }}
+                />
               </div>
+            </button>
+          ))}
+          {projectProgress.length === 0 && (
+            <div className="px-5 py-8 text-center text-gray-400 text-sm">暂无项目</div>
+          )}
+        </div>
+      </div>
+
+      {/* Block 2: 质量情况 */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-800">质量情况</h2>
+          <button onClick={() => navigate('/projects?tab=quality')} className="text-xs text-blue-600 hover:underline">质量看板</button>
+        </div>
+        <div className="p-5">
+          {/* 4 station pass rates */}
+          <div className="grid grid-cols-4 gap-4 mb-5">
+            {stationStats.map(s => (
+              <div key={s.key} className="bg-gray-50 rounded-lg p-4">
+                <div className="text-xs text-gray-500 mb-1">{s.label}</div>
+                <div className={`text-2xl font-bold mb-2 ${s.rate == null ? 'text-gray-300' : s.rate >= 90 ? 'text-green-600' : s.rate >= 75 ? 'text-amber-500' : 'text-red-500'}`}>
+                  {s.rate != null ? `${s.rate}%` : '—'}
+                </div>
+                <div className="text-xs text-gray-400 mb-2">{s.total} 次检验</div>
+                <Sparkline data={s.sparkData} />
+              </div>
+            ))}
+          </div>
+          {/* Overall stats row */}
+          <div className="flex gap-6 pt-4 border-t border-gray-100">
+            <div>
+              <span className="text-xs text-gray-500">整机综合良率</span>
+              <span className="ml-2 text-sm font-semibold text-gray-800">{incomingRate}%</span>
+            </div>
+            <div>
+              <span className="text-xs text-gray-500">当前NG待修整机</span>
+              <span className={`ml-2 text-sm font-semibold ${unresolvedNGDevices > 0 ? 'text-red-600' : 'text-gray-800'}`}>{unresolvedNGDevices} 台</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Block 3: 异常与待处理 */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Pending work orders */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-800">待处理工单</h2>
+            <button onClick={() => navigate('/after-sales')} className="text-xs text-blue-600 hover:underline">
+              {allWOs.filter(w => w.status === '待处理' || w.status === '处理中').length > 5 ? '查看全部' : ''}
+            </button>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {pendingWOs.map(w => (
+              <div key={w.id} className="px-5 py-3 flex items-center gap-3">
+                <span className="font-mono text-xs text-gray-600 w-20 flex-shrink-0">{w.id}</span>
+                <span className="font-mono text-xs text-gray-500 flex-shrink-0">{w.deviceSN}</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${SEV_CHIP[w.severity] || 'bg-gray-100 text-gray-600 border-gray-300'}`}>{w.severity}</span>
+                <span className="text-xs text-gray-400 flex-shrink-0 ml-auto">{(w.createdAt || '').slice(5, 10)}</span>
+              </div>
+            ))}
+            {pendingWOs.length === 0 && (
+              <div className="px-5 py-6 text-center text-sm text-gray-400">暂无待处理工单</div>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Section 2: 设备运营状态 */}
-      <div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">设备运营状态</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-5">
-            <div className="text-xs font-semibold text-gray-500 mb-3">在线 / 离线</div>
-            <div className="flex items-center gap-6">
-              <button onClick={() => navigate('/devices?tab=online')}
-                className="flex-1 text-center hover:bg-gray-50 rounded-lg py-3 transition-colors">
-                <div className="text-3xl font-semibold text-emerald-600">{opOnline}</div>
-                <div className="text-xs text-gray-500 mt-1">在线</div>
-              </button>
-              <div className="h-12 w-px bg-gray-200" />
-              <button onClick={() => navigate('/devices?tab=online')}
-                className="flex-1 text-center hover:bg-gray-50 rounded-lg py-3 transition-colors">
-                <div className="text-3xl font-semibold text-red-500">{opOffline}</div>
-                <div className="text-xs text-gray-500 mt-1">离线</div>
-              </button>
-            </div>
-            <div className="mt-3 flex h-2 rounded-full overflow-hidden bg-gray-100">
-              {operating.length > 0 && (
-                <>
-                  <div className="bg-emerald-500" style={{ width: `${(opOnline / operating.length) * 100}%` }} />
-                  <div className="bg-red-400" style={{ width: `${(opOffline / operating.length) * 100}%` }} />
-                </>
-              )}
-            </div>
+        {/* Health alerts */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-800">健康告警</h2>
+            <button onClick={() => navigate('/assets?tab=devices&subtab=alerts')} className="text-xs text-blue-600 hover:underline">
+              {pendingAlertCount > 5 ? '查看全部' : ''}
+            </button>
           </div>
-
-          <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-5">
-            <div className="text-xs font-semibold text-gray-500 mb-3">未解决告警设备</div>
-            {unresolvedAlerts.length > 0 ? (
-              <div className="space-y-1.5">
-                {unresolvedAlerts.slice(0, 6).map((a) => (
-                  <button key={a.id} onClick={() => navigate(`/devices/${a.deviceId}`)}
-                    className="w-full flex items-center justify-between gap-2 text-xs py-1 px-1 hover:bg-gray-50 rounded transition-colors group">
-                    <span className="font-mono text-gray-700 group-hover:text-slate-800 flex-shrink-0">{a.deviceSN}</span>
-                    <span className="flex-1 text-gray-500 truncate text-left">{a.description}</span>
-                    <span className={`px-1.5 py-0.5 rounded-full border flex-shrink-0 ${sevBadge(a.severity)}`}>{a.severity}</span>
-                  </button>
-                ))}
+          <div className="divide-y divide-gray-50">
+            {pendingAlerts.map(a => (
+              <div key={a.id} className="px-5 py-3 flex items-center gap-3">
+                <span className="font-mono text-xs text-gray-600 w-24 flex-shrink-0">{a.deviceSN}</span>
+                <span className="text-xs text-gray-500 flex-1 truncate">{a.description}</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${SEV_CHIP[a.severity] || 'bg-gray-100 text-gray-600 border-gray-300'}`}>{a.severity}</span>
               </div>
-            ) : (
-              <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                <span>✓</span><span>无未解决告警</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Section 3: 项目交付状态 */}
-      <div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">项目交付状态</h2>
-        <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-5 space-y-4">
-          {projectProgress.map((p) => {
-            const pct = p.targetCount > 0 ? Math.min(Math.round((p.allocated / p.targetCount) * 100), 100) : 0;
-            const deliverPct = p.targetCount > 0 ? Math.round((p.delivered / p.targetCount) * 100) : 0;
-            return (
-              <button key={p.id} onClick={() => navigate(`/projects/${p.id}`)}
-                className="w-full text-left hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors">
-                <div className="flex items-center justify-between mb-1.5 text-sm">
-                  <span className="font-medium text-gray-800">{p.name}</span>
-                  <span className="text-xs text-gray-500">
-                    已分配 {p.allocated}/{p.targetCount} 台 · 验收通过 {p.delivered} 台（{deliverPct}%）
-                  </span>
-                </div>
-                <div className="flex-1 bg-gray-200 rounded-full h-3 relative overflow-hidden">
-                  <div className={`h-3 rounded-full ${pct >= 100 ? 'bg-green-500' : pct > 50 ? 'bg-blue-500' : 'bg-amber-400'}`}
-                    style={{ width: `${Math.max(pct, 2)}%` }} />
-                </div>
-              </button>
-            );
-          })}
-          {projectProgress.length === 0 && <div className="text-sm text-gray-400 text-center py-4">暂无项目</div>}
-        </div>
-      </div>
-
-      {/* Section 4: 维修状态 */}
-      <div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">维修状态</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-5">
-            <div className="text-xs font-semibold text-gray-500 mb-3">本月工单统计</div>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { label: '本月新增', value: woNew, color: 'text-slate-700' },
-                { label: '本月完成', value: woCompleted, color: 'text-green-600' },
-                { label: '处理中', value: woInProgress, color: 'text-orange-600' },
-              ].map(({ label, value, color }) => (
-                <button key={label} onClick={() => navigate('/work-orders')}
-                  className="text-center hover:bg-gray-50 rounded-lg py-3 transition-colors">
-                  <div className={`text-2xl font-semibold ${color}`}>{value}</div>
-                  <div className="text-xs text-gray-500 mt-1">{label}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-5">
-            <div className="text-xs font-semibold text-gray-500 mb-3">超期未处理工单（&gt;3天）</div>
-            {overdueWO.length > 0 ? (
-              <div className="space-y-1.5">
-                {overdueWO.slice(0, 6).map((w) => (
-                  <button key={w.id} onClick={() => navigate(`/work-orders?highlight=${w.id}`)}
-                    className="w-full flex items-center justify-between gap-2 text-xs py-1 px-1 hover:bg-red-50 rounded transition-colors group">
-                    <span className="font-mono text-gray-600 group-hover:text-slate-800 flex-shrink-0">{w.id}</span>
-                    <span className="font-mono text-gray-500 flex-shrink-0">{w.deviceSN}</span>
-                    <span className={`px-1.5 py-0.5 rounded-full border flex-shrink-0 ${sevBadge(w.severity)}`}>{w.severity}</span>
-                    <span className="text-red-600 font-medium flex-shrink-0">{daysSince(w.createdAt)}天</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                <span>✓</span><span>无超期工单</span>
-              </div>
+            ))}
+            {pendingAlerts.length === 0 && (
+              <div className="px-5 py-6 text-center text-sm text-gray-400">暂无未处理告警</div>
             )}
           </div>
         </div>
