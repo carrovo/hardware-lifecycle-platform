@@ -265,15 +265,14 @@ export default function Materials() {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-gray-800">来料检验</h1>
-        {activeTab === '来料检验' && canDo('add_material_batch') && (
+      {activeTab === '来料检验' && canDo('add_material_batch') && (
+        <div className="flex justify-end mb-4">
           <button onClick={() => setShowModal(true)}
             className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
             + 新增来料批次
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-0 border-b border-gray-200 mb-4">

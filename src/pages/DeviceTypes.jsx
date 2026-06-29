@@ -199,8 +199,6 @@ export default function DeviceTypes() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-xl font-bold text-gray-800">设备类型管理</h1>
-
       {/* Tabs */}
       <div className="flex gap-0 border-b border-gray-200">
         {['整机类型', '模块类型库'].map((tab) => (
@@ -222,7 +220,7 @@ export default function DeviceTypes() {
       {activeTab === '整机类型' && (
         <div className="bg-white rounded shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-700">整机类型列表</h2>
+            <div className="text-sm font-medium text-gray-600">整机类型列表</div>
             {canDo('add_device_type') && (
               <button onClick={() => setShowDeviceTypeModal(true)}
                 className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
@@ -358,7 +356,7 @@ export default function DeviceTypes() {
       {activeTab === '模块类型库' && (
         <div className="bg-white rounded shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-700">模块类型库</h2>
+            <div className="text-sm font-medium text-gray-600">模块类型库</div>
             {canDo('add_module_type') && (
               <button onClick={() => setShowModuleModal(true)}
                 className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">

@@ -331,7 +331,7 @@ export default function Dashboard() {
           {/* Block 1: 项目进展 */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-800">项目进展</h2>
+              <span className="text-sm font-semibold text-gray-800">项目进展</span>
               <button onClick={() => navigate('/projects')} className="text-xs text-blue-600 hover:underline">查看全部</button>
             </div>
             <div className="divide-y divide-gray-50">
@@ -369,7 +369,7 @@ export default function Dashboard() {
           {/* Block 2: 质量情况 */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-800">质量情况</h2>
+              <span className="text-sm font-semibold text-gray-800">质量情况</span>
               <button onClick={() => navigate('/projects?tab=quality')} className="text-xs text-blue-600 hover:underline">质量看板</button>
             </div>
             <div className="p-5">
@@ -402,7 +402,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-gray-800">待处理工单</h2>
+                <span className="text-sm font-semibold text-gray-800">待处理工单</span>
                 <button onClick={() => navigate('/after-sales')} className="text-xs text-blue-600 hover:underline">
                   {allWOs.filter(w => w.status === '待处理' || w.status === '处理中').length > 5 ? '查看全部' : ''}
                 </button>
@@ -424,7 +424,7 @@ export default function Dashboard() {
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-gray-800">健康告警</h2>
+                <span className="text-sm font-semibold text-gray-800">健康告警</span>
                 <button onClick={() => navigate('/assets?tab=devices&subtab=alerts')} className="text-xs text-blue-600 hover:underline">
                   {pendingAlertCount > 5 ? '查看全部' : ''}
                 </button>

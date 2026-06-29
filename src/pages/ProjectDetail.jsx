@@ -338,7 +338,7 @@ export default function ProjectDetail() {
 
       {/* Basic Info */}
       <div className="bg-white rounded shadow-sm p-5">
-        <h2 className="text-base font-semibold text-gray-700 mb-4">项目基本信息</h2>
+        <div className="text-sm font-medium text-gray-600 mb-3">项目基本信息</div>
         <div className="grid grid-cols-3 gap-4 text-sm">
           <div><span className="text-gray-500">项目名称：</span><span className="font-medium text-gray-800">{project.name}</span></div>
           <div><span className="text-gray-500">客户：</span><span className="text-gray-700">{project.client || '—'}</span></div>
@@ -379,7 +379,7 @@ export default function ProjectDetail() {
 
       {/* Progress */}
       <div className="bg-white rounded shadow-sm p-5">
-        <h2 className="text-base font-semibold text-gray-700 mb-3">分配进度</h2>
+        <div className="text-sm font-medium text-gray-600 mb-3">分配进度</div>
         <div className="flex items-center gap-4">
           <div className="flex-1 bg-gray-200 rounded-full h-4">
             <div
@@ -399,7 +399,7 @@ export default function ProjectDetail() {
       {/* 设备管理 */}
       <div className="bg-white rounded shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-700">设备管理（{allocatedDevices.length}台）</h2>
+          <div className="text-sm font-medium text-gray-600">设备管理（{allocatedDevices.length}台）</div>
           {canAllocate && !project.voided && (
             <button onClick={() => setShowAllocateModal(true)}
               className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
@@ -490,7 +490,7 @@ export default function ProjectDetail() {
       {allocatedDevices.length > 0 && (
         <div className="bg-white rounded shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-700">交付状态概览</h2>
+            <div className="text-sm font-medium text-gray-600">交付状态概览</div>
           </div>
           <table className="w-full text-sm">
             <thead className="bg-gray-50">

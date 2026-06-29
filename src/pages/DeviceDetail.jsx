@@ -327,7 +327,7 @@ export default function DeviceDetail() {
 
       {/* Basic Info */}
       <div className="bg-white rounded shadow-sm p-5">
-        <h2 className="text-base font-semibold text-gray-700 mb-4">基本信息</h2>
+        <div className="text-sm font-medium text-gray-600 mb-3">基本信息</div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <div className="text-xs text-gray-400 mb-1">设备SN</div>
@@ -374,7 +374,7 @@ export default function DeviceDetail() {
 
       {/* Module list by slot */}
       <div className="bg-white rounded shadow-sm p-5">
-        <h2 className="text-base font-semibold text-gray-700 mb-4">当前模组清单（按槁位）</h2>
+        <div className="text-sm font-medium text-gray-600 mb-3">当前模组清单（按槁位）</div>
         {device.usedMaterials && device.usedMaterials.length > 0 ? (
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
@@ -413,7 +413,7 @@ export default function DeviceDetail() {
 
       {/* Test History — grouped by station */}
       <div className="bg-white rounded shadow-sm p-5">
-        <h2 className="text-base font-semibold text-gray-700 mb-4">测试历史</h2>
+        <div className="text-sm font-medium text-gray-600 mb-3">测试历史</div>
         {testRecords.length > 0 ? (() => {
           // Group by stationKey (quality stations) or testType (legacy)
           const STATION_LABELS = {
@@ -508,7 +508,7 @@ export default function DeviceDetail() {
       {/* Full Lifecycle Timeline */}
       <div className="bg-white rounded shadow-sm p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-gray-700">全生命周期操作时间线</h2>
+          <div className="text-sm font-medium text-gray-600">全生命周期操作时间线</div>
           <span className="text-xs text-gray-400">{timelineEvents.length} 条记录 · 从新到旧</span>
         </div>
         <LifecycleTimeline events={timelineEvents} />

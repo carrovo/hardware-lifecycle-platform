@@ -746,7 +746,7 @@ export default function ProductionPlanDetail() {
         <button onClick={() => navigate('/projects?tab=production')} className="text-gray-400 hover:text-gray-600 mt-1 text-sm">← 返回</button>
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-xl font-bold text-gray-800">{plan.name || plan.id}</h1>
+            <span className="text-base font-semibold text-gray-800">{plan.name || plan.id}</span>
             <StatusBadge status={plan.status || '进行中'} />
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-gray-500">
