@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
-import TabBar from '../components/TabBar';
+import SecondaryTabs from '../components/SecondaryTabs';
 import { FEISHU_USERS } from '../data/mockData';
 
 const TABS = [
@@ -291,14 +291,16 @@ export default function AfterSalesPage() {
 
   return (
     <div>
-      <TabBar
-        tabs={TABS.map(t => ({
-          ...t,
-          badge: t.key === 'production' ? productionWOs.filter(w => w.status === '待处理').length : 0,
-        }))}
-        activeTab={activeTab}
-        onChange={setTab}
-      />
+      <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
+        <SecondaryTabs
+          tabs={TABS.map(t => ({
+            ...t,
+            badge: t.key === 'production' ? productionWOs.filter(w => w.status === '待处理').length : 0,
+          }))}
+          activeTab={activeTab}
+          onChange={setTab}
+        />
+      </div>
       <div className="p-6">
         {activeTab === 'production' && (
           <WorkOrderTable workOrders={productionWOs} actionType="production" state={state} dispatch={dispatch} currentUser={state.currentUser} canDo={canDo} />

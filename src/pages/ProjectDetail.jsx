@@ -196,7 +196,7 @@ export default function ProjectDetail() {
   const [transferTarget, setTransferTarget] = useState(null);
   const [expandedDeviceId, setExpandedDeviceId] = useState(null);
 
-  const { projects, deviceAllocations, devices, deliveryRecords, deviceTypes } = state;
+  const { projects, deviceAllocations, devices, deliveryRecords, deviceTypes, workflowProductionPlans = [], deliveryPlans = [] } = state;
 
   const project = projects.find((p) => p.id === id);
   if (!project) {
@@ -207,6 +207,8 @@ export default function ProjectDetail() {
     );
   }
 
+  const projProductionPlans = workflowProductionPlans.filter(pp => pp.projectId === id);
+  const projDeliveryPlans = deliveryPlans.filter(dp => dp.projectId === id);
   const allocations = deviceAllocations.filter((a) => a.projectId === id);
   const allocatedDeviceIds = [...new Set(allocations.map((a) => a.deviceId))];
   const allocatedDevices = allocatedDeviceIds
@@ -352,6 +354,28 @@ export default function ProjectDetail() {
           )}
         </div>
       </div>
+
+      {/* Plan quick links */}
+      {(projProductionPlans.length > 0 || projDeliveryPlans.length > 0) && (
+        <div className="flex gap-4">
+          {projProductionPlans.length > 0 && (
+            <Link
+              to={`/projects?tab=production`}
+              className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+            >
+              查看生产计划（{projProductionPlans.length}个）→
+            </Link>
+          )}
+          {projDeliveryPlans.length > 0 && (
+            <Link
+              to={`/projects?tab=delivery`}
+              className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+            >
+              查看交付计划（{projDeliveryPlans.length}个）→
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Progress */}
       <div className="bg-white rounded shadow-sm p-5">

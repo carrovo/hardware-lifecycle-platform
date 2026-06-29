@@ -6,7 +6,8 @@ import Materials from './Materials';
 import DeviceTypes from './DeviceTypes';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
-import TabBar from '../components/TabBar';
+import SecondaryTabs from '../components/SecondaryTabs';
+import TertiaryTabs from '../components/TertiaryTabs';
 import { Link, useNavigate } from 'react-router-dom';
 
 const TABS = [
@@ -459,11 +460,11 @@ function DevicesTab() {
 
   return (
     <div>
-      <TabBar
+      <TertiaryTabs
         tabs={DEVICE_SUB_TABS.map(t => ({ ...t, badge: t.key === 'alerts' ? pendingAlerts : 0 }))}
         activeTab={activeSubTab}
         onChange={setSubTab}
-        className="-mx-6 -mt-6 mb-6"
+        className="-mx-6 -mt-6 mb-6 px-6"
       />
       {activeSubTab === 'all' && <AllDevicesSubTab state={state} />}
       {activeSubTab === 'alerts' && <AlertsSubTab state={state} dispatch={dispatch} currentRole={currentRole} />}
@@ -486,7 +487,9 @@ export default function AssetsPage() {
 
   return (
     <div>
-      <TabBar tabs={TABS} activeTab={activeTab} onChange={setTab} />
+      <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
+        <SecondaryTabs tabs={TABS} activeTab={activeTab} onChange={setTab} />
+      </div>
       <div className="p-6">
         {activeTab === 'materials' && <Materials />}
         {activeTab === 'devices' && <DevicesTab />}

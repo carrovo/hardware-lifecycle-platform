@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import Roles from './Roles';
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
-import TabBar from '../components/TabBar';
+import SecondaryTabs from '../components/SecondaryTabs';
 
 const TABS = [
   { key: 'roles', label: '角色权限' },
@@ -54,8 +54,6 @@ function NotificationConfig() {
 
   return (
     <div className="p-6 space-y-6">
-      <h2 className="text-lg font-bold text-gray-800">飞书通知配置</h2>
-
       {/* Webhook URL */}
       <div className="bg-white rounded shadow-sm p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Webhook 配置</h3>
@@ -222,7 +220,6 @@ function LabelManagement() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-gray-800">标签管理</h2>
         <button onClick={() => setShowAddCategory(true)} className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
           + 新增类别
         </button>
@@ -290,9 +287,9 @@ export default function SystemPage() {
 
   return (
     <div>
-      <TabBar tabs={TABS} activeTab={activeTab} onChange={setTab} />
-
-      {/* Content */}
+      <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
+        <SecondaryTabs tabs={TABS} activeTab={activeTab} onChange={setTab} />
+      </div>
       {activeTab === 'roles' && <Roles />}
       {activeTab === 'labels' && <LabelManagement />}
       {activeTab === 'notifications' && <NotificationConfig />}

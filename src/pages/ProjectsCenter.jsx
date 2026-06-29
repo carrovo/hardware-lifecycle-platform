@@ -4,7 +4,8 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
-import TabBar from '../components/TabBar';
+import SecondaryTabs from '../components/SecondaryTabs';
+import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
 
 const TABS = [
   { key: 'list', label: '项目列表' },
@@ -60,9 +61,12 @@ function ProjectListTab() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('全部');
 
-  const { projects, deviceAllocations } = state;
+  const { projects, deliveryPlans = [] } = state;
 
-  const getAllocated = (pid) => new Set(deviceAllocations.filter(a => a.projectId === pid).map(a => a.deviceId)).size;
+  const getAccepted = (pid) => {
+    const projPlans = deliveryPlans.filter(dp => dp.projectId === pid);
+    return projPlans.reduce((sum, dp) => sum + (dp.records?.customerAccept || []).filter(r => r.result === '通过').length, 0);
+  };
 
   const filtered = projects.filter(p => {
     const matchSearch = !search || p.name.includes(search) || (p.client || '').includes(search);
@@ -95,15 +99,15 @@ function ProjectListTab() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {['项目名称', '客户', '目标量', '已分配/目标', '负责人', '创建时间'].map(h => (
+              {['项目名称', '客户', '目标量', '已验收/目标', '负责人', '创建时间'].map(h => (
                 <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filtered.map(p => {
-              const alloc = getAllocated(p.id);
-              const pct = Math.min(Math.round((alloc / p.targetCount) * 100), 100);
+              const accepted = getAccepted(p.id);
+              const pct = Math.min(Math.round((accepted / p.targetCount) * 100), 100);
               return (
                 <tr key={p.id} onClick={() => navigate(`/projects/${p.id}`)}
                   className={`hover:bg-blue-50 cursor-pointer transition-colors ${p.voided ? 'opacity-60' : ''}`}>
@@ -119,7 +123,7 @@ function ProjectListTab() {
                         <div className="flex-1 bg-gray-200 rounded-full h-2">
                           <div className={`h-2 rounded-full ${pct >= 100 ? 'bg-green-500' : pct > 50 ? 'bg-blue-500' : 'bg-amber-400'}`} style={{ width: `${pct}%` }} />
                         </div>
-                        <span className="text-xs text-gray-600">{alloc}/{p.targetCount}</span>
+                        <span className="text-xs text-gray-600">{accepted}/{p.targetCount}</span>
                       </div>
                     )}
                   </td>
@@ -337,10 +341,36 @@ function DeliveryPlanTab() {
   );
 }
 
+const NOW_DATE_Q = new Date('2026-06-26');
+function buildSparklineDataQ(testRecords, stationKey) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(NOW_DATE_Q);
+    d.setDate(d.getDate() - i);
+    const ds = d.toISOString().slice(0, 10);
+    const dayRecs = testRecords.filter(r => r.stationKey === stationKey && (r.testTime || '').slice(0, 10) === ds);
+    const total = dayRecs.length;
+    const pass = dayRecs.filter(r => r.stationResult === 'Pass').length;
+    days.push({ date: ds.slice(5), rate: total > 0 ? Math.round((pass / total) * 100) : null });
+  }
+  return days;
+}
+
+function QSparkline({ data }) {
+  return (
+    <ResponsiveContainer width="100%" height={36}>
+      <LineChart data={data} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+        <Line type="monotone" dataKey="rate" stroke="#3b82f6" strokeWidth={1.5} dot={false} connectNulls />
+        <Tooltip formatter={v => v != null ? `${v}%` : '—'} contentStyle={{ fontSize: 10 }} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
 /* ─────────── 质量看板 Tab ─────────── */
 function QualityDashboard() {
   const { state } = useApp();
-  const { testRecords, devices, workOrders, deliveryPlans = [] } = state;
+  const { testRecords, workOrders, deliveryPlans = [] } = state;
 
   const incoming = (state.materialBatches || []);
   const qualifiedBatches = incoming.filter(b => (b.items || []).every(i => i.result !== '不合格'));
@@ -356,9 +386,7 @@ function QualityDashboard() {
 
   const pendingWO = workOrders.filter(w => ['待处理', '处理中'].includes(w.status)).length;
   const closedWO = workOrders.filter(w => w.status === '已关闭').length;
-  const afterSalesScore = workOrders.length > 0
-    ? Math.round((closedWO / workOrders.length) * 100)
-    : 100;
+  const afterSalesScore = workOrders.length > 0 ? Math.round((closedWO / workOrders.length) * 100) : 100;
 
   const cards = [
     { title: '来料质量', metric: `${incomingPassRate}%`, desc: `${qualifiedBatches.length}/${incoming.length} 批次合格`, color: 'border-blue-500', badge: incomingPassRate >= 90 ? '良好' : '需关注' },
@@ -366,6 +394,9 @@ function QualityDashboard() {
     { title: '交付质量', metric: `${deliveryPassRate}%`, desc: `出厂检验 通过 ${passFI}/${allFI.length}`, color: 'border-amber-500', badge: deliveryPassRate >= 90 ? '良好' : '需关注' },
     { title: '售后质量', metric: `${afterSalesScore}%`, desc: `${pendingWO} 个工单待处理`, color: 'border-red-500', badge: pendingWO === 0 ? '良好' : '需关注' },
   ];
+
+  const STATION_KEYS = ['semi', 'init', 'mid', 'oqt'];
+  const STATION_LABELS_Q = ['半成品检验', '初测', '中测', 'OQT终测'];
 
   return (
     <div>
@@ -383,23 +414,28 @@ function QualityDashboard() {
       </div>
 
       <div className="bg-white rounded shadow-sm p-5">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">质检工站直通率</h3>
-        {['semi', 'init', 'mid', 'oqt'].map((key, i) => {
-          const labels = ['半成品检验', '初测', '中测', 'OQT终测'];
-          const recs = testRecords.filter(r => r.stationKey === key);
-          const pass = recs.filter(r => r.stationResult === 'Pass').length;
-          const rate = recs.length > 0 ? Math.round((pass / recs.length) * 100) : 0;
-          return (
-            <div key={key} className="flex items-center gap-3 mb-2">
-              <span className="text-sm text-gray-600 w-20">{labels[i]}</span>
-              <div className="flex-1 bg-gray-200 rounded-full h-2">
-                <div className={`h-2 rounded-full ${rate >= 90 ? 'bg-green-500' : rate >= 70 ? 'bg-amber-400' : 'bg-red-500'}`} style={{ width: `${rate}%` }} />
+        <div className="text-sm font-semibold text-gray-700 mb-4">质检工站直通率（近7天趋势）</div>
+        <div className="grid grid-cols-2 gap-6">
+          {STATION_KEYS.map((key, i) => {
+            const recs = allTests.filter(r => r.stationKey === key);
+            const pass = recs.filter(r => r.stationResult === 'Pass').length;
+            const rate = recs.length > 0 ? Math.round((pass / recs.length) * 100) : 0;
+            const sparkData = buildSparklineDataQ(allTests, key);
+            return (
+              <div key={key}>
+                <div className="flex items-center gap-3 mb-1">
+                  <span className="text-sm text-gray-600 w-20">{STATION_LABELS_Q[i]}</span>
+                  <div className="flex-1 bg-gray-200 rounded-full h-2">
+                    <div className={`h-2 rounded-full ${rate >= 90 ? 'bg-green-500' : rate >= 70 ? 'bg-amber-400' : 'bg-red-500'}`} style={{ width: `${rate}%` }} />
+                  </div>
+                  <span className={`text-xs font-medium w-10 text-right ${rate >= 90 ? 'text-green-600' : rate >= 70 ? 'text-amber-600' : 'text-red-600'}`}>{rate}%</span>
+                  <span className="text-xs text-gray-400 w-16">{pass}/{recs.length}</span>
+                </div>
+                <QSparkline data={sparkData} />
               </div>
-              <span className={`text-xs font-medium w-10 text-right ${rate >= 90 ? 'text-green-600' : rate >= 70 ? 'text-amber-600' : 'text-red-600'}`}>{rate}%</span>
-              <span className="text-xs text-gray-400 w-16">{pass}/{recs.length}</span>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -419,7 +455,9 @@ export default function ProjectsCenter() {
 
   return (
     <div>
-      <TabBar tabs={TABS} activeTab={activeTab} onChange={setTab} />
+      <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
+        <SecondaryTabs tabs={TABS} activeTab={activeTab} onChange={setTab} />
+      </div>
       <div className="p-6">
         {activeTab === 'list' && <ProjectListTab />}
         {activeTab === 'production' && <ProductionPlanTab />}
