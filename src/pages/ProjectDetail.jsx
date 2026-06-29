@@ -195,8 +195,12 @@ export default function ProjectDetail() {
   const [showAllocateModal, setShowAllocateModal] = useState(false);
   const [transferTarget, setTransferTarget] = useState(null);
   const [expandedDeviceId, setExpandedDeviceId] = useState(null);
+  const [showAddLocationModal, setShowAddLocationModal] = useState(false);
+  const [editingLocation, setEditingLocation] = useState(null);
+  const [deletingLocation, setDeletingLocation] = useState(null);
+  const [setLocationTarget, setSetLocationTarget] = useState(null);
 
-  const { projects, deviceAllocations, devices, deliveryRecords, deviceTypes, workflowProductionPlans = [], deliveryPlans = [] } = state;
+  const { projects, deviceAllocations, devices, deliveryRecords, deviceTypes, workflowProductionPlans = [], deliveryPlans = [], locations = [] } = state;
 
   const project = projects.find((p) => p.id === id);
   if (!project) {
@@ -242,6 +246,44 @@ export default function ProjectDetail() {
   const pendingDevices = devices.filter((d) => d.status === '待分配项目');
   const getProjectName = (pid) => projects.find((p) => p.id === pid)?.name || pid;
   const canAllocate = canDo('add_device_allocation') || canDo('add_project');
+  const canManageLocations = canDo('manage_locations') || canDo('add_project');
+
+  const projLocations = locations.filter((l) => l.projectId === id);
+  const getLocationName = (locId) => locations.find((l) => l.id === locId)?.name || null;
+
+  const handleAddLocation = (form) => {
+    const newLoc = { id: `LOC-${Date.now()}`, projectId: id, name: form.name, address: form.address, deviceIds: [] };
+    dispatch({ type: 'ADD_LOCATION', payload: newLoc });
+  };
+
+  const handleEditLocation = (locId, form) => {
+    dispatch({ type: 'UPDATE_LOCATION', payload: { id: locId, name: form.name, address: form.address } });
+  };
+
+  const handleDeleteLocation = (loc) => {
+    if (loc.deviceIds && loc.deviceIds.length > 0) {
+      alert('请先解除该点位下所有设备的关联后再删除。');
+      return;
+    }
+    dispatch({ type: 'DELETE_LOCATION', payload: loc.id });
+    setDeletingLocation(null);
+  };
+
+  const handleSetLocation = (deviceId, locationId) => {
+    dispatch({ type: 'UPDATE_DEVICE', payload: { id: deviceId, locationId: locationId || null, updatedAt: now() } });
+    const device = devices.find((d) => d.id === deviceId);
+    locations.forEach((loc) => {
+      const hadDevice = loc.deviceIds.includes(deviceId);
+      const shouldHave = loc.id === locationId;
+      if (hadDevice !== shouldHave) {
+        const newIds = shouldHave
+          ? [...loc.deviceIds, deviceId]
+          : loc.deviceIds.filter((did) => did !== deviceId);
+        dispatch({ type: 'UPDATE_LOCATION', payload: { id: loc.id, deviceIds: newIds } });
+      }
+    });
+    setSetLocationTarget(null);
+  };
 
   const now = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
 
@@ -411,7 +453,7 @@ export default function ProjectDetail() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-2.5 w-8" />
-              {['设备SN', '整机类型', '当前状态', '分配时间', '操作'].map((h) => (
+              {['设备SN', '整机类型', '所属点位', '当前状态', '分配时间', '操作'].map((h) => (
                 <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
               ))}
             </tr>
@@ -432,10 +474,14 @@ export default function ProjectDetail() {
                       <Link to={`/devices/${d.id}`} className="hover:text-blue-600 hover:underline">{d.sn}</Link>
                     </td>
                     <td className="px-4 py-2.5 text-gray-600">{getTypeName(d.deviceTypeId)}</td>
+                    <td className="px-4 py-2.5 text-gray-600 text-xs">{getLocationName(d.locationId) || <span className="text-gray-400">—</span>}</td>
                     <td className="px-4 py-2.5"><StatusBadge status={d.status} /></td>
                     <td className="px-4 py-2.5 text-gray-400 text-xs">{alloc?.allocatedAt || '—'}</td>
                     <td className="px-4 py-2.5">
                       <Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline text-xs mr-3">查看详情</Link>
+                      {canManageLocations && !project.voided && (
+                        <button onClick={() => setSetLocationTarget(d)} className="text-blue-600 hover:underline text-xs mr-3">设置点位</button>
+                      )}
                       {canAllocate && !project.voided && (
                         <button onClick={() => setTransferTarget(d)} className="text-amber-600 hover:underline text-xs">转移</button>
                       )}
@@ -443,7 +489,7 @@ export default function ProjectDetail() {
                   </tr>
                   {isExpanded && (
                     <tr key={`${d.id}-history`}>
-                      <td colSpan={6} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
+                      <td colSpan={7} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
                         <div className="px-12 py-4">
                           <div className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">分配/转移记录</div>
                           {history.length > 0 ? (
@@ -480,7 +526,7 @@ export default function ProjectDetail() {
               );
             })}
             {allocatedDevices.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">暂无已分配设备</td></tr>
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">暂无已分配设备</td></tr>
             )}
           </tbody>
         </table>
@@ -527,6 +573,45 @@ export default function ProjectDetail() {
         </div>
       )}
 
+      {/* 点位管理 */}
+      <div className="bg-white rounded shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <div className="text-sm font-medium text-gray-600">点位管理（{projLocations.length}个）</div>
+          {canManageLocations && !project.voided && (
+            <button onClick={() => setShowAddLocationModal(true)} className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">+ 新增点位</button>
+          )}
+        </div>
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              {['点位名称', '地址', '已部署设备', '操作'].map((h) => (
+                <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {projLocations.map((loc) => (
+              <tr key={loc.id} className="hover:bg-gray-50">
+                <td className="px-4 py-2.5 font-medium text-gray-800">{loc.name}</td>
+                <td className="px-4 py-2.5 text-gray-600 text-xs">{loc.address || '—'}</td>
+                <td className="px-4 py-2.5 text-gray-700">{loc.deviceIds?.length || 0} 台</td>
+                <td className="px-4 py-2.5">
+                  {canManageLocations && !project.voided && (
+                    <>
+                      <button onClick={() => setEditingLocation(loc)} className="text-slate-600 hover:underline text-xs mr-3">编辑</button>
+                      <button onClick={() => setDeletingLocation(loc)} className="text-red-500 hover:underline text-xs">删除</button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {projLocations.length === 0 && (
+              <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">暂无点位，点击「新增点位」添加</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
       <EditProjectModal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
@@ -552,6 +637,100 @@ export default function ProjectDetail() {
           onConfirm={handleTransfer}
         />
       )}
+
+      {/* Add Location Modal */}
+      {showAddLocationModal && (
+        <LocationFormModal
+          isOpen={showAddLocationModal}
+          onClose={() => setShowAddLocationModal(false)}
+          onSave={(form) => { handleAddLocation(form); setShowAddLocationModal(false); }}
+          title="新增点位"
+        />
+      )}
+
+      {/* Edit Location Modal */}
+      {editingLocation && (
+        <LocationFormModal
+          isOpen={!!editingLocation}
+          onClose={() => setEditingLocation(null)}
+          onSave={(form) => { handleEditLocation(editingLocation.id, form); setEditingLocation(null); }}
+          title="编辑点位"
+          initial={editingLocation}
+        />
+      )}
+
+      {/* Delete Location Confirm */}
+      {deletingLocation && (
+        <Modal isOpen={!!deletingLocation} onClose={() => setDeletingLocation(null)} title="删除点位">
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">确认删除点位「<span className="font-medium">{deletingLocation.name}</span>」？</p>
+            {deletingLocation.deviceIds?.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
+                该点位下有 {deletingLocation.deviceIds.length} 台设备，请先解除设备关联后再删除。
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setDeletingLocation(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+              {(!deletingLocation.deviceIds || deletingLocation.deviceIds.length === 0) && (
+                <button onClick={() => handleDeleteLocation(deletingLocation)} className="px-4 py-2 text-sm text-white bg-red-600 rounded hover:bg-red-700">确认删除</button>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Set Location Modal */}
+      {setLocationTarget && (
+        <Modal isOpen={!!setLocationTarget} onClose={() => setSetLocationTarget(null)} title={`设置点位：${setLocationTarget.sn}`}>
+          <SetLocationModal
+            device={setLocationTarget}
+            projLocations={projLocations}
+            onConfirm={handleSetLocation}
+            onClose={() => setSetLocationTarget(null)}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function LocationFormModal({ isOpen, onClose, onSave, title, initial }) {
+  const [form, setForm] = useState({ name: initial?.name || '', address: initial?.address || '' });
+  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+      <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">点位名称 *</label>
+          <input className={inp} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">地址</label>
+          <input className={inp} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function SetLocationModal({ device, projLocations, onConfirm, onClose }) {
+  const [locationId, setLocationId] = useState(device.locationId || '');
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-600">为设备 <span className="font-mono font-medium">{device.sn}</span> 选择所属点位：</p>
+      <select className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500"
+        value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+        <option value="">— 不设置点位 —</option>
+        {projLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+      </select>
+      <div className="flex justify-end gap-2 pt-2">
+        <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+        <button onClick={() => onConfirm(device.id, locationId)} className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">确认</button>
+      </div>
     </div>
   );
 }

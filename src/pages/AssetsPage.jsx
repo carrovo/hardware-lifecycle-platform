@@ -360,8 +360,9 @@ function AllDevicesSubTab({ state }) {
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
 
-  const { devices, deviceTypes, projects } = state;
+  const { devices, deviceTypes, projects, locations = [] } = state;
   const getTypeName = id => deviceTypes.find(dt => dt.id === id)?.name || id;
+  const getLocationName = id => id ? (locations.find(l => l.id === id)?.name || '—') : '—';
 
   const total = devices.length;
   const inProgress = devices.filter(d => ['装配中', '整机装配', '半成品检验中', '初测中', '中测中', 'OQT终测中', '功能测试中', '老化测试中', '终测中', '生产返修中'].includes(d.status)).length;
@@ -405,7 +406,7 @@ function AllDevicesSubTab({ state }) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {['设备SN', '整机类型', '所属项目', '当前状态', '装配人', '最近更新', '在此状态天数', '操作'].map(h => (
+              {['设备SN', '整机类型', '所属项目', '所属点位', '当前状态', '装配人', '最近更新', '在此状态天数', '操作'].map(h => (
                 <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
               ))}
             </tr>
@@ -423,6 +424,7 @@ function AllDevicesSubTab({ state }) {
                   <td className="px-4 py-2 text-gray-600 text-xs">
                     {project ? <Link to={`/projects/${project.id}`} className="text-slate-700 hover:underline" onClick={e => e.stopPropagation()}>{project.name}</Link> : <span className="text-gray-400">—</span>}
                   </td>
+                  <td className="px-4 py-2 text-gray-600 text-xs">{d.locationId ? getLocationName(d.locationId) : <span className="text-gray-400">—</span>}</td>
                   <td className="px-4 py-2"><StatusBadge status={d.status} /></td>
                   <td className="px-4 py-2 text-gray-600">{d.assembler}</td>
                   <td className="px-4 py-2 text-gray-500 text-xs">{d.updatedAt}</td>
@@ -435,7 +437,7 @@ function AllDevicesSubTab({ state }) {
                 </tr>
               );
             })}
-            {filtered.length === 0 && <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">暂无数据</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">暂无数据</td></tr>}
           </tbody>
         </table>
       </div>

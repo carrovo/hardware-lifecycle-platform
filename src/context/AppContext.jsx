@@ -20,6 +20,8 @@ import {
   deliveryWorkOrders as initDeliveryWorkOrders,
   deliveryPlans as initDeliveryPlans,
   workflowProductionPlans as initWorkflowProductionPlans,
+  locations as initLocations,
+  qualityIssues as initQualityIssues,
   FEISHU_USERS,
 } from '../data/mockData';
 
@@ -46,6 +48,8 @@ const initialState = {
   deliveryWorkOrders: initDeliveryWorkOrders,
   deliveryPlans: initDeliveryPlans,
   workflowProductionPlans: initWorkflowProductionPlans,
+  locations: initLocations,
+  qualityIssues: initQualityIssues,
   currentUser: '张三',
   currentUserId: 'u1',
 };
@@ -238,6 +242,31 @@ function appReducer(state, action) {
 
     case 'DELETE_LABEL_CATEGORY':
       return { ...state, labelCategories: state.labelCategories.filter((c) => c.id !== action.payload) };
+
+    case 'ADD_LOCATION':
+      return { ...state, locations: [...state.locations, action.payload] };
+
+    case 'UPDATE_LOCATION':
+      return {
+        ...state,
+        locations: state.locations.map((l) =>
+          l.id === action.payload.id ? { ...l, ...action.payload } : l
+        ),
+      };
+
+    case 'DELETE_LOCATION':
+      return { ...state, locations: state.locations.filter((l) => l.id !== action.payload) };
+
+    case 'ADD_QUALITY_ISSUE':
+      return { ...state, qualityIssues: [...state.qualityIssues, action.payload] };
+
+    case 'UPDATE_QUALITY_ISSUE':
+      return {
+        ...state,
+        qualityIssues: state.qualityIssues.map((q) =>
+          q.id === action.payload.id ? { ...q, ...action.payload } : q
+        ),
+      };
 
     default:
       return state;
