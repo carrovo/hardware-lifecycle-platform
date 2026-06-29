@@ -370,29 +370,42 @@ function QSparkline({ data }) {
 /* ─────────── 质量看板 Tab ─────────── */
 function QualityDashboard() {
   const { state } = useApp();
-  const { testRecords, workOrders, deliveryPlans = [] } = state;
+  const { testRecords, deliveryRecords = [], productionWorkOrders = [], deliveryWorkOrders = [], materials = [] } = state;
 
-  const incoming = (state.materialBatches || []);
-  const qualifiedBatches = incoming.filter(b => (b.items || []).every(i => i.result !== '不合格'));
-  const incomingPassRate = incoming.length > 0 ? Math.round((qualifiedBatches.length / incoming.length) * 100) : 0;
+  // 来料质量：按单个 SN 计算
+  const qualifiedMaterials = materials.filter(m => m.inspectionResult === '合格' || m.inspectionResult === '特批使用');
+  const incomingPassRate = materials.length > 0 ? Math.round((qualifiedMaterials.length / materials.length) * 100) : 0;
 
   const allTests = testRecords || [];
   const passTests = allTests.filter(t => t.stationResult === 'Pass').length;
   const productionPassRate = allTests.length > 0 ? Math.round((passTests / allTests.length) * 100) : 0;
 
-  const allFI = deliveryPlans.flatMap(dp => dp.records?.factoryInspection || []);
-  const passFI = allFI.filter(r => r.result === '通过').length;
-  const deliveryPassRate = allFI.length > 0 ? Math.round((passFI / allFI.length) * 100) : 0;
+  // 交付质量：按 deliveryRecords stage 计算
+  const fiRecords = deliveryRecords.filter(r => r.stage === '出厂检验');
+  const fiPass = fiRecords.filter(r => r.result === '合格' || r.result === '通过').length;
+  const siRecords = deliveryRecords.filter(r => r.stage === '现场安装调试');
+  const siPass = siRecords.filter(r => r.result === '通过').length;
+  const caRecords = deliveryRecords.filter(r => r.stage === '客户验收');
+  const caPass = caRecords.filter(r => r.result === '通过').length;
+  const allDeliveryCount = fiRecords.length + siRecords.length + caRecords.length;
+  const allDeliveryPass = fiPass + siPass + caPass;
+  const deliveryPassRate = allDeliveryCount > 0 ? Math.round((allDeliveryPass / allDeliveryCount) * 100) : 0;
 
-  const pendingWO = workOrders.filter(w => ['待处理', '处理中'].includes(w.status)).length;
-  const closedWO = workOrders.filter(w => w.status === '已关闭').length;
-  const afterSalesScore = workOrders.length > 0 ? Math.round((closedWO / workOrders.length) * 100) : 100;
+  // 售后质量：合并生产工单 + 交付工单
+  const allWOs = [...productionWorkOrders, ...deliveryWorkOrders];
+  const pendingWO = allWOs.filter(w => ['待处理', '处理中'].includes(w.status)).length;
+  const closedWO = allWOs.filter(w => w.status === '已关闭').length;
+  const afterSalesScore = allWOs.length > 0 ? Math.round((closedWO / allWOs.length) * 100) : 100;
+  // 重复故障设备（同一 deviceSN 出现在 ≥2 个工单）
+  const snCounts = {};
+  allWOs.forEach(w => { if (w.deviceSN) snCounts[w.deviceSN] = (snCounts[w.deviceSN] || 0) + 1; });
+  const repeatFaultCount = Object.values(snCounts).filter(c => c >= 2).length;
 
   const cards = [
-    { title: '来料质量', metric: `${incomingPassRate}%`, desc: `${qualifiedBatches.length}/${incoming.length} 批次合格`, color: 'border-blue-500', badge: incomingPassRate >= 90 ? '良好' : '需关注' },
+    { title: '来料质量', metric: `${incomingPassRate}%`, desc: `${qualifiedMaterials.length}/${materials.length} 件合格`, color: 'border-blue-500', badge: incomingPassRate >= 90 ? '良好' : '需关注' },
     { title: '生产质量', metric: `${productionPassRate}%`, desc: `直通率 Pass ${passTests}/${allTests.length}`, color: 'border-emerald-500', badge: productionPassRate >= 90 ? '良好' : '需关注' },
-    { title: '交付质量', metric: `${deliveryPassRate}%`, desc: `出厂检验 通过 ${passFI}/${allFI.length}`, color: 'border-amber-500', badge: deliveryPassRate >= 90 ? '良好' : '需关注' },
-    { title: '售后质量', metric: `${afterSalesScore}%`, desc: `${pendingWO} 个工单待处理`, color: 'border-red-500', badge: pendingWO === 0 ? '良好' : '需关注' },
+    { title: '交付质量', metric: `${deliveryPassRate}%`, desc: `出厂/安装/验收 通过 ${allDeliveryPass}/${allDeliveryCount}`, color: 'border-amber-500', badge: deliveryPassRate >= 90 ? '良好' : '需关注' },
+    { title: '售后质量', metric: `${afterSalesScore}%`, desc: `${pendingWO} 个待处理 · ${repeatFaultCount} 台重复故障`, color: 'border-red-500', badge: pendingWO === 0 ? '良好' : '需关注' },
   ];
 
   const STATION_KEYS = ['semi', 'init', 'mid', 'oqt'];

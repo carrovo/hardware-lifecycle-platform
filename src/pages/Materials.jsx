@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
@@ -208,6 +208,7 @@ function ModuleInventoryTab({ materials, moduleTypes }) {
 export default function Materials() {
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
+  const workflowProductionPlans = state.workflowProductionPlans || [];
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('来料检验');
   const [showModal, setShowModal] = useState(false);
@@ -265,17 +266,8 @@ export default function Materials() {
 
   return (
     <div className="p-6">
-      {activeTab === '来料检验' && canDo('add_material_batch') && (
-        <div className="flex justify-end mb-4">
-          <button onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
-            + 新增来料批次
-          </button>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-0 border-b border-gray-200 mb-4">
+      {/* Tabs + Button in one row */}
+      <div className="flex items-center border-b border-gray-200 mb-4">
         {['来料检验', '模块库存'].map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
@@ -284,6 +276,12 @@ export default function Materials() {
             {tab}
           </button>
         ))}
+        {activeTab === '来料检验' && canDo('add_material_batch') && (
+          <button onClick={() => setShowModal(true)}
+            className="ml-auto mb-1 px-4 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
+            + 新增来料批次
+          </button>
+        )}
       </div>
 
       {activeTab === '模块库存' && (
@@ -367,7 +365,7 @@ export default function Materials() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['', '批次号', '类别', '型号', '供应商', '数量', '合格/不合格', '检验员', '检验时间', '备注'].map((h) => (
+                  {['', '批次号', '类别', '型号', '供应商', '采购单号', '数量', '合格/不合格', '检验员', '检验时间', '关联生产计划', '备注'].map((h) => (
                     <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -391,6 +389,9 @@ export default function Materials() {
                         <td className="px-3 py-2.5 text-gray-700">{b.category}</td>
                         <td className="px-3 py-2.5 text-gray-600">{b.model || '—'}</td>
                         <td className="px-3 py-2.5 text-gray-500">{b.supplier}</td>
+                        <td className="px-3 py-2.5 font-mono text-xs text-gray-500">
+                          {b.erpPurchaseOrderNo || <span className="text-gray-300">待录入</span>}
+                        </td>
                         <td className="px-3 py-2.5 text-gray-700 font-medium">{b.items.length} 件</td>
                         <td className="px-3 py-2.5">
                           <span className="flex items-center gap-2 text-xs">
@@ -400,11 +401,21 @@ export default function Materials() {
                         </td>
                         <td className="px-3 py-2.5 text-gray-600">{b.inspector}</td>
                         <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{b.inspectionTime}</td>
+                        <td className="px-3 py-2.5 text-xs">
+                          {(() => {
+                            const plan = workflowProductionPlans.find(p => p.id === b.planId || (p.materialBatchIds || []).includes(b.id));
+                            return plan ? (
+                              <Link to={`/production-plans/${plan.id}`} className="text-blue-600 hover:underline font-mono" onClick={e => e.stopPropagation()}>
+                                {plan.planNo || plan.id}
+                              </Link>
+                            ) : <span className="text-gray-300">—</span>;
+                          })()}
+                        </td>
                         <td className="px-3 py-2.5 text-gray-400 text-xs max-w-xs truncate">{b.notes || '—'}</td>
                       </tr>
                       {isExpanded && (
                         <tr key={`${b.id}-expand`}>
-                          <td colSpan={10} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
+                          <td colSpan={12} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
                             <div className="px-10 py-3">
                               <table className="w-full text-xs">
                                 <thead>
@@ -412,6 +423,7 @@ export default function Materials() {
                                     <th className="text-left py-1.5 pr-4 font-medium">SN</th>
                                     <th className="text-left py-1.5 pr-4 font-medium">检验结果</th>
                                     <th className="text-left py-1.5 pr-4 font-medium">物料状态</th>
+                                    <th className="text-left py-1.5 pr-4 font-medium">当前所在整机</th>
                                     <th className="text-left py-1.5 pr-4 font-medium">出厂日期</th>
                                     <th className="text-left py-1.5 pr-4 font-medium">固件版本</th>
                                     <th className="text-left py-1.5 pr-4 font-medium">累计运行</th>
@@ -421,11 +433,19 @@ export default function Materials() {
                                 <tbody>
                                   {b.items.map((it) => {
                                     const mat = materialBySN[it.sn];
+                                    const ownerDevice = (state.devices || []).find(d =>
+                                      (d.usedMaterials || []).some(um => um.materialId === it.id)
+                                    );
                                     return (
                                     <tr key={it.id} className={`border-b border-gray-100 last:border-0 ${it.result === '不合格' ? 'bg-red-50' : ''}`}>
                                       <td className="py-1.5 pr-4 font-mono text-gray-700">{it.sn}</td>
                                       <td className="py-1.5 pr-4"><Badge map={RESULT_BADGE} value={it.result} /></td>
                                       <td className="py-1.5 pr-4"><Badge map={STATUS_BADGE} value={it.status} /></td>
+                                      <td className="py-1.5 pr-4">
+                                        {ownerDevice ? (
+                                          <Link to={`/devices/${ownerDevice.id}`} className="text-blue-600 hover:underline font-mono text-xs">{ownerDevice.sn}</Link>
+                                        ) : <span className="text-gray-300">—</span>}
+                                      </td>
                                       <td className="py-1.5 pr-4 text-gray-500">{mat?.manufactureDate || '—'}</td>
                                       <td className="py-1.5 pr-4 text-gray-500 font-mono">{mat?.firmwareVersion ? mat.firmwareVersion : '—'}</td>
                                       <td className="py-1.5 pr-4 text-gray-500">{mat && mat.operatingHours > 0 ? `${mat.operatingHours}h` : '—'}</td>
@@ -443,7 +463,7 @@ export default function Materials() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">暂无来料批次</td></tr>
+                  <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无来料批次</td></tr>
                 )}
               </tbody>
             </table>

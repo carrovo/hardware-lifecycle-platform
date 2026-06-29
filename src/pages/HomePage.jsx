@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useRole } from '../context/RoleContext';
 
 const LIFECYCLE_STEPS = [
-  '来料管理', '整机装配', '质量测试', '整机入库', '出厂检验', '现场安装调试', '客户验收', '在线运营',
+  '来料管理', '整机装配', '质量测试', '整机入库', '出厂检验', '现场调试', '客户验收', '在线运营',
 ];
 
 const MODULE_CARDS = [
@@ -67,27 +67,29 @@ export default function HomePage() {
       {/* Lifecycle Flow */}
       <div className="bg-white rounded-xl shadow-sm p-6">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-5">硬件生命周期流程</h2>
-        <div className="flex items-center flex-wrap gap-2">
-          {LIFECYCLE_STEPS.map((step, i) => (
-            <div key={step} className="flex items-center gap-2">
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-full px-3 py-1.5">
-                <span className="w-5 h-5 rounded-full bg-slate-700 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">
-                  {i + 1}
-                </span>
-                <span className="text-sm font-medium text-gray-700 whitespace-nowrap">{step}</span>
+        <div className="overflow-x-auto">
+          <div className="flex items-center flex-nowrap gap-1.5 min-w-max">
+            {LIFECYCLE_STEPS.map((step, i) => (
+              <div key={step} className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-6 h-6 rounded-full bg-slate-700 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">
+                    {i + 1}
+                  </span>
+                  <span className="text-xs text-gray-700 whitespace-nowrap">{step}</span>
+                </div>
+                {i < LIFECYCLE_STEPS.length - 1 && (
+                  <span className="text-gray-300 text-sm">→</span>
+                )}
               </div>
-              {i < LIFECYCLE_STEPS.length - 1 && (
-                <span className="text-gray-300 text-lg font-light">→</span>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Module Cards */}
       <div>
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">功能模块</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {MODULE_CARDS.map((card) => (
             <Link
               key={card.path}

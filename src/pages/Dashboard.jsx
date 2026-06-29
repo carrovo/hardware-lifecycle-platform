@@ -146,10 +146,10 @@ function DetailTab({ projects, deliveryPlans, testRecords, allWOs, alerts }) {
               <div className="flex items-center gap-3 mb-2">
                 <span className="font-medium text-gray-800 text-sm">{p.name}</span>
                 <span className="text-xs text-gray-400 ml-auto">已验收通过 {p.accepted}/{p.target} 台</span>
-                <span className={`text-xs font-semibold w-10 text-right ${p.pct >= 100 ? 'text-green-600' : 'text-blue-600'}`}>{p.pct}%</span>
+                <span className={`text-xs font-semibold w-10 text-right ${p.pct >= 100 ? 'text-green-600' : p.pct >= 60 ? 'text-blue-600' : 'text-orange-500'}`}>{p.pct}%</span>
               </div>
               <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div className={`h-1.5 rounded-full transition-all ${p.pct >= 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${Math.max(p.pct, 1)}%` }} />
+                <div className={`h-1.5 rounded-full transition-all ${p.pct >= 100 ? 'bg-green-500' : p.pct >= 60 ? 'bg-blue-500' : 'bg-orange-400'}`} style={{ width: `${Math.max(p.pct, 1)}%` }} />
               </div>
             </button>
           ))}
@@ -257,18 +257,16 @@ export default function Dashboard() {
 
   /* ─── Block 1: 项目进展 ─── */
   const projectProgress = projects.filter(p => !p.voided).map(p => {
-    const planDevices = devices.filter(d => {
-      return (workflowProductionPlans.filter(wp => wp.projectId === p.id)).some(wp => wp.id === d.productionPlanId) ||
-        deviceAllocations.some(a => a.projectId === p.id && a.deviceId === d.id);
-    });
-    const finished = ['待分配项目','已分配项目','在线运营','出厂检验中','现场安装调试中','客户验收中','待入库','已入库'];
-    const warehoused = planDevices.filter(d => finished.includes(d.status)).length;
+    const projPlans = (deliveryPlans || []).filter(dp => dp.projectId === p.id);
+    const accepted = projPlans.reduce((sum, dp) => {
+      return sum + (dp.records?.customerAccept || []).filter(r => r.result === '通过').length;
+    }, 0);
     const target = p.targetCount || 0;
-    const pct = target > 0 ? Math.min(Math.round((warehoused / target) * 100), 100) : 0;
+    const pct = target > 0 ? Math.min(Math.round((accepted / target) * 100), 100) : 0;
     const daysLeft = daysUntil(p.dueDate || null);
     const timePct = timeProgressPct(p.createdAt, p.dueDate);
     const atRisk = pct < timePct && timePct > 30;
-    return { ...p, warehoused, target, pct, daysLeft, timePct, atRisk };
+    return { ...p, accepted, target, pct, daysLeft, timePct, atRisk };
   });
 
   /* ─── Block 2: 质量情况 ─── */
@@ -338,23 +336,24 @@ export default function Dashboard() {
               {projectProgress.map(p => (
                 <button key={p.id} onClick={() => navigate(`/projects/${p.id}`)}
                   className="w-full px-5 py-4 text-left hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center gap-3 mb-2">
+                  <div className="flex items-center gap-2 mb-2">
                     <span className="font-medium text-gray-800 text-sm">{p.name}</span>
-                    {p.atRisk && (
-                      <span className="bg-red-100 text-red-700 border border-red-300 text-xs px-2 py-0.5 rounded-full">延期风险</span>
+                    {p.pct >= 100 && (
+                      <span className="bg-green-100 text-green-700 border border-green-300 text-xs px-1.5 py-0.5 rounded-full">✓ 已完成</span>
                     )}
                     <span className="ml-auto text-xs text-gray-400">
-                      {p.warehoused}/{p.target} 台入库
+                      {p.accepted}/{p.target} 台已验收
                       {p.daysLeft != null && (
                         <span className={p.daysLeft < 14 ? ' text-amber-600 font-medium' : ''}>
                           {' · '}{p.daysLeft > 0 ? `${p.daysLeft}天后截止` : `已逾期${Math.abs(p.daysLeft)}天`}
                         </span>
                       )}
                     </span>
+                    {p.pct < 60 && <span className="text-xs text-red-500 font-medium flex-shrink-0">⚠ 延期风险</span>}
                   </div>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div
-                      className={`h-2 rounded-full transition-all ${p.pct >= 100 ? 'bg-green-500' : p.atRisk ? 'bg-red-400' : 'bg-blue-500'}`}
+                      className={`h-2 rounded-full transition-all ${p.pct >= 100 ? 'bg-green-500' : p.pct >= 60 ? 'bg-blue-500' : 'bg-orange-400'}`}
                       style={{ width: `${Math.max(p.pct, 2)}%` }}
                     />
                   </div>

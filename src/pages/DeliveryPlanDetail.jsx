@@ -250,6 +250,10 @@ function BatchFIModal({ isOpen, onClose, onSave, selectedIds, eligibleDevices })
 function FactoryInspectionNode({ plan }) {
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
+  const getDeviceLink = (sn) => {
+    const dev = sn ? state.devices.find(d => d.sn === sn) : null;
+    return dev ? <Link to={`/devices/${dev.id}`} className="text-blue-600 hover:underline">{sn}</Link> : (sn || '—');
+  };
   const [showModal, setShowModal] = useState(false);
   const [showBatch, setShowBatch] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -327,7 +331,7 @@ function FactoryInspectionNode({ plan }) {
           <tbody className="divide-y divide-gray-100">
             {records.map(r => (
               <tr key={r.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-mono text-xs text-gray-800">{r.deviceSN}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-gray-800">{getDeviceLink(r.deviceSN)}</td>
                 <td className="px-4 py-2.5 text-gray-600">{r.inspector}</td>
                 <td className="px-4 py-2.5 text-gray-400 text-xs">{r.time}</td>
                 <td className="px-4 py-2.5"><StatusBadge status={r.result} /></td>
@@ -455,6 +459,10 @@ function BatchSIModal({ isOpen, onClose, onSave, selectedIds, eligibleDevices })
 function SiteInstallNode({ plan }) {
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
+  const getDeviceLink = (sn) => {
+    const dev = sn ? state.devices.find(d => d.sn === sn) : null;
+    return dev ? <Link to={`/devices/${dev.id}`} className="text-blue-600 hover:underline">{sn}</Link> : (sn || '—');
+  };
   const [showModal, setShowModal] = useState(false);
   const [showBatch, setShowBatch] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -530,7 +538,7 @@ function SiteInstallNode({ plan }) {
           <tbody className="divide-y divide-gray-100">
             {records.map(r => (
               <tr key={r.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-mono text-xs text-gray-800">{r.deviceSN}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-gray-800">{getDeviceLink(r.deviceSN)}</td>
                 <td className="px-4 py-2.5 text-gray-600">{r.technician}</td>
                 <td className="px-4 py-2.5 text-gray-600 text-xs max-w-[160px] truncate">{r.address || '—'}</td>
                 <td className="px-4 py-2.5 text-gray-400 text-xs">{r.time}</td>
@@ -656,6 +664,10 @@ function BatchCAModal({ isOpen, onClose, onSave, selectedIds, eligibleDevices })
 function CustomerAcceptNode({ plan }) {
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
+  const getDeviceLink = (sn) => {
+    const dev = sn ? state.devices.find(d => d.sn === sn) : null;
+    return dev ? <Link to={`/devices/${dev.id}`} className="text-blue-600 hover:underline">{sn}</Link> : (sn || '—');
+  };
   const [showModal, setShowModal] = useState(false);
   const [showBatch, setShowBatch] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -731,7 +743,7 @@ function CustomerAcceptNode({ plan }) {
           <tbody className="divide-y divide-gray-100">
             {records.map(r => (
               <tr key={r.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-mono text-xs text-gray-800">{r.deviceSN}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-gray-800">{getDeviceLink(r.deviceSN)}</td>
                 <td className="px-4 py-2.5 text-gray-600">{r.acceptor}</td>
                 <td className="px-4 py-2.5 text-gray-400 text-xs">{r.time}</td>
                 <td className="px-4 py-2.5"><StatusBadge status={r.result} /></td>
