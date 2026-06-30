@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
@@ -97,6 +97,8 @@ function GuidedAssemblyModal({ isOpen, onClose, onSave, plan }) {
   const [step, setStep] = useState(1);
   const [selectedTypeId, setSelectedTypeId] = useState('');
   const [slotSelections, setSlotSelections] = useState({});
+  const [labels, setLabels] = useState({});
+  const [erpPickingOrderNo, setErpPickingOrderNo] = useState('');
   const [form, setForm] = useState({
     assembler: state.currentUser,
     assemblyTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
@@ -111,6 +113,8 @@ function GuidedAssemblyModal({ isOpen, onClose, onSave, plan }) {
     setStep(1);
     setSelectedTypeId('');
     setSlotSelections({});
+    setLabels({});
+    setErpPickingOrderNo('');
     setForm({
       assembler: state.currentUser,
       assemblyTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
@@ -139,6 +143,8 @@ function GuidedAssemblyModal({ isOpen, onClose, onSave, plan }) {
       sn,
       deviceTypeId: selectedTypeId,
       slotSelections,
+      labels,
+      erpPickingOrderNo,
       ...form,
     });
     handleClose();
@@ -233,6 +239,51 @@ function GuidedAssemblyModal({ isOpen, onClose, onSave, plan }) {
               })}
             </div>
           )}
+          {/* Labels block */}
+          {(() => {
+            const labelCatIds = selectedType?.labelCategoryIds || [];
+            const cats = labelCatIds.map(id => state.labelCategories?.find(lc => lc.id === id)).filter(Boolean);
+            if (cats.length === 0) return null;
+            return (
+              <div className="mt-5 pt-4 border-t border-gray-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-sm font-medium text-gray-700">设备标签</span>
+                  <span className="text-xs text-gray-400">建议填写，装配后不可修改</span>
+                </div>
+                <div className="space-y-2">
+                  {cats.map(cat => (
+                    <div key={cat.id} className="flex items-center gap-3">
+                      <span className="w-28 flex-shrink-0 text-sm text-gray-600">{cat.name}</span>
+                      <select
+                        className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm bg-white"
+                        value={labels[cat.name] || ''}
+                        onChange={e => setLabels({ ...labels, [cat.name]: e.target.value })}
+                      >
+                        <option value="">— 选择（可选）—</option>
+                        {cat.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 领料信息 */}
+          <div className="mt-5 pt-4 border-t border-gray-100">
+            <div className="text-sm font-medium text-gray-700 mb-3">领料信息</div>
+            <div className="flex items-center gap-3">
+              <span className="w-28 flex-shrink-0 text-sm text-gray-600">ERP领料单号</span>
+              <input
+                type="text"
+                className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-slate-500"
+                value={erpPickingOrderNo}
+                onChange={e => setErpPickingOrderNo(e.target.value)}
+                placeholder="如 PR-2026-XXX（选填）"
+              />
+            </div>
+          </div>
+
           <div className="flex justify-between mt-6">
             <button onClick={() => setStep(1)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">← 上一步</button>
             <button onClick={() => setStep(3)} className="px-5 py-2 text-sm bg-slate-700 text-white rounded hover:bg-slate-800">下一步 →</button>
@@ -723,8 +774,12 @@ function WarehouseNode({ plan }) {
 export default function ProductionPlanDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { state } = useApp();
-  const [activeNode, setActiveNode] = useState('materialPrep');
+  const { state, dispatch } = useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const NODE_KEYS = ['materialPrep', 'assembly', 'quality', 'warehouse'];
+  const nodeParam = searchParams.get('node');
+  const activeNode = NODE_KEYS.includes(nodeParam) ? nodeParam : 'materialPrep';
+  const setActiveNode = (key) => setSearchParams({ node: key }, { replace: true });
 
   const plan = [...(state.workflowProductionPlans || []), ...(state.productionPlans || [])].find(p => p.id === id);
 
@@ -754,6 +809,22 @@ export default function ProductionPlanDetail() {
             <span>目标量：{plan.targetCount ?? '—'} 台</span>
             <span>已装配：{planDevices.length} 台</span>
             {plan.endDate && <span>计划完成：{plan.endDate}</span>}
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-sm text-gray-500">ERP生产工单号：</span>
+            <input
+              key={plan.id}
+              type="text"
+              defaultValue={plan.erpProductionOrderNo || ''}
+              onBlur={e => {
+                const val = e.target.value.trim();
+                if (val !== (plan.erpProductionOrderNo || '')) {
+                  dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: plan.id, erpProductionOrderNo: val } });
+                }
+              }}
+              placeholder="如 WO-2026-XXX（选填）"
+              className="border border-gray-200 rounded px-2 py-0.5 text-sm text-gray-700 font-mono focus:outline-none focus:border-slate-400 w-52"
+            />
           </div>
         </div>
       </div>

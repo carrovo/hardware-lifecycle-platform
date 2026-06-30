@@ -9,46 +9,41 @@ const MODULE_CARDS = [
   {
     path: '/dashboard',
     name: '运营看板',
-    desc: '实时监控设备运营状态与健康告警',
+    desc: '实时监控在线设备健康状态、告警与运营数据',
     color: 'border-blue-500',
     iconBg: 'bg-blue-100',
-    iconText: 'text-blue-600',
     icon: '📊',
   },
   {
     path: '/projects',
     name: '项目中心',
-    desc: '管理生产计划、交付计划和质量看板',
+    desc: '管理生产计划、交付计划，查看质量看板与项目进度',
     color: 'border-emerald-500',
     iconBg: 'bg-emerald-100',
-    iconText: 'text-emerald-600',
     icon: '🏭',
   },
   {
     path: '/assets',
     name: '资产管理',
-    desc: '追踪来料批次、设备列表和设备类型',
+    desc: '追踪来料批次与设备全生命周期，管理设备类型与模块',
     color: 'border-amber-500',
     iconBg: 'bg-amber-100',
-    iconText: 'text-amber-600',
     icon: '📦',
   },
   {
     path: '/after-sales',
     name: '售后管理',
-    desc: '处理生产工单与交付工单全流程',
+    desc: '处理生产与交付工单，记录维修与售后服务全流程',
     color: 'border-red-500',
     iconBg: 'bg-red-100',
-    iconText: 'text-red-600',
     icon: '🔧',
   },
   {
     path: '/system',
     name: '系统管理',
-    desc: '配置角色权限、标签字典和通知推送',
+    desc: '配置角色权限、设备标签字典与系统通知推送',
     color: 'border-purple-500',
     iconBg: 'bg-purple-100',
-    iconText: 'text-purple-600',
     icon: '⚙️',
   },
 ];
@@ -87,23 +82,39 @@ export default function HomePage() {
       </div>
 
       {/* Module Cards */}
-      <div>
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">功能模块</h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {MODULE_CARDS.map((card) => (
+      <div className="mt-8">
+        <h2 className="text-sm font-medium text-gray-500 mb-4">功能模块</h2>
+        <div className="grid grid-cols-3 gap-4">
+          {MODULE_CARDS.slice(0, 3).map((card) => (
             <Link
               key={card.path}
               to={card.path}
-              className={`bg-white rounded-xl shadow-sm border-l-4 ${card.color} p-5 hover:shadow-md transition-shadow flex items-start gap-4 group`}
+              className={`bg-white rounded-xl shadow-sm border-l-4 ${card.color} p-5 h-[140px] flex items-start gap-4 group hover:-translate-y-0.5 transition-transform`}
             >
               <div className={`w-10 h-10 rounded-lg ${card.iconBg} flex items-center justify-center text-xl flex-shrink-0`}>
                 {card.icon}
               </div>
               <div className="min-w-0">
                 <div className="font-semibold text-gray-800 group-hover:text-slate-600 mb-1">{card.name}</div>
-                <div className="text-xs text-gray-500 leading-relaxed">{card.desc}</div>
+                <div className="text-xs text-gray-500 leading-relaxed line-clamp-2">{card.desc}</div>
               </div>
-              <span className="ml-auto text-gray-300 group-hover:text-gray-500 transition-colors text-lg flex-shrink-0">→</span>
+            </Link>
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-4 mt-4">
+          {MODULE_CARDS.slice(3).map((card) => (
+            <Link
+              key={card.path}
+              to={card.path}
+              className={`bg-white rounded-xl shadow-sm border-l-4 ${card.color} p-5 h-[140px] flex items-start gap-4 group hover:-translate-y-0.5 transition-transform`}
+            >
+              <div className={`w-10 h-10 rounded-lg ${card.iconBg} flex items-center justify-center text-xl flex-shrink-0`}>
+                {card.icon}
+              </div>
+              <div className="min-w-0">
+                <div className="font-semibold text-gray-800 group-hover:text-slate-600 mb-1">{card.name}</div>
+                <div className="text-xs text-gray-500 leading-relaxed line-clamp-2">{card.desc}</div>
+              </div>
             </Link>
           ))}
         </div>

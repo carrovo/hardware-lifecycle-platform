@@ -15,6 +15,7 @@ function EditProjectModal({ isOpen, onClose, project, onSave }) {
     notes: project?.notes || '',
     targetCount: project?.targetCount || 1,
     manager: project?.manager || '',
+    erpPurchaseOrderNo: project?.erpPurchaseOrderNo || '',
   });
 
   const f = (key) => ({ value: form[key], onChange: (e) => setForm({ ...form, [key]: e.target.value }) });
@@ -55,6 +56,12 @@ function EditProjectModal({ isOpen, onClose, project, onSave }) {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">联系电话</label>
             <input type="text" className={inputClass} {...f('contactPhone')} />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              ERP采购订单号 <span className="font-normal text-gray-400">（选填）</span>
+            </label>
+            <input type="text" className={inputClass} {...f('erpPurchaseOrderNo')} placeholder="关联ERP采购订单，便于后续核对，暂不自动同步" />
           </div>
         </div>
         <div>
@@ -388,6 +395,9 @@ export default function ProjectDetail() {
           <div><span className="text-gray-500">联系人：</span><span className="text-gray-700">{project.contactPerson || '—'}</span></div>
           <div><span className="text-gray-500">联系电话：</span><span className="text-gray-700">{project.contactPhone || '—'}</span></div>
           <div><span className="text-gray-500">创建时间：</span><span className="text-gray-500 text-xs">{project.createdAt}</span></div>
+          {project.erpPurchaseOrderNo && (
+            <div><span className="text-gray-500">ERP采购订单号：</span><span className="text-gray-700 font-mono">{project.erpPurchaseOrderNo}</span></div>
+          )}
           {project.background && (
             <div className="col-span-3"><span className="text-gray-500">项目背景：</span><span className="text-gray-700">{project.background}</span></div>
           )}

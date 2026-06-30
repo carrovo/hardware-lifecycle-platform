@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
@@ -768,7 +768,11 @@ export default function DeliveryPlanDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { state } = useApp();
-  const [activeNode, setActiveNode] = useState('factoryInspection');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const NODE_KEYS = ['factoryInspection', 'siteInstall', 'customerAccept'];
+  const nodeParam = searchParams.get('node');
+  const activeNode = NODE_KEYS.includes(nodeParam) ? nodeParam : 'factoryInspection';
+  const setActiveNode = (key) => setSearchParams({ node: key }, { replace: true });
 
   const plan = state.deliveryPlans?.find(p => p.id === id);
 

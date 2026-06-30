@@ -8,7 +8,7 @@ import StatusBadge from '../components/StatusBadge';
 const CATEGORIES = ['底盘', '机械臂', '电机', '末端', '全身相机', '预控'];
 
 function ModuleTypeModal({ isOpen, onClose, onSave, initial }) {
-  const [form, setForm] = useState(initial || { name: '', category: '底盘', specs: '', urdf: '', active: true });
+  const [form, setForm] = useState(initial || { name: '', category: '底盘', specs: '', urdf: '', erpMaterialCode: '', active: true });
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -42,6 +42,14 @@ function ModuleTypeModal({ isOpen, onClose, onSave, initial }) {
           <label className="block text-sm font-medium text-gray-700 mb-1">URDF文件名</label>
           <input type="text" value={form.urdf} onChange={(e) => setForm({ ...form, urdf: e.target.value })}
             placeholder="e.g. module_v1.urdf"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            ERP物料编码 <span className="font-normal text-gray-400">（选填）</span>
+          </label>
+          <input type="text" value={form.erpMaterialCode || ''} onChange={(e) => setForm({ ...form, erpMaterialCode: e.target.value })}
+            placeholder="如 MAT-2026-XXX"
             className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" />
         </div>
         <div className="flex justify-end gap-2 pt-2">

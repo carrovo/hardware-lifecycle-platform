@@ -4,20 +4,37 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
 
-const FLOW_STAGES = ['来料检验', '整机装配', '功能测试', '老化测试', '终测', '待分配'];
+const FLOW_STAGES = ['整机装配', '质量测试', '整机入库', '出厂检验', '现场安装调试', '客户验收', '在线运营'];
 
-const STATUS_STAGE_IDX = {
-  '整机装配': 1, '装配中': 1,
-  '功能测试中': 2,
-  '老化测试中': 3,
-  '终测中': 4,
-  '待分配项目': 5,
-  '已激活': 6,
-};
+function getStageProgress(status) {
+  switch (status) {
+    case '装配中': return { doneUpTo: 0, currentIdx: 0 };
+    case '半成品检验中':
+    case '初测中':
+    case '中测中':
+    case 'OQT终测中':
+    case '生产返修中':
+      return { doneUpTo: 1, currentIdx: 1 };
+    case '已入库':
+    case '待分配项目':
+      return { doneUpTo: 3, currentIdx: -1 };
+    case '已分配项目':
+    case '出厂检验中':
+      return { doneUpTo: 3, currentIdx: 3 };
+    case '现场安装调试中':
+      return { doneUpTo: 4, currentIdx: 4 };
+    case '客户验收中':
+      return { doneUpTo: 5, currentIdx: 5 };
+    case '在线运营':
+      return { doneUpTo: 7, currentIdx: -1 };
+    default:
+      return { doneUpTo: 0, currentIdx: -1 };
+  }
+}
 
 function StageStepper({ status }) {
-  const currentIdx = STATUS_STAGE_IDX[status] ?? -1;
-  const isRepair = status === '返修中';
+  const { doneUpTo, currentIdx } = getStageProgress(status);
+  const isRepair = status === '生产返修中';
 
   return (
     <div className="bg-white rounded shadow-sm p-5">
@@ -26,28 +43,28 @@ function StageStepper({ status }) {
           <span>⚠</span><span>当前设备处于返修状态，待修复后继续流转</span>
         </div>
       )}
-      <div className="flex items-start">
+      <div className="flex items-start overflow-x-auto">
         {FLOW_STAGES.map((stage, i) => {
-          const done = currentIdx > i;
+          const done = doneUpTo > i;
           const active = currentIdx === i;
           return (
             <div key={stage} className="flex items-start flex-1 last:flex-none">
-              <div className="flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+              <div className="flex flex-col items-center min-w-[64px]">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
                   done ? 'bg-green-500 text-white'
-                  : active ? (isRepair ? 'bg-red-500 text-white' : 'bg-blue-600 text-white')
-                  : 'bg-gray-100 text-gray-400 border border-gray-300'
+                  : active ? 'bg-blue-600 text-white ring-2 ring-blue-300'
+                  : 'border-2 border-gray-300 text-gray-400 bg-white'
                 }`}>
                   {done ? '✓' : i + 1}
                 </div>
                 <span className={`text-xs mt-1 text-center whitespace-nowrap ${
                   done ? 'text-green-700'
-                  : active ? (isRepair ? 'text-red-600 font-semibold' : 'text-blue-700 font-semibold')
+                  : active ? 'text-blue-700 font-semibold'
                   : 'text-gray-400'
                 }`}>{stage}</span>
               </div>
               {i < FLOW_STAGES.length - 1 && (
-                <div className={`flex-1 h-0.5 mt-4 mx-1 ${done ? 'bg-green-300' : 'bg-gray-200'}`} />
+                <div className={`flex-1 h-0.5 mt-4 mx-1 ${doneUpTo > i ? 'bg-green-300' : 'bg-gray-200'}`} />
               )}
             </div>
           );
@@ -370,6 +387,19 @@ export default function DeviceDetail() {
             </div>
           )}
         </div>
+        {device.labels && Object.keys(device.labels).length > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="text-xs text-gray-400 mb-2">设备标签</div>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(device.labels).map(([k, v]) => (
+                <span key={k} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 text-xs px-2.5 py-1 rounded-full">
+                  <span className="text-blue-500">{k}:</span>
+                  <span className="font-medium">{v}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Module list by slot */}
