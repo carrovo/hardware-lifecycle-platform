@@ -264,7 +264,7 @@ export default function Materials() {
   const { canDo } = useRole();
   const workflowProductionPlans = state.workflowProductionPlans || [];
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState('模块批次');
+  const [activeTab, setActiveTab] = useState('模块批次管理');
   const [showModal, setShowModal] = useState(false);
   const [filterCategory, setFilterCategory] = useState('全部');
   const [filterSupplier, setFilterSupplier] = useState('全部');
@@ -323,7 +323,7 @@ export default function Materials() {
     <div className="p-6">
       {/* Tabs + Button in one row */}
       <div className="flex items-center border-b border-gray-200 mb-4">
-        {['模块批次', '模块实例', '模块库存汇总'].map((tab) => (
+        {['模块批次管理', '模块实例追踪', '模块库存汇总'].map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab ? 'border-slate-700 text-slate-800' : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -331,7 +331,7 @@ export default function Materials() {
             {tab}
           </button>
         ))}
-        {activeTab === '模块批次' && canDo('add_material_batch') && (
+        {activeTab === '模块批次管理' && canDo('add_material_batch') && (
           <button onClick={() => setShowModal(true)}
             className="ml-auto mb-1 px-4 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
             + 新增来料批次
@@ -340,15 +340,22 @@ export default function Materials() {
       </div>
 
       {activeTab === '模块库存汇总' && (
-        <ModuleInventoryTab materials={state.materials} moduleTypes={state.moduleTypes} deviceTypes={state.deviceTypes} />
-      )}
-
-      {activeTab === '模块实例' && (
-        <ModuleInstanceTab materials={state.materials} devices={state.devices} moduleTypes={state.moduleTypes} />
-      )}
-
-      {activeTab === '模块批次' && (
         <>
+          <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">模块库存汇总：按模块类型汇总库存水位，用于判断生产齐套风险和模块库存不足风险。</div>
+          <ModuleInventoryTab materials={state.materials} moduleTypes={state.moduleTypes} deviceTypes={state.deviceTypes} />
+        </>
+      )}
+
+      {activeTab === '模块实例追踪' && (
+        <>
+          <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">模块实例追踪：追踪每个模块 SN 的使用状态（在库、锁定、已装配、维修中、已报废）。整机装配时需从模块实例中选择具体模块 SN 绑定到设备。</div>
+          <ModuleInstanceTab materials={state.materials} devices={state.devices} moduleTypes={state.moduleTypes} />
+        </>
+      )}
+
+      {activeTab === '模块批次管理' && (
+        <>
+          <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">模块批次管理：记录供应商到货批次、检验结果和可用数量，供生产计划来料准备节点关联使用。</div>
           {/* Summary */}
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
@@ -426,7 +433,7 @@ export default function Materials() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['', '批次号', '模块类型', '型号', '供应商', 'ERP采购单号', '到货数量', '合格/不合格', '检验结果', '可用数量', '关联生产计划', '操作'].map((h) => (
+                  {['', '批次号', '模块类型', '型号', '供应商', 'ERP采购单号', '到货数量', '合格数量', '不合格数量', '检验结果', '可用数量', '已锁定数量', '关联生产计划', '检验时间', '操作'].map((h) => (
                     <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -453,17 +460,14 @@ export default function Materials() {
                         <td className="px-3 py-2.5 font-mono text-xs text-gray-500">
                           {b.erpPurchaseOrderNo || <span className="text-gray-300">待录入</span>}
                         </td>
-                        <td className="px-3 py-2.5 text-gray-700 font-medium">{b.items.length} 件</td>
-                        <td className="px-3 py-2.5">
-                          <span className="flex items-center gap-2 text-xs">
-                            <span className="text-green-600 font-medium">✓ {passCount}</span>
-                            {failCount > 0 && <span className="text-red-600 font-medium">✗ {failCount}</span>}
-                          </span>
-                        </td>
+                        <td className="px-3 py-2.5 text-gray-700 font-medium">{b.items.length}</td>
+                        <td className="px-3 py-2.5 text-green-600 font-medium">{passCount}</td>
+                        <td className="px-3 py-2.5">{failCount > 0 ? <span className="text-red-600 font-medium">{failCount}</span> : <span className="text-gray-400">0</span>}</td>
                         <td className="px-3 py-2.5">
                           <Badge map={RESULT_BADGE} value={failCount > 0 && passCount > 0 ? '部分合格' : failCount > 0 ? '不合格' : passCount > 0 ? '合格' : '待检验'} />
                         </td>
                         <td className="px-3 py-2.5 text-gray-700">{b.items.filter((it) => it.status === '待装配').length}</td>
+                        <td className="px-3 py-2.5 text-gray-500">{b.items.filter((it) => it.status === '已占用').length}</td>
                         <td className="px-3 py-2.5 text-xs">
                           {(() => {
                             const plan = workflowProductionPlans.find(p => p.id === b.planId || (p.materialBatchIds || []).includes(b.id));
@@ -474,14 +478,15 @@ export default function Materials() {
                             ) : <span className="text-gray-300">—</span>;
                           })()}
                         </td>
+                        <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{b.inspectionTime}</td>
                         <td className="px-3 py-2.5 text-xs whitespace-nowrap" onClick={e => e.stopPropagation()}>
                           <span className="text-slate-600 hover:underline mr-2 cursor-pointer">录入检验结果</span>
-                          <span className="text-indigo-600 hover:underline cursor-pointer">锁定到生产计划</span>
+                          <span className="text-indigo-600 hover:underline cursor-pointer">锁定</span>
                         </td>
                       </tr>
                       {isExpanded && (
                         <tr key={`${b.id}-expand`}>
-                          <td colSpan={12} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
+                          <td colSpan={15} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
                             <div className="px-10 py-3">
                               <table className="w-full text-xs">
                                 <thead>
@@ -529,7 +534,7 @@ export default function Materials() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无来料批次</td></tr>
+                  <tr><td colSpan={15} className="px-4 py-8 text-center text-gray-400">暂无来料批次</td></tr>
                 )}
               </tbody>
             </table>

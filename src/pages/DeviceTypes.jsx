@@ -281,70 +281,97 @@ export default function DeviceTypes() {
                       <tr key={`${dt.id}-expand`}>
                         <td colSpan={6} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
                           <div className="px-12 py-4">
-                            <div className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">装配模板（BOM）</div>
+                            <div className="text-[11px] text-gray-400 mb-4">设备类型定义装配 BOM、质量测试流程与标签模板。生产计划绑定设备类型后，整机装配节点按装配 BOM 绑定模块 SN。</div>
+
+                            {/* 基础信息 */}
+                            <div className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">基础信息</div>
+                            <div className="grid grid-cols-4 gap-4 text-sm bg-white border border-gray-200 rounded p-4">
+                              <div><span className="text-gray-400 text-xs">设备类型ID：</span><span className="font-mono text-gray-700">{dt.id}</span></div>
+                              <div><span className="text-gray-400 text-xs">设备类型名称：</span><span className="text-gray-800">{dt.name}</span></div>
+                              <div><span className="text-gray-400 text-xs">配置版本：</span><span className="text-gray-700">{dt.version || 'V1'}</span></div>
+                              <div><span className="text-gray-400 text-xs">URDF文件：</span><span className="font-mono text-gray-600 text-xs">{dt.urdf || '—'}</span></div>
+                            </div>
+
+                            {/* 装配 BOM 模板 */}
+                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-3 uppercase tracking-wide">装配 BOM 模板</div>
                             {slots.length > 0 ? (
                               <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
                                 <thead className="bg-gray-100">
                                   <tr>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">槽位名称</th>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">需要模块类型</th>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">类别</th>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">数量</th>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">是否必填</th>
+                                    {['装配位置', '需要模块类型', '数量', '是否必填', '是否允许替代模块', '备注'].map((h) => (
+                                      <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
+                                    ))}
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                   {slots.map((slot, i) => (
                                     <tr key={i} className="bg-white">
                                       <td className="px-3 py-2 text-gray-800 font-medium">{slot.slotName}</td>
-                                      <td className="px-3 py-2 text-gray-700">{getModuleName(slot.moduleTypeId)}</td>
-                                      <td className="px-3 py-2">
-                                        <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{getModuleCategory(slot.moduleTypeId)}</span>
-                                      </td>
+                                      <td className="px-3 py-2 text-gray-700">{getModuleName(slot.moduleTypeId)}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{getModuleCategory(slot.moduleTypeId)}</span></td>
                                       <td className="px-3 py-2 font-bold text-slate-700">×{slot.quantity}</td>
                                       <td className="px-3 py-2 text-xs text-gray-600">是</td>
+                                      <td className="px-3 py-2 text-xs text-gray-600">{['机械臂', '电机'].includes(getModuleCategory(slot.moduleTypeId)) ? '允许（同类型）' : '否'}</td>
+                                      <td className="px-3 py-2 text-xs text-gray-400">—</td>
                                     </tr>
                                   ))}
                                 </tbody>
                               </table>
                             ) : (
-                              <div className="text-sm text-gray-400">暂无装配模板</div>
+                              <div className="text-sm text-gray-400">暂无装配 BOM 模板</div>
                             )}
 
-                            {/* 测试流程 */}
-                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-3 uppercase tracking-wide">适用测试流程</div>
-                            <div className="flex items-center gap-2">
-                              {['半成品检验', '初测', '中测', 'OQT终测'].map((s, i) => (
-                                <div key={s} className="flex items-center gap-2">
-                                  <span className="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-full text-xs px-3 py-1 text-gray-700">
-                                    <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-600 text-[10px] flex items-center justify-center">{i + 1}</span>{s}
-                                  </span>
-                                  {i < 3 && <span className="text-gray-300">→</span>}
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* 标签模板 */}
-                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-3 uppercase tracking-wide">标签模板</div>
+                            {/* 质量测试流程模板 */}
+                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-3 uppercase tracking-wide">质量测试流程模板</div>
                             <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
                               <thead className="bg-gray-100">
                                 <tr>
-                                  {['标签名称', '是否必填', '示例值', '是否写入设备详情'].map((h) => (
+                                  {['顺序', '工站名称', '是否必测', 'Pass 后流向', 'NG 后处理方式'].map((h) => (
                                     <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
                                   ))}
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100">
                                 {[
-                                  { name: '批次标签', required: '是', sample: '首批', write: '是' },
-                                  { name: '客户标签', required: '否', sample: '智魔方', write: '是' },
-                                  { name: '版本标签', required: '否', sample: 'V2', write: '是' },
+                                  { seq: 1, name: '半成品检验', must: '是', pass: '进入初测', ng: '生成生产返修' },
+                                  { seq: 2, name: '初测', must: '是', pass: '进入中测', ng: '生成生产返修' },
+                                  { seq: 3, name: '中测', must: '是', pass: '进入OQT终测', ng: '生成生产返修' },
+                                  { seq: 4, name: 'OQT终测', must: '是', pass: '进入整机入库', ng: '生成生产返修' },
+                                ].map((st) => (
+                                  <tr key={st.seq} className="bg-white">
+                                    <td className="px-3 py-2 text-gray-700">{st.seq}</td>
+                                    <td className="px-3 py-2 text-gray-800 font-medium">{st.name}</td>
+                                    <td className="px-3 py-2 text-xs text-gray-600">{st.must}</td>
+                                    <td className="px-3 py-2 text-xs text-green-700">{st.pass}</td>
+                                    <td className="px-3 py-2 text-xs text-red-600">{st.ng}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+
+                            {/* 设备标签模板 */}
+                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-3 uppercase tracking-wide">设备标签模板</div>
+                            <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
+                              <thead className="bg-gray-100">
+                                <tr>
+                                  {['标签名称', '标签用途', '填写节点', '字段类型', '是否必填', '是否写入设备详情', '示例值'].map((h) => (
+                                    <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {[
+                                  { name: '批次标签', use: '生产追溯', node: '整机装配', type: '单选', required: '是', write: '是', sample: '首批' },
+                                  { name: '客户标签', use: '客户归属', node: '交付绑定', type: '文本', required: '否', write: '是', sample: '智魔方' },
+                                  { name: '版本标签', use: '版本管理', node: '整机入库', type: '单选', required: '否', write: '是', sample: 'V2' },
                                 ].map((lab) => (
                                   <tr key={lab.name} className="bg-white">
                                     <td className="px-3 py-2 text-gray-800 font-medium">{lab.name}</td>
+                                    <td className="px-3 py-2 text-xs text-gray-600">{lab.use}</td>
+                                    <td className="px-3 py-2 text-xs text-gray-600">{lab.node}</td>
+                                    <td className="px-3 py-2 text-xs text-gray-600">{lab.type}</td>
                                     <td className="px-3 py-2 text-xs text-gray-600">{lab.required}</td>
-                                    <td className="px-3 py-2 text-xs text-gray-500">{lab.sample}</td>
                                     <td className="px-3 py-2 text-xs text-gray-600">{lab.write}</td>
+                                    <td className="px-3 py-2 text-xs text-gray-500">{lab.sample}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -356,7 +383,7 @@ export default function DeviceTypes() {
                               return (
                                 <div className="mt-5">
                                   <div className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">
-                                    已装配整机（{assembled.length}）
+                                    已关联设备（{assembled.length}）
                                   </div>
                                   {assembled.length > 0 ? (
                                     <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">

@@ -72,13 +72,18 @@ const DELIVERY_ACTION_FIELDS = {
   调整点位: ['设备SN', '原预分配点位', '新预分配点位', '调整原因'],
   解绑设备: ['设备SN', '当前状态', '解绑原因', '二次确认'],
 };
+const DELIVERY_ACTION_TEXT = {
+  确认绑定完成: '已确认绑定完成，设备状态将更新为待出厂检验，交付计划进入出厂检验节点。',
+  暂存绑定结果: '已暂存当前绑定结果。仍有设备未绑定，需绑定完成后才能推进到出厂检验。',
+};
 
 function ActionPlaceholderModal({ isOpen, onClose, title }) {
   const fields = DELIVERY_ACTION_FIELDS[title];
+  const customText = DELIVERY_ACTION_TEXT[title];
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title || '交付动作'} size="lg">
       <div className="space-y-4">
-        <p className="text-sm text-gray-600">已保留「{title || '交付动作'}」动作入口，后续可接入真实审批、工单和状态流转。</p>
+        <p className="text-sm text-gray-600">{customText || `已保留「${title || '交付动作'}」动作入口，后续可接入真实审批、工单和状态流转。`}</p>
         {fields && (
           <div className="grid grid-cols-2 gap-3">
             {fields.map((f) => (
@@ -184,18 +189,31 @@ function getBoundDeviceIds(plan) {
   return [...new Set([...explicit, ...bindingRecords, ...stageRecords].filter(Boolean))];
 }
 
-function BindingNode({ plan, boundDevices, eligibleDevices, locations, deviceTypes, openSelector, confirmBinding, openAction }) {
+function BindingNode({ plan, boundDevices, eligibleDevices, locations, deviceTypes, openSelector, confirmBinding, onStash, openAction }) {
+  const target = plan.targetCount || 0;
+  const remaining = Math.max(target - boundDevices.length, 0);
+  const isFull = target > 0 && remaining === 0;
   return (
     <div className="space-y-5">
       <MetricCards items={[
-        { label: '计划交付', value: plan.targetCount || 0, color: 'border-slate-500' },
+        { label: '计划交付', value: target, color: 'border-slate-500' },
         { label: '已绑定', value: boundDevices.length, color: 'border-blue-500' },
-        { label: '未绑定', value: Math.max((plan.targetCount || 0) - boundDevices.length, 0), color: 'border-amber-500' },
+        { label: '未绑定', value: remaining, color: 'border-amber-500' },
         { label: '可选设备', value: eligibleDevices.length, color: 'border-emerald-500' },
         { label: '点位数', value: locations.length, color: 'border-indigo-500' },
       ]} />
-      <Section title="绑定概览" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={openSelector}>选择可交付设备</button><button className={BTN_PRIMARY} onClick={confirmBinding}>确认绑定完成</button></div>}>
+      <Section title="绑定概览" action={
+        <div className="flex gap-2">
+          <button className={BTN_GHOST} onClick={openSelector}>选择可交付设备</button>
+          {isFull
+            ? <button className={BTN_PRIMARY} onClick={confirmBinding}>确认绑定完成</button>
+            : <button className={BTN_GHOST} onClick={onStash}>暂存绑定结果</button>}
+        </div>
+      }>
         <div className="text-sm text-gray-600">只有属于当前项目、已入库/待分配项目、未被其他未完成交付计划绑定、未作废冻结的设备可选。预分配点位是计划安装位置，现场安装调试时需要再次确认现场实际点位。</div>
+        {isFull
+          ? <div className="mt-2 text-xs bg-emerald-50 border border-emerald-100 text-emerald-700 rounded px-3 py-2">已绑定设备数已达计划交付数量。确认后将锁定本交付计划的设备 SN，并将当前节点推进至出厂检验。</div>
+          : <div className="mt-2 text-xs bg-amber-50 border border-amber-100 text-amber-700 rounded px-3 py-2">当前仍有 {remaining} 台设备未绑定，需绑定完成后才能进入出厂检验。</div>}
       </Section>
       <Section title="已绑定设备列表">
         <table className="w-full text-sm">
@@ -479,7 +497,8 @@ export default function DeliveryPlanDetail() {
           locations={projectLocations}
           deviceTypes={state.deviceTypes}
           openSelector={() => setModal('selectDevices')}
-          confirmBinding={() => advance('出厂检验', '交付中')}
+          confirmBinding={() => { setActionName('确认绑定完成'); advance('出厂检验', '交付中'); }}
+          onStash={() => setActionName('暂存绑定结果')}
           openAction={(name) => setActionName(name)}
         />
       )}

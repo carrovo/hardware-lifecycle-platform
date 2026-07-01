@@ -49,26 +49,28 @@ function UsersRolesPage() {
 
 /* ─────── 标签配置 ─────── */
 const LABEL_ROWS = [
-  { name: '批次标签', types: 'AlphaBot 1 / AlphaBot 2', node: '整机装配', required: '是', write: '是', sample: '首批' },
-  { name: '客户标签', types: '全部', node: '交付绑定', required: '否', write: '是', sample: '智魔方' },
-  { name: '版本标签', types: 'AlphaBot 2', node: '整机入库', required: '否', write: '是', sample: 'V2' },
-  { name: '点位标签', types: '全部', node: '现场安装调试', required: '否', write: '是', sample: 'T3-A区' },
+  { name: '批次标签', use: '生产追溯', types: 'AlphaBot 1 / AlphaBot 2', node: '整机装配', type: '单选', required: '是', write: '是', sample: '首批' },
+  { name: '客户标签', use: '客户归属', types: '全部', node: '交付绑定', type: '文本', required: '否', write: '是', sample: '智魔方' },
+  { name: '版本标签', use: '版本管理', types: 'AlphaBot 2', node: '整机入库', type: '单选', required: '否', write: '是', sample: 'V2' },
+  { name: '点位标签', use: '点位管理', types: '全部', node: '现场安装调试', type: '文本', required: '否', write: '是', sample: 'T3-A区' },
 ];
 function LabelConfig() {
   return (
     <div className="p-6 space-y-4">
-      <p className="text-sm text-gray-500">标签配置用于定义设备实例标签模板。装配或交付过程中填写的标签，会写入设备详情并用于筛选和追溯。</p>
+      <p className="text-sm text-gray-500">标签配置用于定义设备实例标签模板。装配、入库或交付过程中填写的标签会写入设备详情，并用于筛选、追溯和质量分析。</p>
       <div className="bg-white rounded shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
-            <tr>{['标签名称', '适用设备类型', '填写节点', '是否必填', '是否写入设备详情', '示例值', '启用状态', '操作'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr>
+            <tr>{['标签名称', '标签用途', '适用设备类型', '填写节点', '字段类型', '是否必填', '是否写入设备详情', '示例值', '启用状态', '操作'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {LABEL_ROWS.map(l => (
               <tr key={l.name} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-medium text-gray-800">{l.name}</td>
+                <td className="px-4 py-2.5 font-medium text-gray-800 whitespace-nowrap">{l.name}</td>
+                <td className="px-4 py-2.5"><span className="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full">{l.use}</span></td>
                 <td className="px-4 py-2.5 text-gray-600 text-xs">{l.types}</td>
                 <td className="px-4 py-2.5"><span className="text-xs bg-cyan-50 text-cyan-700 border border-cyan-200 px-2 py-0.5 rounded-full">{l.node}</span></td>
+                <td className="px-4 py-2.5 text-xs text-gray-600">{l.type}</td>
                 <td className="px-4 py-2.5 text-xs text-gray-600">{l.required}</td>
                 <td className="px-4 py-2.5 text-xs text-gray-600">{l.write}</td>
                 <td className="px-4 py-2.5 text-xs text-gray-500">{l.sample}</td>
