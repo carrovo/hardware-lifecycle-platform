@@ -153,9 +153,9 @@ export const materials = [
 
 export const devices = [
   { id: 'DEV-001', sn: 'SN-DEV-001', deviceTypeId: 'DT-001', status: '装配中', assembler: '张三', assemblyTime: '2026-06-18 10:00', photoName: 'assembly_dev001.jpg', usedMaterials: [], productionPlanId: 'WPP-002', createdAt: '2026-06-18 10:00', updatedAt: '2026-06-18 10:00' },
-  { id: 'DEV-002', sn: 'SN-DEV-002', deviceTypeId: 'DT-001', status: '功能测试中', assembler: '李四', assemblyTime: '2026-06-16 14:00', photoName: 'assembly_dev002.jpg', usedMaterials: [{ materialId: 'MAT-001', moduleTypeId: 'MT-001' }, { materialId: 'MAT-003', moduleTypeId: 'MT-002' }], productionPlanId: 'WPP-002', createdAt: '2026-06-16 14:00', updatedAt: '2026-06-17 09:00' },
-  { id: 'DEV-003', sn: 'SN-DEV-003', deviceTypeId: 'DT-001', status: '老化测试中', assembler: '王五', assemblyTime: '2026-06-14 09:00', photoName: 'assembly_dev003.jpg', usedMaterials: [{ materialId: 'MAT-006', moduleTypeId: 'MT-003' }, { materialId: 'MAT-009', moduleTypeId: 'MT-004' }], productionPlanId: 'WPP-002', createdAt: '2026-06-14 09:00', updatedAt: '2026-06-16 15:00' },
-  { id: 'DEV-004', sn: 'SN-DEV-004', deviceTypeId: 'DT-002', status: '终测中', assembler: '赵六', assemblyTime: '2026-06-10 08:00', photoName: 'assembly_dev004.jpg', usedMaterials: [{ materialId: 'MAT-013', moduleTypeId: 'MT-006' }], productionPlanId: 'WPP-005', createdAt: '2026-06-10 08:00', updatedAt: '2026-06-17 08:00' },
+  { id: 'DEV-002', sn: 'SN-DEV-002', deviceTypeId: 'DT-001', status: '初测中', assembler: '李四', assemblyTime: '2026-06-16 14:00', photoName: 'assembly_dev002.jpg', usedMaterials: [{ materialId: 'MAT-001', moduleTypeId: 'MT-001' }, { materialId: 'MAT-003', moduleTypeId: 'MT-002' }], productionPlanId: 'WPP-002', createdAt: '2026-06-16 14:00', updatedAt: '2026-06-17 09:00' },
+  { id: 'DEV-003', sn: 'SN-DEV-003', deviceTypeId: 'DT-001', status: '中测中', assembler: '王五', assemblyTime: '2026-06-14 09:00', photoName: 'assembly_dev003.jpg', usedMaterials: [{ materialId: 'MAT-006', moduleTypeId: 'MT-003' }, { materialId: 'MAT-009', moduleTypeId: 'MT-004' }], productionPlanId: 'WPP-002', createdAt: '2026-06-14 09:00', updatedAt: '2026-06-16 15:00' },
+  { id: 'DEV-004', sn: 'SN-DEV-004', deviceTypeId: 'DT-002', status: 'OQT终测中', assembler: '赵六', assemblyTime: '2026-06-10 08:00', photoName: 'assembly_dev004.jpg', usedMaterials: [{ materialId: 'MAT-013', moduleTypeId: 'MT-006' }], productionPlanId: 'WPP-005', createdAt: '2026-06-10 08:00', updatedAt: '2026-06-17 08:00' },
   { id: 'DEV-005', sn: 'SN-DEV-005', deviceTypeId: 'DT-002', status: '待分配项目', assembler: '张三', assemblyTime: '2026-06-01 10:00', photoName: 'assembly_dev005.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-019', moduleTypeId: 'MT-002' }, { materialId: 'MAT-020', moduleTypeId: 'MT-002' }, { materialId: 'MAT-006', moduleTypeId: 'MT-003' }, { materialId: 'MAT-016', moduleTypeId: 'MT-003' }, { materialId: 'MAT-017', moduleTypeId: 'MT-003' }, { materialId: 'MAT-009', moduleTypeId: 'MT-004' }, { materialId: 'MAT-013', moduleTypeId: 'MT-006' }], productionPlanId: 'WPP-005', createdAt: '2026-06-01 10:00', updatedAt: '2026-06-08 16:00' },
   { id: 'DEV-006', sn: 'SN-DEV-006', deviceTypeId: 'DT-001', status: '待分配项目', assembler: '李四', assemblyTime: '2026-05-28 09:00', photoName: 'assembly_dev006.jpg', usedMaterials: [{ materialId: 'MAT-001', moduleTypeId: 'MT-001' }, { materialId: 'MAT-003', moduleTypeId: 'MT-002' }, { materialId: 'MAT-018', moduleTypeId: 'MT-001' }, { materialId: 'MAT-011', moduleTypeId: 'MT-005' }], productionPlanId: 'WPP-007', createdAt: '2026-05-28 09:00', updatedAt: '2026-06-05 10:00' },
   { id: 'DEV-007', sn: 'SN-DEV-007', deviceTypeId: 'DT-001', status: '已分配项目', assembler: '王五', assemblyTime: '2026-05-20 10:00', photoName: 'assembly_dev007.jpg', usedMaterials: [{ materialId: 'MAT-002', moduleTypeId: 'MT-001' }, { materialId: 'MAT-004', moduleTypeId: 'MT-002' }], projectId: 'PROJ-001', productionPlanId: 'WPP-001', erpStorageOrderNo: 'WR-2026-088', createdAt: '2026-05-20 10:00', updatedAt: '2026-06-10 09:00' },
@@ -174,7 +174,7 @@ export const devices = [
   // 生产返修中 (WPP-007)
   { id: 'DEV-020', sn: 'SN-DEV-020', deviceTypeId: 'DT-001', status: '生产返修中', assembler: '李四', assemblyTime: '2026-06-13 09:00', photoName: 'assembly_dev020.jpg', usedMaterials: [{ materialId: 'MAT-010', moduleTypeId: 'MT-004' }], productionPlanId: 'WPP-007', createdAt: '2026-06-13 09:00', updatedAt: '2026-06-16 14:00' },
   // 终测中 (WPP-007)
-  { id: 'DEV-021', sn: 'SN-DEV-021', deviceTypeId: 'DT-002', status: '终测中', assembler: '王五', assemblyTime: '2026-06-09 08:30', photoName: 'assembly_dev021.jpg', usedMaterials: [{ materialId: 'MAT-014', moduleTypeId: 'MT-006' }], productionPlanId: 'WPP-007', createdAt: '2026-06-09 08:30', updatedAt: '2026-06-17 11:00' },
+  { id: 'DEV-021', sn: 'SN-DEV-021', deviceTypeId: 'DT-002', status: 'OQT终测中', assembler: '王五', assemblyTime: '2026-06-09 08:30', photoName: 'assembly_dev021.jpg', usedMaterials: [{ materialId: 'MAT-014', moduleTypeId: 'MT-006' }], productionPlanId: 'WPP-007', createdAt: '2026-06-09 08:30', updatedAt: '2026-06-17 11:00' },
   // 待分配项目 (WPP-006 completed devices)
   { id: 'DEV-022', sn: 'SN-DEV-022', deviceTypeId: 'DT-001', status: '待分配项目', assembler: '赵六', assemblyTime: '2026-06-02 10:00', photoName: 'assembly_dev022.jpg', usedMaterials: [{ materialId: 'MAT-018', moduleTypeId: 'MT-001' }, { materialId: 'MAT-019', moduleTypeId: 'MT-002' }, { materialId: 'MAT-016', moduleTypeId: 'MT-003' }], productionPlanId: 'WPP-006', createdAt: '2026-06-02 10:00', updatedAt: '2026-06-09 16:00' },
   // Additional completed devices for WPP-001 / WPP-006
@@ -295,14 +295,14 @@ export const workflowProductionPlans = [
   },
   {
     id: 'WPP-002', name: '智魔方Q2补单生产', projectId: 'PROJ-001',
-    targetCount: 3, status: '进行中', endDate: '2026-07-15',
+    targetCount: 3, status: '生产中', endDate: '2026-07-15',
     createdAt: '2026-06-10 10:00', erpProductionOrderNo: 'MO-2026-031',
     materialBatchIds: ['BATCH-009', 'BATCH-010'],
     notes: '',
   },
   {
     id: 'WPP-003', name: '智魔方B厂房备货', projectId: 'PROJ-001',
-    targetCount: 2, status: '待开始', endDate: '2026-08-01',
+    targetCount: 2, status: '未开始', endDate: '2026-08-01',
     createdAt: '2026-06-20 14:00', erpProductionOrderNo: '',
     materialBatchIds: [],
     notes: 'B厂房扩产备货',
@@ -316,7 +316,7 @@ export const workflowProductionPlans = [
   },
   {
     id: 'WPP-005', name: '华熙生物扩产订单', projectId: 'PROJ-002',
-    targetCount: 4, status: '进行中', endDate: '2026-07-31',
+    targetCount: 4, status: '生产中', endDate: '2026-07-31',
     createdAt: '2026-06-15 09:00', erpProductionOrderNo: 'MO-2026-038',
     materialBatchIds: ['BATCH-016', 'BATCH-017'],
     notes: '二期扩产',
@@ -330,7 +330,7 @@ export const workflowProductionPlans = [
   },
   {
     id: 'WPP-007', name: '机场追加订单', projectId: 'PROJ-003',
-    targetCount: 3, status: '进行中', endDate: '2026-07-20',
+    targetCount: 3, status: '生产中', endDate: '2026-07-20',
     createdAt: '2026-06-18 14:00', erpProductionOrderNo: 'MO-2026-042',
     materialBatchIds: ['BATCH-019', 'BATCH-020'],
     notes: '追加T3航站楼部署',
@@ -733,53 +733,149 @@ export const deliveryWorkOrders = [
 
 export const deliveryPlans = [
   {
-    id: 'DP-001', name: '智魔方Q2交付计划', projectId: 'PROJ-001',
-    targetCount: 5, dueDate: '2026-07-31', status: '进行中',
+    // 交付中：已绑定、部分节点推进、尚未全部验收
+    id: 'DP-001', name: '智魔方Q2交付计划', batchNo: 'DB-2026-001', projectId: 'PROJ-001',
+    targetCount: 5, status: '交付中', owner: '张三', currentNode: '客户验收',
+    factoryDate: '2026-06-10', siteInstallDate: '2026-06-14', acceptanceDate: '2026-07-31', dueDate: '2026-07-31',
+    erpOutboundNo: 'SO-2026-018', erpAcceptanceNo: 'AC-2026-018',
+    boundDeviceIds: ['DEV-010', 'DEV-011', 'DEV-013'],
     records: {
+      binding: [
+        { id: 'BIND-010', deviceId: 'DEV-010', preAssignedLocationId: 'LOC-001', operator: '张三', time: '2026-06-07 09:00' },
+        { id: 'BIND-011', deviceId: 'DEV-011', preAssignedLocationId: 'LOC-002', operator: '张三', time: '2026-06-07 09:10' },
+        { id: 'BIND-013', deviceId: 'DEV-013', preAssignedLocationId: 'LOC-001', operator: '张三', time: '2026-06-07 09:20' },
+      ],
       factoryInspection: [
-        { id: 'FI-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', inspector: '赵六', time: '2026-06-08 10:00', result: '通过', reportFile: 'fi_DEV010.pdf', reportLink: '' },
-        { id: 'FI-002', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', inspector: '赵六', time: '2026-06-08 11:00', result: '通过', reportFile: '', reportLink: 'http://report.example.com/fi002' },
-        { id: 'FI-003', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', inspector: '张三', time: '2026-06-09 09:00', result: '通过', reportFile: 'fi_DEV013.pdf', reportLink: '' },
+        { id: 'FI-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', operator: '赵六', time: '2026-06-08 10:00', result: 'Pass', reportFile: 'fi_DEV010.pdf', reportLink: '' },
+        { id: 'FI-002', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', operator: '赵六', time: '2026-06-08 11:00', result: 'Pass', reportFile: '', reportLink: 'http://report.example.com/fi002' },
+        { id: 'FI-003', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', operator: '张三', time: '2026-06-09 09:00', result: 'Pass', reportFile: 'fi_DEV013.pdf', reportLink: '' },
       ],
       siteInstall: [
-        { id: 'SI-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', technician: '赵六', address: '北京市朝阳区科技园A座', time: '2026-06-12 14:00', result: '通过', notes: '' },
-        { id: 'SI-002', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', technician: '赵六', address: '北京市朝阳区科技园B座', time: '2026-06-13 10:00', result: '通过', notes: '' },
+        { id: 'SI-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', operator: '赵六', locationId: 'LOC-001', time: '2026-06-12 14:00', result: 'Pass', notes: '' },
+        { id: 'SI-002', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', operator: '赵六', locationId: 'LOC-002', time: '2026-06-13 10:00', result: 'Pass', notes: '' },
       ],
       customerAccept: [
-        { id: 'CA-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', acceptor: '蔡八', time: '2026-06-15 15:00', result: '通过', erpOutboundNo: 'SO-2026-018', voucherDesc: '验收单照片.jpg' },
+        { id: 'CA-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', operator: '蔡八', locationId: 'LOC-001', time: '2026-06-15 15:00', result: 'Pass', erpOutboundNo: 'SO-2026-018', voucherDesc: '验收单照片.jpg' },
       ],
     },
   },
   {
-    id: 'DP-002', name: '华熙生物交付计划', projectId: 'PROJ-002',
-    targetCount: 3, dueDate: '2026-08-15', status: '进行中',
+    // 交付中：出厂检验 / 现场安装调试进行中
+    id: 'DP-002', name: '华熙生物交付计划', batchNo: 'DB-2026-002', projectId: 'PROJ-002',
+    targetCount: 3, status: '交付中', owner: '李四', currentNode: '现场安装调试',
+    factoryDate: '2026-06-18', siteInstallDate: '2026-06-20', acceptanceDate: '2026-08-15', dueDate: '2026-08-15',
+    erpOutboundNo: '', erpAcceptanceNo: '',
+    boundDeviceIds: ['DEV-009', 'DEV-026'],
     records: {
+      binding: [
+        { id: 'BIND-009', deviceId: 'DEV-009', preAssignedLocationId: 'LOC-004', operator: '李四', time: '2026-06-17 09:00' },
+        { id: 'BIND-026', deviceId: 'DEV-026', preAssignedLocationId: 'LOC-003', operator: '李四', time: '2026-06-17 09:10' },
+      ],
       factoryInspection: [
-        { id: 'FI-004', deviceId: 'DEV-009', deviceSN: 'SN-DEV-009', inspector: '张三', time: '2026-06-18 10:00', result: '通过', reportFile: 'fi_DEV009.pdf', reportLink: '' },
-        { id: 'FI-005', deviceId: 'DEV-026', deviceSN: 'SN-DEV-026', inspector: '张三', time: '2026-06-18 11:00', result: '通过', reportFile: 'fi_DEV026.pdf', reportLink: '' },
+        { id: 'FI-004', deviceId: 'DEV-009', deviceSN: 'SN-DEV-009', operator: '张三', time: '2026-06-18 10:00', result: 'Pass', reportFile: 'fi_DEV009.pdf', reportLink: '' },
+        { id: 'FI-005', deviceId: 'DEV-026', deviceSN: 'SN-DEV-026', operator: '张三', time: '2026-06-18 11:00', result: 'Pass', reportFile: 'fi_DEV026.pdf', reportLink: '' },
       ],
       siteInstall: [
-        { id: 'SI-003', deviceId: 'DEV-009', deviceSN: 'SN-DEV-009', technician: '赵六', address: '北京市通州区华熙生物园区A楼', time: '2026-06-20 09:00', result: '通过', notes: '洁净环境安装顺利' },
+        { id: 'SI-003', deviceId: 'DEV-009', deviceSN: 'SN-DEV-009', operator: '赵六', locationId: 'LOC-004', time: '2026-06-20 09:00', result: 'Pass', notes: '洁净环境安装顺利' },
       ],
       customerAccept: [],
     },
   },
   {
-    id: 'DP-003', name: '机场T3航站楼交付计划', projectId: 'PROJ-003',
-    targetCount: 4, dueDate: '2026-08-30', status: '进行中',
+    // 交付中：含一台出厂检验 NG，已生成交付工单
+    id: 'DP-003', name: '机场T3航站楼交付计划', batchNo: 'DB-2026-003', projectId: 'PROJ-003',
+    targetCount: 4, status: '交付中', owner: '王五', currentNode: '出厂检验',
+    factoryDate: '2026-06-19', siteInstallDate: '2026-07-05', acceptanceDate: '2026-08-30', dueDate: '2026-08-30',
+    erpOutboundNo: '', erpAcceptanceNo: '',
+    boundDeviceIds: ['DEV-012', 'DEV-023', 'DEV-024'],
     records: {
+      binding: [
+        { id: 'BIND-012', deviceId: 'DEV-012', preAssignedLocationId: 'LOC-005', operator: '王五', time: '2026-06-09 09:00' },
+        { id: 'BIND-023', deviceId: 'DEV-023', preAssignedLocationId: 'LOC-005', operator: '王五', time: '2026-06-09 09:10' },
+        { id: 'BIND-024', deviceId: 'DEV-024', preAssignedLocationId: 'LOC-006', operator: '王五', time: '2026-06-09 09:20' },
+      ],
       factoryInspection: [
-        { id: 'FI-006', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', inspector: '王五', time: '2026-04-09 11:00', result: '通过', reportFile: 'fi_DEV012.pdf', reportLink: '' },
-        { id: 'FI-007', deviceId: 'DEV-023', deviceSN: 'SN-DEV-023', inspector: '王五', time: '2026-06-10 10:00', result: '通过', reportFile: 'fi_DEV023.pdf', reportLink: '' },
-        { id: 'FI-008', deviceId: 'DEV-024', deviceSN: 'SN-DEV-024', inspector: '张三', time: '2026-06-19 09:00', result: '不通过', reportFile: '', reportLink: '', notes: 'IP65防护不足，已生成工单DWO-006' },
+        { id: 'FI-006', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', operator: '王五', time: '2026-04-09 11:00', result: 'Pass', reportFile: 'fi_DEV012.pdf', reportLink: '' },
+        { id: 'FI-007', deviceId: 'DEV-023', deviceSN: 'SN-DEV-023', operator: '王五', time: '2026-06-10 10:00', result: 'Pass', reportFile: 'fi_DEV023.pdf', reportLink: '' },
+        { id: 'FI-008', deviceId: 'DEV-024', deviceSN: 'SN-DEV-024', operator: '张三', time: '2026-06-19 09:00', result: 'NG', reportFile: '', reportLink: '', notes: 'IP65防护不足，已生成工单DWO-006' },
       ],
       siteInstall: [
-        { id: 'SI-004', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', technician: '王五', address: '首都国际机场T1航站楼B区', time: '2026-04-11 10:00', result: '通过', notes: '巡检路线已配置' },
+        { id: 'SI-004', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', operator: '王五', locationId: 'LOC-005', time: '2026-04-11 10:00', result: 'Pass', notes: '巡检路线已配置' },
+      ],
+      customerAccept: [],
+    },
+  },
+  {
+    // 未开始 且 未绑定设备
+    id: 'DP-004', name: '华熙生物二期交付计划', batchNo: 'DB-2026-004', projectId: 'PROJ-002',
+    targetCount: 2, status: '未开始', owner: '李四', currentNode: '绑定设备',
+    factoryDate: '2026-08-01', siteInstallDate: '2026-08-10', acceptanceDate: '2026-08-25', dueDate: '2026-08-25',
+    erpOutboundNo: '', erpAcceptanceNo: '',
+    boundDeviceIds: [],
+    records: { binding: [], factoryInspection: [], siteInstall: [], customerAccept: [] },
+  },
+  {
+    // 未开始 但 已绑定设备
+    id: 'DP-005', name: '机场T2航站楼交付计划', batchNo: 'DB-2026-005', projectId: 'PROJ-003',
+    targetCount: 2, status: '未开始', owner: '王五', currentNode: '绑定设备',
+    factoryDate: '2026-07-20', siteInstallDate: '2026-07-28', acceptanceDate: '2026-08-10', dueDate: '2026-08-10',
+    erpOutboundNo: '', erpAcceptanceNo: '',
+    boundDeviceIds: ['DEV-023'],
+    records: {
+      binding: [
+        { id: 'BIND-053', deviceId: 'DEV-023', preAssignedLocationId: 'LOC-006', operator: '王五', time: '2026-06-28 10:00' },
+      ],
+      factoryInspection: [], siteInstall: [], customerAccept: [],
+    },
+  },
+  {
+    // 已延期：计划验收时间早于今天且未全部验收
+    id: 'DP-006', name: '智魔方Q1补交付计划', batchNo: 'DB-2026-006', projectId: 'PROJ-001',
+    targetCount: 3, status: '交付中', owner: '张三', currentNode: '现场安装调试',
+    factoryDate: '2026-06-01', siteInstallDate: '2026-06-08', acceptanceDate: '2026-06-20', dueDate: '2026-06-20',
+    erpOutboundNo: '', erpAcceptanceNo: '',
+    boundDeviceIds: ['DEV-025'],
+    records: {
+      binding: [
+        { id: 'BIND-025', deviceId: 'DEV-025', preAssignedLocationId: 'LOC-002', operator: '张三', time: '2026-05-30 09:00' },
+      ],
+      factoryInspection: [
+        { id: 'FI-009', deviceId: 'DEV-025', deviceSN: 'SN-DEV-025', operator: '赵六', time: '2026-06-02 10:00', result: 'Pass', reportFile: 'fi_DEV025.pdf', reportLink: '' },
+      ],
+      siteInstall: [],
+      customerAccept: [],
+    },
+  },
+  {
+    // 已验收：目标数量全部客户验收 Pass
+    id: 'DP-007', name: '杭州东站验收交付计划', batchNo: 'DB-2026-007', projectId: 'PROJ-006',
+    targetCount: 1, status: '已验收', owner: '李四', currentNode: '客户验收',
+    factoryDate: '2026-05-20', siteInstallDate: '2026-05-25', acceptanceDate: '2026-06-01', dueDate: '2026-06-01',
+    erpOutboundNo: 'SO-2026-032', erpAcceptanceNo: 'AC-2026-032',
+    boundDeviceIds: ['DEV-024'],
+    records: {
+      binding: [
+        { id: 'BIND-124', deviceId: 'DEV-024', preAssignedLocationId: 'LOC-006', operator: '李四', time: '2026-05-18 09:00' },
+      ],
+      factoryInspection: [
+        { id: 'FI-010', deviceId: 'DEV-024', deviceSN: 'SN-DEV-024', operator: '王五', time: '2026-05-20 10:00', result: 'Pass', reportFile: 'fi_hz024.pdf', reportLink: '' },
+      ],
+      siteInstall: [
+        { id: 'SI-005', deviceId: 'DEV-024', deviceSN: 'SN-DEV-024', operator: '赵六', locationId: 'LOC-006', time: '2026-05-25 10:00', result: 'Pass', notes: '' },
       ],
       customerAccept: [
-        { id: 'CA-002', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', acceptor: '运营负责人', time: '2026-04-15 14:00', result: '通过', erpOutboundNo: 'SO-2026-022', voucherDesc: '机场验收证明.pdf' },
+        { id: 'CA-003', deviceId: 'DEV-024', deviceSN: 'SN-DEV-024', operator: '现场验收负责人', locationId: 'LOC-006', time: '2026-06-01 15:00', result: 'Pass', erpOutboundNo: 'SO-2026-032', voucherDesc: '杭州东站验收单.pdf' },
       ],
     },
+  },
+  {
+    // 已作废
+    id: 'DP-008', name: '作废演示交付计划', batchNo: 'DB-2026-008', projectId: 'PROJ-001',
+    targetCount: 2, status: '已作废', voided: true, voidReason: '客户调整交付批次', owner: '张三', currentNode: '绑定设备',
+    factoryDate: '2026-06-01', siteInstallDate: '', acceptanceDate: '', dueDate: '2026-07-15',
+    erpOutboundNo: '', erpAcceptanceNo: '',
+    boundDeviceIds: [],
+    records: { binding: [], factoryInspection: [], siteInstall: [], customerAccept: [] },
   },
 ];
 

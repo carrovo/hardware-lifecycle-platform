@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
+import { productionPlanStatus, assemblyStatus, qualityStatus } from '../utils/status';
 
 const NODES = [
   { key: 'materialPrep', label: '来料准备' },
@@ -188,6 +189,11 @@ function TestResultModal({ isOpen, onClose, planDevices, state, dispatch }) {
 
 function MaterialPrepNode({ plan, state, openAction }) {
   const linkedBatches = (state.materialBatches || []).filter((batch) => plan.materialBatchIds?.includes(batch.id) || batch.planId === plan.id);
+  const kitStatus = (available, required) => {
+    if (available >= required) return '已齐套';
+    if (available > 0) return '部分齐套';
+    return '缺料';
+  };
   const requiredModules = ['底盘', '机械臂', '电机', '末端', '全身相机', '预控'].map((category) => {
     const available = state.materials.filter((item) => item.category === category && item.status === '待装配').length;
     return { category, required: Math.max(plan.targetCount || 1, 1), available };
@@ -199,12 +205,12 @@ function MaterialPrepNode({ plan, state, openAction }) {
       <MetricCards items={[
         { label: '齐套类别', value: `${readyCount}/${requiredModules.length}`, color: 'border-cyan-500' },
         { label: '关联批次', value: linkedBatches.length, color: 'border-blue-500' },
-        { label: 'ERP生产工单', value: plan.erpProductionOrderNo ? '已关联' : '未关联', color: plan.erpProductionOrderNo ? 'border-green-500' : 'border-amber-500' },
+        { label: 'ERP生产订单号', value: plan.erpProductionOrderNo ? '已关联' : '未关联', color: plan.erpProductionOrderNo ? 'border-green-500' : 'border-amber-500' },
         { label: '计划数量', value: plan.targetCount || 0, color: 'border-slate-500' },
       ]} />
       <Section title="ERP关联信息" action={<button className={BTN_GHOST} onClick={() => openAction('刷新库存')}>刷新库存</button>}>
         <div className="grid grid-cols-3 gap-4 text-sm">
-          <div><span className="text-gray-500">生产工单号：</span><span className="font-mono text-gray-700">{plan.erpProductionOrderNo || '—'}</span></div>
+          <div><span className="text-gray-500">ERP生产订单号：</span><span className="font-mono text-gray-700">{plan.erpProductionOrderNo || '—'}</span></div>
           <div><span className="text-gray-500">计划创建：</span><span className="text-gray-700">{plan.createdAt || '—'}</span></div>
           <div><span className="text-gray-500">计划完成：</span><span className="text-gray-700">{plan.endDate || '—'}</span></div>
         </div>
@@ -212,7 +218,7 @@ function MaterialPrepNode({ plan, state, openAction }) {
       <Section title="所需模块清单" action={<button className={BTN_GHOST} onClick={() => openAction('跳转来料管理')}>跳转来料管理</button>}>
         <table className="w-full text-sm">
           <thead className="bg-gray-50"><tr>{['模块类别', '需求数量', '可用库存', '齐套状态'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-gray-100">{requiredModules.map((item) => <tr key={item.category}><td className="px-3 py-2">{item.category}</td><td className="px-3 py-2">{item.required}</td><td className="px-3 py-2">{item.available}</td><td className="px-3 py-2"><StatusBadge status={item.available >= item.required ? '合格' : '待处理'} /></td></tr>)}</tbody>
+          <tbody className="divide-y divide-gray-100">{requiredModules.map((item) => <tr key={item.category}><td className="px-3 py-2">{item.category}</td><td className="px-3 py-2">{item.required}</td><td className="px-3 py-2">{item.available}</td><td className="px-3 py-2"><StatusBadge status={kitStatus(item.available, item.required)} /></td></tr>)}</tbody>
         </table>
       </Section>
       <Section title="关联来料批次" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={() => openAction('关联来料批次')}>关联来料批次</button><button className={BTN_PRIMARY} onClick={() => openAction('确认来料齐套')}>确认来料齐套</button></div>}>
@@ -228,37 +234,81 @@ function MaterialPrepNode({ plan, state, openAction }) {
   );
 }
 
+const labelFillStatus = (device) => {
+  const count = device.labels ? Object.keys(device.labels).length : 0;
+  if (count === 0) return '未填写';
+  if (count === 1) return '部分填写';
+  return '已填写';
+};
+
+const assemblyActions = (status) => {
+  switch (status) {
+    case '未开始': return [{ label: '开始装配', action: '开始装配', cls: 'text-emerald-600' }];
+    case '装配中': return [{ label: '继续装配', action: '继续装配', cls: 'text-blue-600' }];
+    case '待确认装配完成': return [{ label: '确认完成', action: '确认装配完成', cls: 'text-emerald-600' }];
+    case '装配异常': return [{ label: '查看异常', action: '查看装配异常', cls: 'text-red-600' }, { label: '继续装配', action: '继续装配', cls: 'text-blue-600' }];
+    case '已装配':
+    default: return [{ label: '查看记录', action: '查看装配记录', cls: 'text-slate-600' }];
+  }
+};
+
 function AssemblyNode({ planDevices, state, openAssembly, openAction }) {
+  const rows = planDevices.map((device) => ({ device, aStatus: assemblyStatus(device) }));
   return (
     <div className="space-y-5">
       <MetricCards items={[
-        { label: '装配设备', value: planDevices.length, color: 'border-blue-500' },
-        { label: '装配中', value: planDevices.filter((d) => ['装配中', '整机装配'].includes(d.status)).length, color: 'border-amber-500' },
-        { label: '已进入测试', value: planDevices.filter((d) => ['半成品检验中', '初测中', '中测中', 'OQT终测中', '待入库'].includes(d.status)).length, color: 'border-purple-500' },
-        { label: '标签已填', value: planDevices.filter((d) => d.labels && Object.keys(d.labels).length > 0).length, color: 'border-green-500' },
+        { label: '装配设备', value: rows.length, color: 'border-blue-500' },
+        { label: '装配中', value: rows.filter((r) => r.aStatus === '装配中').length, color: 'border-amber-500' },
+        { label: '已装配', value: rows.filter((r) => r.aStatus === '已装配').length, color: 'border-green-500' },
+        { label: '装配异常', value: rows.filter((r) => r.aStatus === '装配异常').length, color: 'border-red-500' },
       ]} />
       <Section title="装配设备列表" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={() => openAction('批量生成设备占位')}>批量生成设备占位</button><button className={BTN_PRIMARY} onClick={openAssembly}>新建设备装配</button></div>}>
         <table className="w-full text-sm">
-          <thead className="bg-gray-50"><tr>{['设备SN', '整机类型', '状态', '槽位绑定', '设备标签', '装配人', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
+          <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '装配状态', '模块绑定进度', '设备标签状态', '装配人', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-100">
-            {planDevices.map((device) => {
+            {rows.map(({ device, aStatus }) => {
               const type = state.deviceTypes.find((item) => item.id === device.deviceTypeId);
-              return <tr key={device.id}><td className="px-3 py-2 font-mono text-xs"><Link className="text-blue-600 hover:underline" to={`/devices/${device.id}`}>{device.sn}</Link></td><td className="px-3 py-2">{type?.name || device.deviceTypeId}</td><td className="px-3 py-2"><StatusBadge status={device.status} /></td><td className="px-3 py-2">{device.usedMaterials?.length || 0}/{type?.slots?.length || 0}</td><td className="px-3 py-2 text-xs text-gray-500">{device.labels ? Object.values(device.labels).join('、') : '—'}</td><td className="px-3 py-2">{device.assembler || '—'}</td><td className="px-3 py-2"><button className="text-xs text-slate-600 hover:underline" onClick={() => openAction('保存装配记录')}>保存装配记录</button></td></tr>;
+              return (
+                <tr key={device.id}>
+                  <td className="px-3 py-2 font-mono text-xs"><Link className="text-blue-600 hover:underline" to={`/devices/${device.id}`}>{device.sn}</Link></td>
+                  <td className="px-3 py-2">{type?.name || device.deviceTypeId}</td>
+                  <td className="px-3 py-2"><StatusBadge status={aStatus} /></td>
+                  <td className="px-3 py-2">{device.usedMaterials?.length || 0}/{type?.slots?.length || 0}</td>
+                  <td className="px-3 py-2"><StatusBadge status={labelFillStatus(device)} /></td>
+                  <td className="px-3 py-2">{device.assembler || '—'}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-2">
+                      {assemblyActions(aStatus).map((a) => (
+                        <button key={a.label} className={`text-xs hover:underline ${a.cls}`} onClick={() => openAction(a.action)}>{a.label}</button>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              );
             })}
-            {planDevices.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">暂无装配设备</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">暂无装配设备</td></tr>}
           </tbody>
         </table>
       </Section>
-      <Section title="设备装配详情 / 槽位绑定">
+      <Section title="设备装配详情 / 模块绑定">
         <div className="grid grid-cols-3 gap-3 text-sm text-gray-600">
-          <div className="bg-gray-50 rounded p-3">槽位绑定：展示各设备已绑定模块数量</div>
-          <div className="bg-gray-50 rounded p-3">设备标签：支持批次、客户、版本等标签</div>
-          <div className="bg-gray-50 rounded p-3">确认装配完成：后续接入节点推进规则</div>
+          <div className="bg-gray-50 rounded p-3">模块绑定：展示各设备已绑定模块 / 总槽位数量</div>
+          <div className="bg-gray-50 rounded p-3">设备标签：支持批次、客户、版本等标签，标签状态分未填写 / 部分填写 / 已填写</div>
+          <div className="bg-gray-50 rounded p-3">确认装配完成：全部装配完成后推进到质量测试</div>
         </div>
       </Section>
     </div>
   );
 }
+
+const testResultLabel = (record) => {
+  if (!record) return '待测试';
+  if (record.stationResult === 'Pass') return 'Pass';
+  if (record.stationResult === 'NG') return 'NG';
+  if (['合格', 'Pass', '通过'].includes(record.result)) return 'Pass';
+  if (['不合格', 'NG', '不通过'].includes(record.result)) return 'NG';
+  return '待测试';
+};
 
 function QualityNode({ planDevices, testRecords, workOrders, openTest, openAction }) {
   const stationStats = STATIONS.map((label) => {
@@ -281,13 +331,14 @@ function QualityNode({ planDevices, testRecords, workOrders, openTest, openActio
       </Section>
       <Section title="设备测试列表">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50"><tr>{['设备SN', '当前状态', '最新测试结果', 'NG返修单', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
+          <thead className="bg-gray-50"><tr>{['设备SN', '测试状态', '最新测试结果', 'NG返修单', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-100">
             {planDevices.map((device) => {
               const latest = testRecords.filter((record) => record.deviceId === device.id).sort((a, b) => (b.testTime || '').localeCompare(a.testTime || ''))[0];
               const wo = workOrders.find((item) => item.deviceId === device.id);
-              return <tr key={device.id}><td className="px-3 py-2 font-mono text-xs">{device.sn}</td><td className="px-3 py-2"><StatusBadge status={device.status} /></td><td className="px-3 py-2"><StatusBadge status={latest?.stationResult || latest?.result || '待测试'} /></td><td className="px-3 py-2">{wo ? <StatusBadge status={wo.status} /> : '—'}</td><td className="px-3 py-2"><button className="text-xs text-red-600 hover:underline" onClick={() => openAction('生成返修记录')}>生成返修记录</button></td></tr>;
+              return <tr key={device.id}><td className="px-3 py-2 font-mono text-xs">{device.sn}</td><td className="px-3 py-2"><StatusBadge status={qualityStatus(device, latest)} /></td><td className="px-3 py-2"><StatusBadge status={testResultLabel(latest)} /></td><td className="px-3 py-2">{wo ? <StatusBadge status={wo.status} /> : '—'}</td><td className="px-3 py-2"><button className="text-xs text-red-600 hover:underline" onClick={() => openAction('生成返修记录')}>生成返修记录</button></td></tr>;
             })}
+            {planDevices.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">暂无测试设备</td></tr>}
           </tbody>
         </table>
       </Section>
@@ -316,16 +367,19 @@ function WarehouseNode({ plan, planDevices, state, dispatch, openAction }) {
       ]} />
       <Section title="ERP关联信息" action={<button className={BTN_GHOST} onClick={() => openAction('查看入库记录')}>查看入库记录</button>}>
         <div className="grid grid-cols-3 gap-4 text-sm">
-          <div><span className="text-gray-500">ERP入库单：</span><span className="font-mono text-gray-700">{plan.erpInboundNo || 'IN-' + plan.id}</span></div>
+          <div><span className="text-gray-500">ERP生产订单号：</span><span className="font-mono text-gray-700">{plan.erpProductionOrderNo || '—'}</span></div>
+          <div><span className="text-gray-500">ERP产成品入库单号：</span><span className="font-mono text-gray-700">{plan.erpInboundNo || 'IN-' + plan.id}</span></div>
           <div><span className="text-gray-500">入库规则：</span><span className="text-gray-700">仅 OQT Pass 设备可入库</span></div>
-          <div><span className="text-gray-500">计划状态：</span><StatusBadge status={plan.status || '进行中'} /></div>
         </div>
       </Section>
       <Section title="待入库设备列表" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={() => pending.forEach(confirmWarehouse)}>批量确认入库</button><button className={BTN_PRIMARY} onClick={finishPlan}>推进生产计划完成</button></div>}>
         <table className="w-full text-sm">
           <thead className="bg-gray-50"><tr>{['设备SN', '当前状态', 'OQT结果', '入库资格', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-100">
-            {pending.map((device) => <tr key={device.id}><td className="px-3 py-2 font-mono text-xs">{device.sn}</td><td className="px-3 py-2"><StatusBadge status={device.status} /></td><td className="px-3 py-2"><StatusBadge status={oqtPassDeviceIds.has(device.id) ? 'Pass' : '待测试'} /></td><td className="px-3 py-2">{oqtPassDeviceIds.has(device.id) ? '可入库' : '需OQT Pass'}</td><td className="px-3 py-2"><button className="text-xs text-teal-600 hover:underline" disabled={!oqtPassDeviceIds.has(device.id)} onClick={() => confirmWarehouse(device)}>确认入库</button></td></tr>)}
+            {pending.map((device) => {
+              const canStore = oqtPassDeviceIds.has(device.id) || device.status === '待入库';
+              return <tr key={device.id}><td className="px-3 py-2 font-mono text-xs">{device.sn}</td><td className="px-3 py-2"><StatusBadge status={canStore ? '待入库' : '不可入库'} /></td><td className="px-3 py-2"><StatusBadge status={oqtPassDeviceIds.has(device.id) ? 'Pass' : '待测试'} /></td><td className="px-3 py-2">{canStore ? '可入库' : '需OQT Pass'}</td><td className="px-3 py-2"><button className="text-xs text-teal-600 hover:underline disabled:opacity-40" disabled={!canStore} onClick={() => confirmWarehouse(device)}>确认入库</button></td></tr>;
+            })}
             {pending.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">暂无待入库设备</td></tr>}
           </tbody>
         </table>
@@ -380,8 +434,8 @@ export default function ProductionPlanDetail() {
   };
   const handleAction = (name) => {
     if (name === '确认来料齐套') {
-      dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: plan.id, currentNode: '整机装配', materialReady: true, status: '进行中', updatedAt: nowText() } });
-      writeLog(name, '来料齐套确认完成，推进到整机装配', plan.status, '进行中');
+      dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: plan.id, currentNode: '整机装配', materialReady: true, status: '生产中', updatedAt: nowText() } });
+      writeLog(name, '来料齐套确认完成，推进到整机装配', productionPlanStatus(plan), '生产中');
       setActiveNode('assembly');
       return;
     }
@@ -415,7 +469,7 @@ export default function ProductionPlanDetail() {
           dispatch({ type: 'UPDATE_DEVICE', payload: { id: device.id, status: '半成品检验中', updatedAt: nowText() } });
         }
       });
-      dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: plan.id, currentNode: '质量测试', status: '进行中', updatedAt: nowText() } });
+      dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: plan.id, currentNode: '质量测试', status: '生产中', updatedAt: nowText() } });
       writeLog(name, '装配记录已保存，设备进入质量测试');
       setActiveNode('quality');
       return;
@@ -430,7 +484,7 @@ export default function ProductionPlanDetail() {
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-xl font-bold text-gray-900">{plan.name || plan.id}</h1>
-            <StatusBadge status={plan.status || '进行中'} />
+            <StatusBadge status={productionPlanStatus(plan)} />
             <StatusBadge status={plan.currentNode || NODES.find((node) => node.key === activeNode)?.label} />
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
@@ -438,7 +492,7 @@ export default function ProductionPlanDetail() {
             <span>计划数量：{plan.targetCount || 0} 台</span>
             <span>已装配：{planDevices.length} 台</span>
             <span>计划周期：{(plan.createdAt || '').slice(0, 10)} ~ {plan.endDate || '—'}</span>
-            <span>ERP生产工单：{plan.erpProductionOrderNo || '—'}</span>
+            <span>ERP生产订单号：{plan.erpProductionOrderNo || '—'}</span>
           </div>
         </div>
       </div>

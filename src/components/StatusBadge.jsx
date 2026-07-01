@@ -82,6 +82,44 @@ const statusColorMap = {
   '出厂检验': 'bg-blue-100 text-blue-700 border-blue-300',
   '现场安装调试': 'bg-indigo-100 text-indigo-700 border-indigo-300',
   '客户验收': 'bg-green-100 text-green-700 border-green-300',
+
+  // ---- v-final: material-prep 齐套状态 ----
+  '已齐套':   'bg-green-100 text-green-700 border-green-300',
+  '部分齐套': 'bg-amber-100 text-amber-700 border-amber-300',
+  '缺料':     'bg-red-100 text-red-700 border-red-300',
+  '库存不足': 'bg-orange-100 text-orange-700 border-orange-300',
+  '待确认':   'bg-gray-100 text-gray-500 border-gray-300',
+
+  // ---- v-final: assembly 装配状态 ----
+  '待确认装配完成': 'bg-amber-100 text-amber-700 border-amber-300',
+  '已装配':   'bg-green-100 text-green-700 border-green-300',
+  '装配异常': 'bg-red-100 text-red-700 border-red-300',
+
+  // ---- v-final: quality-test 测试状态 ----
+  '测试通过': 'bg-green-100 text-green-700 border-green-300',
+  '测试NG':   'bg-red-100 text-red-700 border-red-300',
+
+  // ---- v-final: warehouse 入库状态 ----
+  '不可入库': 'bg-red-100 text-red-700 border-red-300',
+
+  // ---- v-final: delivery binding / factory ----
+  '待交付':     'bg-gray-100 text-gray-600 border-gray-300',
+  '可交付':     'bg-emerald-100 text-emerald-700 border-emerald-300',
+  '待出厂检验': 'bg-blue-100 text-blue-700 border-blue-300',
+  '待确认出厂': 'bg-amber-100 text-amber-700 border-amber-300',
+  '已出厂':     'bg-teal-100 text-teal-700 border-teal-300',
+  '不可出厂':   'bg-red-100 text-red-700 border-red-300',
+
+  // ---- v-final: delivery site-install / accept ----
+  '安装调试中':  'bg-blue-100 text-blue-700 border-blue-300',
+  '安装异常':    'bg-red-100 text-red-700 border-red-300',
+  '待客户验收':  'bg-purple-100 text-purple-700 border-purple-300',
+  '验收异常':    'bg-red-100 text-red-700 border-red-300',
+
+  // ---- v-final: pending results ----
+  '待检验': 'bg-gray-100 text-gray-500 border-gray-300',
+  '待录入': 'bg-gray-100 text-gray-500 border-gray-300',
+  '待验收': 'bg-gray-100 text-gray-500 border-gray-300',
 };
 
 export default function StatusBadge({ status, size = 'sm' }) {

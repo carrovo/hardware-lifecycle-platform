@@ -3,6 +3,10 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
+import {
+  isPass, deliveryPlanStatus, resultLabel,
+  bindingDeviceStatus, factoryStageStatus, siteStageStatus, acceptStageStatus,
+} from '../utils/status';
 
 const NODES = [
   { key: 'binding', label: '绑定设备' },
@@ -141,7 +145,7 @@ function ResultModal({ isOpen, onClose, title, devices, defaultResult = 'Pass', 
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div><label className="block text-sm font-medium text-gray-700 mb-1">设备</label><select className={INPUT} required value={form.deviceId} onChange={(e) => setForm({ ...form, deviceId: e.target.value })}><option value="">-- 选择设备 --</option>{devices.map((device) => <option key={device.id} value={device.id}>{device.sn}</option>)}</select></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">结果</label><select className={INPUT} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}><option>Pass</option><option>NG</option><option>待测试</option></select></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">结果</label><select className={INPUT} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}><option>Pass</option><option>NG</option></select></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">操作人</label><input className={INPUT} value={form.operator} onChange={(e) => setForm({ ...form, operator: e.target.value })} /></div>
           {requireLocation && <div><label className="block text-sm font-medium text-gray-700 mb-1">现场确认点位 *</label><select className={INPUT} required value={form.locationId} onChange={(e) => setForm({ ...form, locationId: e.target.value })}><option value="">-- 选择点位 --</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></div>}
           {locationChanged && <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">点位变更原因 *</label><textarea className={INPUT} required rows={2} value={form.changeReason} onChange={(e) => setForm({ ...form, changeReason: e.target.value })} /></div>}
@@ -163,7 +167,7 @@ function getBoundDeviceIds(plan) {
   return [...new Set([...explicit, ...bindingRecords, ...stageRecords].filter(Boolean))];
 }
 
-function BindingNode({ plan, boundDevices, eligibleDevices, locations, deviceTypes, openSelector, confirmBinding }) {
+function BindingNode({ plan, boundDevices, eligibleDevices, locations, deviceTypes, openSelector, confirmBinding, openAction }) {
   return (
     <div className="space-y-5">
       <MetricCards items={[
@@ -174,18 +178,28 @@ function BindingNode({ plan, boundDevices, eligibleDevices, locations, deviceTyp
         { label: '点位数', value: locations.length, color: 'border-indigo-500' },
       ]} />
       <Section title="绑定概览" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={openSelector}>选择可交付设备</button><button className={BTN_PRIMARY} onClick={confirmBinding}>确认绑定完成</button></div>}>
-        <div className="text-sm text-gray-600">只有属于当前项目、已入库/待分配项目、未被其他未完成交付计划绑定、未作废冻结的设备可选。绑定后可预分配点位，作为现场安装调试的校验依据。</div>
+        <div className="text-sm text-gray-600">只有属于当前项目、已入库/待分配项目、未被其他未完成交付计划绑定、未作废冻结的设备可选。预分配点位是计划安装位置，现场安装调试时需要再次确认现场实际点位。</div>
       </Section>
       <Section title="已绑定设备列表">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50"><tr>{['设备SN', '整机类型', '当前状态', '预分配点位', '绑定状态'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
+          <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '来源生产计划', '当前状态', '预分配点位', '绑定状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-100">
             {boundDevices.map((device) => {
               const type = deviceTypes.find((item) => item.id === device.deviceTypeId);
               const location = locations.find((item) => item.id === device.preAssignedLocationId || item.id === device.locationId);
-              return <tr key={device.id}><td className="px-3 py-2 font-mono text-xs"><Link to={`/devices/${device.id}`} className="text-blue-600 hover:underline">{device.sn}</Link></td><td className="px-3 py-2">{type?.name || device.deviceTypeId}</td><td className="px-3 py-2"><StatusBadge status={device.status} /></td><td className="px-3 py-2">{location?.name || '—'}</td><td className="px-3 py-2"><StatusBadge status="绑定设备" /></td></tr>;
+              return (
+                <tr key={device.id}>
+                  <td className="px-3 py-2 font-mono text-xs"><Link to={`/devices/${device.id}`} className="text-blue-600 hover:underline">{device.sn}</Link></td>
+                  <td className="px-3 py-2">{type?.name || device.deviceTypeId}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-500">{device.productionPlanId || '—'}</td>
+                  <td className="px-3 py-2"><StatusBadge status={bindingDeviceStatus(device, true)} /></td>
+                  <td className="px-3 py-2">{location?.name || '—'}</td>
+                  <td className="px-3 py-2"><StatusBadge status="绑定设备" /></td>
+                  <td className="px-3 py-2"><button className="text-xs text-red-500 hover:underline" onClick={() => openAction('解绑设备')}>解绑</button></td>
+                </tr>
+              );
             })}
-            {boundDevices.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">暂无已绑定设备</td></tr>}
+            {boundDevices.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">暂无已绑定设备</td></tr>}
           </tbody>
         </table>
       </Section>
@@ -193,31 +207,116 @@ function BindingNode({ plan, boundDevices, eligibleDevices, locations, deviceTyp
   );
 }
 
-function StageNode({ title, summary, devices, records, locations, actionLabel, onAction, onAdvance, requireLocation = false, canAdvanceText }) {
-  const passIds = new Set(records.filter((record) => ['通过', 'Pass'].includes(record.result)).map((record) => record.deviceId));
-  const ngCount = records.filter((record) => ['未通过', 'NG'].includes(record.result)).length;
+function StageMetrics({ label0, devices, records }) {
+  const passIds = new Set(records.filter(isPass).map((r) => r.deviceId));
+  const ngCount = records.filter((r) => !isPass(r) && ['NG', '不通过', '未通过'].includes(r.result)).length;
+  return (
+    <MetricCards items={[
+      { label: label0, value: devices.length, color: 'border-slate-500' },
+      { label: 'Pass', value: passIds.size, color: 'border-green-500' },
+      { label: 'NG', value: ngCount, color: 'border-red-500' },
+      { label: '待处理', value: Math.max(devices.length - passIds.size, 0), color: 'border-amber-500' },
+      { label: '进度', value: `${passIds.size}/${devices.length}`, color: 'border-blue-500' },
+    ]} />
+  );
+}
+
+const latestFor = (records, deviceId) => records.filter((item) => item.deviceId === deviceId).at(-1);
+const locName = (locations, ...ids) => {
+  const found = locations.find((item) => ids.filter(Boolean).includes(item.id));
+  return found?.name || '—';
+};
+
+function FactoryNode({ devices, records, locations, deviceTypes, onAction, onAdvance }) {
   return (
     <div className="space-y-5">
-      <MetricCards items={[
-        { label: summary[0], value: devices.length, color: 'border-slate-500' },
-        { label: 'Pass', value: passIds.size, color: 'border-green-500' },
-        { label: 'NG', value: ngCount, color: 'border-red-500' },
-        { label: '待处理', value: Math.max(devices.length - passIds.size, 0), color: 'border-amber-500' },
-        { label: '进度', value: `${passIds.size}/${devices.length}`, color: 'border-blue-500' },
-      ]} />
-      <Section title={`${title}概览`} action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={onAction}>{actionLabel}</button><button className={BTN_PRIMARY} onClick={onAdvance}>{canAdvanceText}</button></div>}>
-        <div className="text-sm text-gray-600">{summary[1]}</div>
+      <StageMetrics label0="待检设备" devices={devices} records={records} />
+      <Section title="出厂检验概览" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={onAction}>录入出厂检验结果</button><button className={BTN_PRIMARY} onClick={onAdvance}>推进到现场安装调试</button></div>}>
+        <div className="text-sm text-gray-600">Pass 后才允许确认出厂；NG 时生成交付工单。所有设备出厂检验 Pass 且确认出厂后，才允许推进到现场安装调试。</div>
       </Section>
-      <Section title={`${title}设备列表`}>
+      <Section title="出厂检验设备列表">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50"><tr>{['设备SN', '当前状态', requireLocation ? '现场确认点位' : '点位', '最新结果', '备注'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
+          <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '预分配点位', '检验结果', '出厂状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-100">
             {devices.map((device) => {
-              const record = records.filter((item) => item.deviceId === device.id).at(-1);
-              const location = locations.find((item) => item.id === record?.locationId || item.id === device.locationId || item.id === device.preAssignedLocationId);
-              return <tr key={device.id}><td className="px-3 py-2 font-mono text-xs">{device.sn}</td><td className="px-3 py-2"><StatusBadge status={device.status} /></td><td className="px-3 py-2">{location?.name || '—'}</td><td className="px-3 py-2"><StatusBadge status={record?.result || '待测试'} /></td><td className="px-3 py-2 text-xs text-gray-500 max-w-[240px] truncate">{record?.notes || record?.changeReason || '—'}</td></tr>;
+              const record = latestFor(records, device.id);
+              const type = deviceTypes.find((item) => item.id === device.deviceTypeId);
+              return (
+                <tr key={device.id}>
+                  <td className="px-3 py-2 font-mono text-xs">{device.sn}</td>
+                  <td className="px-3 py-2">{type?.name || device.deviceTypeId}</td>
+                  <td className="px-3 py-2">{locName(locations, device.preAssignedLocationId, device.locationId)}</td>
+                  <td className="px-3 py-2"><StatusBadge status={resultLabel(record, '待检验')} /></td>
+                  <td className="px-3 py-2"><StatusBadge status={factoryStageStatus(record)} /></td>
+                  <td className="px-3 py-2"><button className="text-xs text-slate-600 hover:underline" onClick={onAction}>录入结果</button></td>
+                </tr>
+              );
             })}
-            {devices.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">暂无设备</td></tr>}
+            {devices.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">暂无设备</td></tr>}
+          </tbody>
+        </table>
+      </Section>
+    </div>
+  );
+}
+
+function SiteNode({ devices, records, locations, onAction, onAdvance }) {
+  return (
+    <div className="space-y-5">
+      <StageMetrics label0="待安装调试设备" devices={devices} records={records} />
+      <Section title="现场安装调试概览" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={onAction}>录入安装调试结果</button><button className={BTN_PRIMARY} onClick={onAdvance}>推进到客户验收</button></div>}>
+        <div className="text-sm text-gray-600">现场确认点位必填；若现场确认点位与预分配点位不一致，需要填写点位变更原因；NG 时生成交付工单。</div>
+      </Section>
+      <Section title="现场安装调试设备列表">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50"><tr>{['设备SN', '预分配点位', '现场确认点位', '安装调试结果', '当前状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
+          <tbody className="divide-y divide-gray-100">
+            {devices.map((device) => {
+              const record = latestFor(records, device.id);
+              return (
+                <tr key={device.id}>
+                  <td className="px-3 py-2 font-mono text-xs">{device.sn}</td>
+                  <td className="px-3 py-2">{locName(locations, device.preAssignedLocationId)}</td>
+                  <td className="px-3 py-2">{locName(locations, record?.locationId, device.locationId)}</td>
+                  <td className="px-3 py-2"><StatusBadge status={resultLabel(record, '待录入')} /></td>
+                  <td className="px-3 py-2"><StatusBadge status={siteStageStatus(record)} /></td>
+                  <td className="px-3 py-2"><button className="text-xs text-slate-600 hover:underline" onClick={onAction}>录入结果</button></td>
+                </tr>
+              );
+            })}
+            {devices.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">暂无设备</td></tr>}
+          </tbody>
+        </table>
+      </Section>
+    </div>
+  );
+}
+
+function AcceptNode({ devices, records, locations, onAction, onAdvance }) {
+  return (
+    <div className="space-y-5">
+      <StageMetrics label0="待验收设备" devices={devices} records={records} />
+      <Section title="客户验收概览" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={onAction}>录入客户验收结果</button><button className={BTN_PRIMARY} onClick={onAdvance}>完成交付计划</button></div>}>
+        <div className="text-sm text-gray-600">Pass 后设备状态变为在线运营；NG 时生成交付工单，必要时生成质量问题记录。全部设备验收 Pass 后，交付计划状态变为已验收。</div>
+      </Section>
+      <Section title="客户验收设备列表">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50"><tr>{['设备SN', '现场确认点位', '验收结果', '验收时间', '当前状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
+          <tbody className="divide-y divide-gray-100">
+            {devices.map((device) => {
+              const record = latestFor(records, device.id);
+              return (
+                <tr key={device.id}>
+                  <td className="px-3 py-2 font-mono text-xs">{device.sn}</td>
+                  <td className="px-3 py-2">{locName(locations, record?.locationId, device.locationId, device.preAssignedLocationId)}</td>
+                  <td className="px-3 py-2"><StatusBadge status={resultLabel(record, '待验收')} /></td>
+                  <td className="px-3 py-2 text-xs text-gray-500">{record?.time || '—'}</td>
+                  <td className="px-3 py-2"><StatusBadge status={acceptStageStatus(record)} /></td>
+                  <td className="px-3 py-2"><button className="text-xs text-slate-600 hover:underline" onClick={onAction}>录入结果</button></td>
+                </tr>
+              );
+            })}
+            {devices.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">暂无设备</td></tr>}
           </tbody>
         </table>
       </Section>
@@ -278,22 +377,13 @@ export default function DeliveryPlanDetail() {
     const nextIndex = records[key].length + 1;
     const record = { id: `${key}-${resultForm.deviceId}-${nextIndex}`, deviceId: resultForm.deviceId, deviceSN: resultForm.deviceSN, result: resultForm.result, operator: resultForm.operator || state.currentUser, time: nowText(), notes: resultForm.notes, locationId: resultForm.locationId || null, changeReason: resultForm.changeReason || '' };
     updatePlanRecords(key, [...records[key], record]);
+    // 客户验收 Pass -> 设备在线运营。出厂检验 / 现场安装调试的阶段状态由本节点记录派生，
+    // 不再写入设备的中间状态，避免与设备生命周期词表产生新的不一致。
     if (key === 'customerAccept' && resultForm.result === 'Pass') {
       dispatch({ type: 'UPDATE_DEVICE', payload: { id: resultForm.deviceId, status: '在线运营', locationId: resultForm.locationId || undefined, updatedAt: nowText() } });
     }
-    if (key === 'factoryInspection' && resultForm.result === 'Pass') {
-      dispatch({ type: 'UPDATE_DEVICE', payload: { id: resultForm.deviceId, status: '出厂检验通过', updatedAt: nowText() } });
-    }
     if (key === 'siteInstall' && resultForm.locationId) {
-      dispatch({
-        type: 'UPDATE_DEVICE',
-        payload: {
-          id: resultForm.deviceId,
-          ...(resultForm.result === 'Pass' ? { status: '现场安装调试通过' } : {}),
-          locationId: resultForm.locationId,
-          updatedAt: nowText(),
-        },
-      });
+      dispatch({ type: 'UPDATE_DEVICE', payload: { id: resultForm.deviceId, locationId: resultForm.locationId, updatedAt: nowText() } });
     }
     if (resultForm.result === 'NG') {
       dispatch({ type: 'ADD_DELIVERY_WORK_ORDER', payload: { id: `DWO-${plan.id}-${resultForm.deviceId}-${nextIndex}`, type: 'delivery', deliveryPlanId: plan.id, deviceId: resultForm.deviceId, deviceSN: resultForm.deviceSN, description: resultForm.notes || `${key}节点NG`, severity: '中', status: '待处理', assignedTo: '', createdAt: nowText(), updatedAt: nowText(), processLogs: [] } });
@@ -323,8 +413,7 @@ export default function DeliveryPlanDetail() {
     dispatch({ type: 'ADD_OPERATION_LOG', payload: { id: `LOG-${Date.now()}-${plan.id}`, deliveryPlanId: plan.id, projectId: plan.projectId, operator: state.currentUser, timestamp: nowText(), actionType: '推进交付节点', fromStatus: plan.status, toStatus: status || plan.status, notes: `推进到${nodeLabel}` } });
   };
 
-  const acceptedCount = records.customerAccept.filter((record) => ['Pass', '通过'].includes(record.result)).length;
-  const planStatus = acceptedCount >= (plan.targetCount || 0) && plan.targetCount > 0 ? '已验收' : (plan.status === '进行中' ? '交付中' : plan.status);
+  const planStatus = deliveryPlanStatus(plan);
 
   return (
     <div className="p-6">
@@ -333,15 +422,21 @@ export default function DeliveryPlanDetail() {
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-xl font-bold text-gray-900">{plan.name}</h1>
-            <StatusBadge status={planStatus || '交付中'} />
+            <StatusBadge status={planStatus} />
             <StatusBadge status={plan.currentNode || NODES.find((node) => node.key === activeNode)?.label} />
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
+            <span>交付计划ID：<span className="font-mono">{plan.id}</span></span>
+            <span>交付批次：{plan.batchNo || plan.name}</span>
             {project && <span>所属项目：<Link to={`/projects/${project.id}`} className="text-blue-600 hover:underline">{project.name}</Link></span>}
+            <span>负责人：{plan.owner || project?.manager || '—'}</span>
             <span>计划交付：{plan.targetCount || 0} 台</span>
             <span>已绑定：{boundDevices.length} 台</span>
             <span>计划出厂：{plan.factoryDate || plan.dueDate || '—'}</span>
+            <span>计划现场安装调试：{plan.siteInstallDate || '—'}</span>
             <span>计划验收：{plan.acceptanceDate || plan.dueDate || '—'}</span>
+            <span>ERP销售出库单号：{plan.erpOutboundNo || '—'}</span>
+            <span>ERP验收单号：{plan.erpAcceptanceNo || '—'}</span>
           </div>
         </div>
       </div>
@@ -357,46 +452,35 @@ export default function DeliveryPlanDetail() {
           deviceTypes={state.deviceTypes}
           openSelector={() => setModal('selectDevices')}
           confirmBinding={() => advance('出厂检验', '交付中')}
+          openAction={() => setModal('placeholder')}
         />
       )}
       {activeNode === 'factoryInspection' && (
-        <StageNode
-          title="出厂检验"
-          summary={['待检设备', 'Pass 后才允许确认出厂；NG 时生成交付工单。所有设备出厂检验 Pass 且确认出厂后，才允许推进到现场安装调试。']}
+        <FactoryNode
           devices={boundDevices}
           records={records.factoryInspection}
           locations={projectLocations}
-          actionLabel="录入出厂检验结果"
+          deviceTypes={state.deviceTypes}
           onAction={() => setModal('factoryResult')}
           onAdvance={() => advance('现场安装调试', '交付中')}
-          canAdvanceText="推进到现场安装调试"
         />
       )}
       {activeNode === 'siteInstall' && (
-        <StageNode
-          title="现场安装调试"
-          summary={['待安装调试设备', '现场确认点位必填；若与预分配点位不一致，需要填写点位变更原因；NG 时生成交付工单。']}
+        <SiteNode
           devices={factoryPassDevices.length ? factoryPassDevices : boundDevices}
           records={records.siteInstall}
           locations={projectLocations}
-          actionLabel="录入安装调试结果"
           onAction={() => setModal('siteResult')}
           onAdvance={() => advance('客户验收', '交付中')}
-          canAdvanceText="推进到客户验收"
-          requireLocation
         />
       )}
       {activeNode === 'customerAccept' && (
-        <StageNode
-          title="客户验收"
-          summary={['待验收设备', 'Pass 后设备状态变为在线运营；NG 时生成交付工单或质量问题记录；全部 Pass 后交付计划变为已验收。']}
+        <AcceptNode
           devices={sitePassDevices.length ? sitePassDevices : boundDevices}
           records={records.customerAccept}
           locations={projectLocations}
-          actionLabel="录入客户验收结果"
           onAction={() => setModal('acceptResult')}
           onAdvance={() => advance('客户验收', '已验收')}
-          canAdvanceText="完成交付计划"
         />
       )}
 

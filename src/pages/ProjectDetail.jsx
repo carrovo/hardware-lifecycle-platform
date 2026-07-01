@@ -5,6 +5,7 @@ import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import OperationLog from '../components/OperationLog';
 import StatusBadge from '../components/StatusBadge';
+import { isPass, projectStatus, productionPlanStatus, deliveryPlanStatus } from '../utils/status';
 
 const INPUT = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500 bg-white';
 const BTN_PRIMARY = 'px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-800';
@@ -12,18 +13,6 @@ const BTN_GHOST = 'px-3 py-1.5 text-sm border border-gray-300 text-gray-600 roun
 
 function nowText() {
   return new Date().toISOString().slice(0, 16).replace('T', ' ');
-}
-
-function projectStatus(project, productionPlans, deliveryPlans) {
-  if (project.voided || project.status === '已作废') return '已作废';
-  if (project.status) return project.status;
-  const accepted = deliveryPlans
-    .filter((p) => p.projectId === project.id)
-    .reduce((sum, plan) => sum + (plan.records?.customerAccept || []).filter((r) => r.result === '通过').length, 0);
-  if (project.closedAt) return '已关闭';
-  if (accepted >= (project.targetCount || 0) && project.targetCount > 0) return '已交付';
-  if (productionPlans.some((plan) => plan.projectId === project.id)) return '进行中';
-  return '未开始';
 }
 
 function Section({ title, action, children }) {
@@ -205,12 +194,13 @@ export default function ProjectDetail() {
   const [modal, setModal] = useState(null);
 
   const {
-    projects, workflowProductionPlans = [], productionPlans = [], deliveryPlans = [],
+    projects, workflowProductionPlans = [], deliveryPlans = [],
     devices = [], deviceTypes = [], locations = [], qualityIssues = [],
     productionWorkOrders = [], deliveryWorkOrders = [], operationLogs = [],
   } = state;
 
-  const allProductionPlans = [...workflowProductionPlans, ...productionPlans];
+  // 生产计划只取流程型计划 (WPP-*)；PLAN-* 为日产能数据，不在项目详情的生产计划列表里展示。
+  const allProductionPlans = workflowProductionPlans;
   const project = projects.find((p) => p.id === id);
 
   if (!project) {
@@ -233,7 +223,7 @@ export default function ProjectDetail() {
     const plan = projProductionPlans.find((p) => p.id === device.productionPlanId);
     return plan && ['已入库', '待分配项目', '已分配项目', '在线运营', '出厂检验中', '现场安装调试中', '客户验收中'].includes(device.status);
   }).length;
-  const acceptedCount = projDeliveryPlans.reduce((sum, plan) => sum + (plan.records?.customerAccept || []).filter((r) => r.result === '通过').length, 0);
+  const acceptedCount = projDeliveryPlans.reduce((sum, plan) => sum + (plan.records?.customerAccept || []).filter(isPass).length, 0);
   const pendingIssues = projIssues.filter((q) => q.status !== '已关闭').length + projWorkOrders.filter((w) => !['已关闭', '已作废'].includes(w.status)).length;
 
   const availableDevices = devices.filter((d) =>
@@ -340,7 +330,7 @@ export default function ProjectDetail() {
                   <tr key={plan.id} className="hover:bg-gray-50">
                     <td className="py-2 font-mono text-xs"><Link to={`/production-plans/${plan.id}`} className="text-blue-600 hover:underline">{plan.id}</Link></td>
                     <td className="py-2 text-gray-700">{plan.name}</td>
-                    <td className="py-2"><StatusBadge status={plan.status || '进行中'} /></td>
+                    <td className="py-2"><StatusBadge status={productionPlanStatus(plan)} /></td>
                     <td className="py-2"><StatusBadge status={plan.currentNode || '来料准备'} /></td>
                     <td className="py-2 text-gray-600">{done}/{plan.targetCount || 0}</td>
                   </tr>
@@ -356,12 +346,12 @@ export default function ProjectDetail() {
             <thead><tr className="text-left text-xs text-gray-500">{['计划ID', '计划名称', '状态', '当前节点', '验收'].map((h) => <th key={h} className="py-2">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-100">
               {projDeliveryPlans.slice(0, 5).map((plan) => {
-                const accepted = (plan.records?.customerAccept || []).filter((r) => r.result === '通过').length;
+                const accepted = (plan.records?.customerAccept || []).filter(isPass).length;
                 return (
                   <tr key={plan.id} className="hover:bg-gray-50">
                     <td className="py-2 font-mono text-xs"><Link to={`/delivery-plans/${plan.id}`} className="text-blue-600 hover:underline">{plan.id}</Link></td>
                     <td className="py-2 text-gray-700">{plan.name}</td>
-                    <td className="py-2"><StatusBadge status={plan.status === '进行中' ? '交付中' : plan.status} /></td>
+                    <td className="py-2"><StatusBadge status={deliveryPlanStatus(plan)} /></td>
                     <td className="py-2"><StatusBadge status={plan.currentNode || '绑定设备'} /></td>
                     <td className="py-2 text-gray-600">{accepted}/{plan.targetCount || 0}</td>
                   </tr>
@@ -440,7 +430,7 @@ export default function ProjectDetail() {
         type="production"
         project={project}
         onSave={(form) => {
-          const plan = { id: `PP-${Date.now().toString().slice(-6)}`, projectId: id, name: form.name, targetCount: form.targetCount, owner: form.owner, endDate: form.date, erpProductionOrderNo: form.erpNo, status: '进行中', currentNode: '来料准备', createdAt: nowText() };
+          const plan = { id: `PP-${Date.now().toString().slice(-6)}`, projectId: id, name: form.name, targetCount: form.targetCount, owner: form.owner, endDate: form.date, erpProductionOrderNo: form.erpNo, status: '生产中', currentNode: '来料准备', createdAt: nowText() };
           dispatch({ type: 'ADD_PRODUCTION_PLAN', payload: plan });
           updateProject({ status: '进行中' });
           writeLog('创建生产计划', `创建 ${plan.name}`, status, '进行中');

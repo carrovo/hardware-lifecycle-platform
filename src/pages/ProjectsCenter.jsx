@@ -5,6 +5,10 @@ import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
 import SecondaryTabs from '../components/SecondaryTabs';
+import {
+  isPass, projectStatus as deriveProjectStatus,
+  productionPlanStatus, deliveryPlanStatus,
+} from '../utils/status';
 
 const TABS = [
   { key: 'list', label: '项目列表' },
@@ -13,6 +17,7 @@ const TABS = [
 ];
 
 const PROJECT_STATUSES = ['未开始', '进行中', '已交付', '已关闭', '已作废'];
+const PRODUCTION_STATUSES = ['未开始', '生产中', '已完成', '已延期', '已作废'];
 const PRODUCTION_NODES = ['来料准备', '整机装配', '质量测试', '整机入库'];
 const DELIVERY_NODES = ['绑定设备', '出厂检验', '现场安装调试', '客户验收'];
 const DELIVERY_STATUSES = ['未开始', '交付中', '已验收', '已延期', '已作废'];
@@ -25,18 +30,7 @@ function nowText() {
   return new Date().toISOString().slice(0, 16).replace('T', ' ');
 }
 
-function normalizeProjectStatus(project, productionPlans, deliveryPlans) {
-  if (project.voided || project.status === '已作废') return '已作废';
-  if (project.status) return project.status;
-  const projDeliveries = deliveryPlans.filter((p) => p.projectId === project.id);
-  const accepted = projDeliveries.reduce((sum, plan) => (
-    sum + (plan.records?.customerAccept || []).filter((r) => r.result === '通过').length
-  ), 0);
-  if (project.closedAt) return '已关闭';
-  if (accepted >= (project.targetCount || 0) && project.targetCount > 0) return '已交付';
-  if (productionPlans.some((plan) => plan.projectId === project.id)) return '进行中';
-  return '未开始';
-}
+const normalizeProjectStatus = deriveProjectStatus;
 
 function progressBar(done, total, color = 'bg-blue-500') {
   const pct = total > 0 ? Math.min(Math.round((done / total) * 100), 100) : 0;
@@ -161,7 +155,7 @@ function ProjectListTab() {
     }).length;
     const accepted = deliveryPlans
       .filter((plan) => plan.projectId === project.id)
-      .reduce((sum, plan) => sum + (plan.records?.customerAccept || []).filter((r) => r.result === '通过').length, 0);
+      .reduce((sum, plan) => sum + (plan.records?.customerAccept || []).filter(isPass).length, 0);
     return {
       ...project,
       status,
@@ -349,13 +343,13 @@ function ProjectListTab() {
           { key: 'targetCount', label: '计划数量 *', type: 'number', min: 1, defaultValue: target?.targetCount || 1, required: true },
           { key: 'owner', label: '负责人', options: ['张三', '李四', '王五', '赵六'] },
           { key: 'endDate', label: '计划完成日期', type: 'date' },
-          { key: 'erpProductionOrderNo', label: 'ERP生产工单号' },
+          { key: 'erpProductionOrderNo', label: 'ERP生产订单号' },
         ]}
         onSubmit={(form) => {
           const plan = {
             id: `PP-${Date.now().toString().slice(-6)}`,
             projectId: target.id,
-            status: '进行中',
+            status: '生产中',
             currentNode: '来料准备',
             createdAt: nowText(),
             ...form,
@@ -431,9 +425,10 @@ function ProjectListTab() {
   );
 }
 
-function MetricCards({ items }) {
+function MetricCards({ items, cols = 4 }) {
+  const colClass = { 4: 'grid-cols-4', 5: 'grid-cols-5' }[cols] || 'grid-cols-4';
   return (
-    <div className="grid grid-cols-4 gap-4 mb-5">
+    <div className={`grid ${colClass} gap-4 mb-5`}>
       {items.map((item) => (
         <div key={item.label} className={`bg-white rounded shadow-sm border-l-4 ${item.color} p-4`}>
           <div className="text-2xl font-semibold text-gray-900">{item.value}</div>
@@ -448,25 +443,30 @@ function ProductionPlanTab() {
   const { state } = useApp();
   const navigate = useNavigate();
   const [filters, setFilters] = useState({ keyword: '', projectId: '', deviceType: '', status: '', owner: '', delayed: '' });
-  const plans = [...(state.workflowProductionPlans || []), ...(state.productionPlans || [])];
+  const [placeholder, setPlaceholder] = useState(null);
+  // 生产计划列表只展示流程型生产计划 (WPP-*)。PLAN-* 属于日产能数据，不混入此列表。
+  const plans = state.workflowProductionPlans || [];
   const projects = state.projects || [];
-  const today = '2026-07-01';
 
   const enriched = plans.map((plan) => {
     const devices = state.devices.filter((d) => d.productionPlanId === plan.id);
-    const completed = devices.filter((d) => ['已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status)).length;
-    const currentNode = plan.currentNode || (plan.status === '已完成' ? '整机入库' : PRODUCTION_NODES[Math.min(Math.floor(completed / Math.max(plan.targetCount || 1, 1) * 4), 3)]);
+    const completed = devices.filter((d) => ['待入库', '已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status)).length;
+    const status = productionPlanStatus(plan);
+    const currentNode = plan.currentNode || (status === '已完成' ? '整机入库' : PRODUCTION_NODES[Math.min(Math.floor(completed / Math.max(plan.targetCount || 1, 1) * 4), 3)]);
     const project = projects.find((p) => p.id === plan.projectId);
     return {
       ...plan,
+      status,
       projectName: project?.name || '—',
       deviceType: plan.deviceType || 'AlphaBot',
       owner: plan.owner || project?.manager || '—',
       completed,
       currentNode,
-      delayed: plan.endDate && plan.endDate < today && !['已完成', '已作废'].includes(plan.status),
+      delayed: status === '已延期',
     };
   });
+
+  const owners = [...new Set(enriched.map((p) => p.owner).filter((o) => o && o !== '—'))];
 
   const filtered = enriched.filter((plan) => {
     const kw = filters.keyword.trim().toLowerCase();
@@ -478,11 +478,15 @@ function ProductionPlanTab() {
       && (!filters.delayed || (filters.delayed === 'yes' ? plan.delayed : !plan.delayed));
   });
 
+  const stop = (e) => e.stopPropagation();
+  const NODE_KEY = { 来料准备: 'materialPrep', 整机装配: 'assembly', 质量测试: 'quality', 整机入库: 'warehouse' };
+  const enterFlow = (plan) => navigate(`/production-plans/${plan.id}?node=${NODE_KEY[plan.currentNode] || 'materialPrep'}`);
+
   return (
     <div>
       <MetricCards items={[
         { label: '计划总数', value: enriched.length, color: 'border-slate-500' },
-        { label: '生产中', value: enriched.filter((p) => ['进行中', '生产中'].includes(p.status)).length, color: 'border-blue-500' },
+        { label: '生产中', value: enriched.filter((p) => p.status === '生产中').length, color: 'border-blue-500' },
         { label: '已完成', value: enriched.filter((p) => p.status === '已完成').length, color: 'border-green-500' },
         { label: '延期计划', value: enriched.filter((p) => p.delayed).length, color: 'border-red-500' },
       ]} />
@@ -492,10 +496,13 @@ function ProductionPlanTab() {
           <option value="">所属项目</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <input className={INPUT} placeholder="设备类型" value={filters.deviceType} onChange={(e) => setFilters({ ...filters, deviceType: e.target.value })} />
         <select className={INPUT} value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
           <option value="">全部状态</option>
-          {['待开始', '进行中', '已完成', '已作废'].map((s) => <option key={s}>{s}</option>)}
+          {PRODUCTION_STATUSES.map((s) => <option key={s}>{s}</option>)}
+        </select>
+        <select className={INPUT} value={filters.owner} onChange={(e) => setFilters({ ...filters, owner: e.target.value })}>
+          <option value="">全部负责人</option>
+          {owners.map((o) => <option key={o}>{o}</option>)}
         </select>
         <select className={INPUT} value={filters.delayed} onChange={(e) => setFilters({ ...filters, delayed: e.target.value })}>
           <option value="">是否延期</option>
@@ -522,14 +529,32 @@ function ProductionPlanTab() {
                 <td className="px-4 py-3">{plan.completed}</td>
                 <td className="px-4 py-3 text-xs text-gray-500">{(plan.createdAt || '').slice(0, 10)} ~ {plan.endDate || '—'}</td>
                 <td className="px-4 py-3"><StatusBadge status={plan.currentNode} /></td>
-                <td className="px-4 py-3"><StatusBadge status={plan.delayed ? '已延期' : (plan.status || '进行中')} /></td>
+                <td className="px-4 py-3"><StatusBadge status={plan.status} /></td>
                 <td className="px-4 py-3 text-gray-600">{plan.owner}</td>
-                <td className="px-4 py-3 text-xs text-slate-600">查看 / 编辑 / 进入流程</td>
+                <td className="px-4 py-3" onClick={stop}>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <button className="text-slate-600 hover:underline" onClick={() => navigate(`/production-plans/${plan.id}`)}>查看</button>
+                    <button className="text-emerald-600 hover:underline" onClick={() => enterFlow(plan)}>进入流程</button>
+                    <button className="text-blue-600 hover:underline" onClick={() => setPlaceholder({ title: '编辑生产计划', text: `编辑「${plan.name || plan.id}」的入口已保留，后续接入表单与校验。` })}>编辑</button>
+                    {!['已完成', '已作废'].includes(plan.status) && (
+                      <button className="text-red-500 hover:underline" onClick={() => setPlaceholder({ title: '作废生产计划', text: `作废「${plan.name || plan.id}」的入口已保留，后续接入审批流程。` })}>作废</button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
+            {filtered.length === 0 && <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">暂无匹配生产计划</td></tr>}
           </tbody>
         </table>
       </div>
+
+      <Modal isOpen={!!placeholder} onClose={() => setPlaceholder(null)} title={placeholder?.title || ''}>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">{placeholder?.text}</p>
+          <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">本阶段以可演示的流程结构为主，动作入口先占位。</div>
+          <div className="flex justify-end"><button onClick={() => setPlaceholder(null)} className={BTN_PRIMARY}>知道了</button></div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -538,17 +563,16 @@ function DeliveryPlanTab() {
   const { state } = useApp();
   const navigate = useNavigate();
   const [filters, setFilters] = useState({ keyword: '', projectId: '', status: '', node: '', owner: '', bound: '' });
+  const [placeholder, setPlaceholder] = useState(null);
   const projects = state.projects || [];
-  const today = '2026-07-01';
 
   const enriched = (state.deliveryPlans || []).map((plan) => {
     const project = projects.find((p) => p.id === plan.projectId);
     const bindingCount = plan.boundDeviceIds?.length || plan.records?.binding?.length || 0;
-    const accepted = (plan.records?.customerAccept || []).filter((r) => r.result === '通过').length;
-    const status = plan.status === '进行中' ? '交付中' : (plan.status || '未开始');
+    const accepted = (plan.records?.customerAccept || []).filter(isPass).length;
     return {
       ...plan,
-      status: accepted >= (plan.targetCount || 0) && plan.targetCount > 0 ? '已验收' : (plan.dueDate && plan.dueDate < today ? '已延期' : status),
+      status: deliveryPlanStatus(plan),
       projectName: project?.name || '—',
       owner: plan.owner || project?.manager || '—',
       currentNode: plan.currentNode || (accepted > 0 ? '客户验收' : (plan.records?.siteInstall || []).length > 0 ? '现场安装调试' : (plan.records?.factoryInspection || []).length > 0 ? '出厂检验' : '绑定设备'),
@@ -556,6 +580,8 @@ function DeliveryPlanTab() {
       accepted,
     };
   });
+
+  const owners = [...new Set(enriched.map((p) => p.owner).filter((o) => o && o !== '—'))];
 
   const filtered = enriched.filter((plan) => {
     const kw = filters.keyword.trim().toLowerCase();
@@ -567,13 +593,17 @@ function DeliveryPlanTab() {
       && (!filters.bound || (filters.bound === 'yes' ? plan.bindingCount > 0 : plan.bindingCount === 0));
   });
 
+  const stop = (e) => e.stopPropagation();
+  const NODE_KEY = { 绑定设备: 'binding', 出厂检验: 'factoryInspection', 现场安装调试: 'siteInstall', 客户验收: 'customerAccept' };
+
   return (
     <div>
-      <MetricCards items={[
-        { label: '计划总数', value: enriched.length, color: 'border-slate-500' },
-        { label: '交付中', value: enriched.filter((p) => p.status === '交付中').length, color: 'border-blue-500' },
-        { label: '已验收', value: enriched.filter((p) => p.status === '已验收').length, color: 'border-green-500' },
-        { label: '未绑定设备', value: enriched.filter((p) => p.bindingCount === 0).length, color: 'border-amber-500' },
+      <MetricCards cols={5} items={[
+        { label: '交付计划总数', value: enriched.length, color: 'border-slate-500' },
+        { label: '交付中计划数', value: enriched.filter((p) => p.status === '交付中').length, color: 'border-blue-500' },
+        { label: '已验收计划数', value: enriched.filter((p) => p.status === '已验收').length, color: 'border-green-500' },
+        { label: '未绑定设备计划数', value: enriched.filter((p) => p.bindingCount === 0).length, color: 'border-amber-500' },
+        { label: '已延期计划数', value: enriched.filter((p) => p.status === '已延期').length, color: 'border-red-500' },
       ]} />
       <div className="bg-white rounded shadow-sm p-4 mb-4 grid grid-cols-6 gap-3">
         <input className={`${INPUT} col-span-2`} placeholder="交付计划ID / 项目名称" value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })} />
@@ -589,10 +619,9 @@ function DeliveryPlanTab() {
           <option value="">当前节点</option>
           {DELIVERY_NODES.map((n) => <option key={n}>{n}</option>)}
         </select>
-        <select className={INPUT} value={filters.bound} onChange={(e) => setFilters({ ...filters, bound: e.target.value })}>
-          <option value="">绑定情况</option>
-          <option value="yes">已绑定设备</option>
-          <option value="no">未绑定设备</option>
+        <select className={INPUT} value={filters.owner} onChange={(e) => setFilters({ ...filters, owner: e.target.value })}>
+          <option value="">全部负责人</option>
+          {owners.map((o) => <option key={o}>{o}</option>)}
         </select>
       </div>
       <div className="bg-white rounded shadow-sm overflow-hidden">
@@ -618,12 +647,31 @@ function DeliveryPlanTab() {
                 <td className="px-4 py-3"><StatusBadge status={plan.currentNode} /></td>
                 <td className="px-4 py-3"><StatusBadge status={plan.status} /></td>
                 <td className="px-4 py-3 text-gray-600">{plan.owner}</td>
-                <td className="px-4 py-3 text-xs text-slate-600">查看 / 编辑 / 进入流程</td>
+                <td className="px-4 py-3" onClick={stop}>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <button className="text-slate-600 hover:underline" onClick={() => navigate(`/delivery-plans/${plan.id}`)}>查看</button>
+                    <button className="text-emerald-600 hover:underline" onClick={() => navigate(`/delivery-plans/${plan.id}?node=${NODE_KEY[plan.currentNode] || 'binding'}`)}>进入流程</button>
+                    <button className="text-indigo-600 hover:underline" onClick={() => navigate(`/delivery-plans/${plan.id}?node=binding`)}>绑定设备</button>
+                    <button className="text-blue-600 hover:underline" onClick={() => setPlaceholder({ title: '编辑交付计划', text: `编辑「${plan.name || plan.id}」的入口已保留，后续接入表单与校验。` })}>编辑</button>
+                    {!['已验收', '已作废'].includes(plan.status) && (
+                      <button className="text-red-500 hover:underline" onClick={() => setPlaceholder({ title: '作废交付计划', text: `作废「${plan.name || plan.id}」的入口已保留，后续接入审批流程。` })}>作废</button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
+            {filtered.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无匹配交付计划</td></tr>}
           </tbody>
         </table>
       </div>
+
+      <Modal isOpen={!!placeholder} onClose={() => setPlaceholder(null)} title={placeholder?.title || ''}>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">{placeholder?.text}</p>
+          <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">本阶段以可演示的流程结构为主，动作入口先占位。</div>
+          <div className="flex justify-end"><button onClick={() => setPlaceholder(null)} className={BTN_PRIMARY}>知道了</button></div>
+        </div>
+      </Modal>
     </div>
   );
 }
