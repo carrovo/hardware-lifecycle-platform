@@ -169,11 +169,6 @@ export default function DeviceTypes() {
   const getAssembledDevices = (deviceTypeId) =>
     state.devices.filter((d) => d.deviceTypeId === deviceTypeId);
 
-  // Count materials waiting to be assembled (待装配) that match this module type.
-  // Materials match a module type by shared category (e.g. "底盘", "机械臂").
-  const getPendingMaterialCount = (moduleType) =>
-    state.materials.filter((m) => m.status === '待装配' && m.category === moduleType.category).length;
-
   const toggleExpand = (id) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -195,6 +190,10 @@ export default function DeviceTypes() {
     dispatch({ type: 'UPDATE_MODULE_TYPE', payload: { id: mt.id, active: !mt.active } });
   };
 
+  const handleToggleDeviceTypeActive = (dt) => {
+    dispatch({ type: 'UPDATE_DEVICE_TYPE', payload: { id: dt.id, active: dt.active === false } });
+  };
+
   const handleAddDeviceType = (form) => {
     dispatch({ type: 'ADD_DEVICE_TYPE', payload: { id: `DT-${Date.now()}`, name: form.name, urdf: form.urdf, slots: form.slots } });
   };
@@ -212,6 +211,10 @@ export default function DeviceTypes() {
 
   return (
     <div className="p-6 space-y-6">
+      <div className="bg-slate-50 border border-slate-200 rounded p-3 text-xs text-slate-600">
+        设备类型用于维护整机装配模板、质量测试流程模板和设备标签模板；模块类型库用于维护可被整机类型引用的模块主数据。这里定义模板，不占用库存。
+        <span className="text-slate-400">（设备类型定义整机需要哪些模块，模块类型库定义模块主数据，实际到货批次与模块 SN 在「模块与来料」管理；生产计划在来料准备中关联批次、在录入待测试设备时绑定具体模块 SN，模块库存数量只在「模块与来料 / 模块库存汇总」展示。）</span>
+      </div>
       {/* Tabs */}
       <div className="flex gap-0 border-b border-gray-200">
         {['整机类型', '模块类型库'].map((tab) => (
@@ -245,46 +248,44 @@ export default function DeviceTypes() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['', '设备类型ID', '设备类型名称', 'URDF文件', '装配模板', '操作'].map((h) => (
+                {['设备类型ID', '设备类型名称', '配置版本', 'URDF文件', '装配模板', '测试流程', '标签模板', '已关联设备数', '状态', '操作'].map((h) => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100">
               {deviceTypePaged.pageItems.map((dt) => {
                 const isExpanded = expandedIds.has(dt.id);
                 const slots = dt.slots || [];
+                const assembledCount = getAssembledDevices(dt.id).length;
                 return (
                   <>
                     <tr key={dt.id}
-                      onClick={() => toggleExpand(dt.id)}
-                      className={`cursor-pointer border-t border-gray-100 transition-colors ${isExpanded ? 'bg-slate-50' : 'hover:bg-gray-50'}`}>
-                      <td className="px-4 py-3 text-gray-400 text-sm w-8">
-                        <span>{isExpanded ? '▼' : '▶'}</span>
+                      className={`transition-colors ${isExpanded ? 'bg-slate-50' : 'hover:bg-gray-50'}`}>
+                      <td className="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">{dt.id}</td>
+                      <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">{dt.name}</td>
+                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{dt.version || 'V1'}</td>
+                      <td className="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">{dt.urdf || '—'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-xs px-2 py-0.5">{slots.length} 个装配槽位</span>
                       </td>
-                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">{dt.id}</td>
-                      <td className="px-4 py-3 font-semibold text-gray-800">{dt.name}</td>
-                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">{dt.urdf || '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-xs px-2 py-0.5">
-                          {slots.length} 个装配槽位
-                        </span>
+                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">4 工站</td>
+                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">3 个标签</td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{assembledCount}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${dt.active !== false ? 'bg-green-100 text-green-700 border-green-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>{dt.active !== false ? '启用' : '已停用'}</span>
                       </td>
-                      <td className="px-4 py-3">
-                        {canDo('edit_device_type') && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setEditingDeviceType(dt); }}
-                            className="text-xs text-slate-600 hover:underline mr-3"
-                          >编辑</button>
-                        )}
-                        <span className="text-xs text-slate-500 hover:underline cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleExpand(dt.id); }}>
-                          {isExpanded ? '收起' : '展开'}
-                        </span>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        <div className="flex items-center gap-x-3">
+                          <button className="text-blue-600 hover:underline" onClick={() => toggleExpand(dt.id)}>{isExpanded ? '收起详情' : '查看详情'}</button>
+                          {canDo('edit_device_type') && <button className="text-slate-600 hover:underline" onClick={() => setEditingDeviceType(dt)}>编辑</button>}
+                          {canDo('edit_device_type') && <button className={`hover:underline ${dt.active !== false ? 'text-red-400 hover:text-red-600' : 'text-green-600'}`} onClick={() => handleToggleDeviceTypeActive(dt)}>{dt.active !== false ? '停用' : '启用'}</button>}
+                        </div>
                       </td>
                     </tr>
                     {isExpanded && (
                       <tr key={`${dt.id}-expand`}>
-                        <td colSpan={6} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
+                        <td colSpan={10} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
                           <div className="px-12 py-4">
                             <div className="text-[11px] text-gray-400 mb-4">设备类型定义装配 BOM、质量测试流程与标签模板。生产计划绑定设备类型后，整机装配节点按装配 BOM 绑定模块 SN。</div>
 
@@ -300,7 +301,8 @@ export default function DeviceTypes() {
                             </div>
 
                             {/* 装配 BOM 模板 */}
-                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-3 uppercase tracking-wide">装配 BOM 模板</div>
+                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-1 uppercase tracking-wide">装配 BOM 模板</div>
+                            <div className="text-[11px] text-gray-400 mb-2">设备类型只定义装配模板，不占用库存；实际模块 SN 在生产计划的录入待测试设备节点绑定。</div>
                             {slots.length > 0 ? (
                               <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
                                 <thead className="bg-gray-100">
@@ -333,7 +335,8 @@ export default function DeviceTypes() {
                             )}
 
                             {/* 质量测试流程模板 */}
-                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-3 uppercase tracking-wide">质量测试流程模板</div>
+                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-1 uppercase tracking-wide">质量测试流程模板</div>
+                            <div className="text-[11px] text-gray-400 mb-2">工站顺序（半成品检验 → 初测 → 中测 → OQT终测）与生产计划详情的质量测试矩阵保持一致。</div>
                             <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
                               <thead className="bg-gray-100">
                                 <tr>
@@ -362,7 +365,8 @@ export default function DeviceTypes() {
                             </table>
 
                             {/* 设备标签模板 */}
-                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-3 uppercase tracking-wide">设备标签模板</div>
+                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-1 uppercase tracking-wide">设备标签模板</div>
+                            <div className="text-[11px] text-gray-400 mb-2">标签模板定义设备在装配、入库、交付等节点需要补充的追溯字段。</div>
                             <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
                               <thead className="bg-gray-100">
                                 <tr>
@@ -390,26 +394,28 @@ export default function DeviceTypes() {
                               </tbody>
                             </table>
 
-                            {/* 已装配整机 */}
+                            {/* 已关联设备 */}
                             {(() => {
                               const assembled = getAssembledDevices(dt.id);
+                              const shown = assembled.slice(0, 5);
                               return (
                                 <div className="mt-5">
                                   <div className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">
                                     已关联设备（{assembled.length}）
                                   </div>
                                   {assembled.length > 0 ? (
+                                    <>
                                     <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
                                       <thead className="bg-gray-100">
                                         <tr>
-                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">SN</th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">设备SN</th>
                                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">装配时间</th>
                                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">当前业务节点</th>
                                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">操作</th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-gray-100">
-                                        {assembled.map((d) => (
+                                        {shown.map((d) => (
                                           <tr key={d.id} className="bg-white">
                                             <td className="px-3 py-2 font-mono text-xs text-gray-800 font-medium">{d.sn}</td>
                                             <td className="px-3 py-2 text-gray-500 text-xs">{d.assemblyTime || '—'}</td>
@@ -421,8 +427,15 @@ export default function DeviceTypes() {
                                         ))}
                                       </tbody>
                                     </table>
+                                    {assembled.length > 5 && (
+                                      <div className="mt-2 text-xs text-gray-500">
+                                        仅展示前 5 台，共 {assembled.length} 台，
+                                        <Link to="/assets?tab=devices" className="text-blue-600 hover:underline ml-1">查看全部关联设备</Link>
+                                      </div>
+                                    )}
+                                    </>
                                   ) : (
-                                    <div className="text-sm text-gray-400">暂无已装配整机</div>
+                                    <div className="text-sm text-gray-400">暂无已关联设备</div>
                                   )}
                                 </div>
                               );
@@ -446,6 +459,10 @@ export default function DeviceTypes() {
 
       {/* 模块类型库 tab */}
       {activeTab === '模块类型库' && (
+        <div>
+          <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">
+            模块类型库用于定义可被整机类型引用的模块主数据；实际到货批次和模块 SN 在「模块与来料」中管理，库存数量在「模块库存汇总」中查看。此处不展示库存。
+          </div>
         <div className="bg-white rounded shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <div className="text-sm font-medium text-gray-600">模块类型库</div>
@@ -460,56 +477,46 @@ export default function DeviceTypes() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['', 'ID', '模块名称', '物料大类', '规格参数', 'URDF文件', '状态', '操作'].map((h) => (
+                {['模块类型ID', '模块名称', '物料大类', '规格参数', 'URDF文件', '被引用整机类型', '状态', '操作'].map((h) => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100">
               {moduleTypePaged.pageItems.map((mt) => {
                 const isExpanded = expandedIds.has(mt.id);
                 const referencedBy = getReferencingDeviceTypes(mt.id);
                 return (
                   <>
                     <tr key={mt.id}
-                      onClick={() => toggleExpand(mt.id)}
-                      className={`cursor-pointer border-t border-gray-100 transition-colors ${!mt.active ? 'opacity-60' : ''} ${isExpanded ? 'bg-slate-50' : 'hover:bg-gray-50'}`}>
-                      <td className="px-4 py-2.5 text-gray-400 w-8">{isExpanded ? '▼' : '▶'}</td>
-                      <td className="px-4 py-2.5 text-gray-500 font-mono text-xs">{mt.id}</td>
-                      <td className="px-4 py-2.5 font-medium text-gray-800">
-                        <span className="inline-flex items-center gap-1.5">
-                          {mt.name}
-                          {getPendingMaterialCount(mt) > 0 && (
-                            <span className="bg-green-100 text-green-700 border border-green-300 text-xs px-1.5 py-0.5 rounded-full font-normal"
-                              title="待装配物料数量">
-                              {getPendingMaterialCount(mt)} 待装配
-                            </span>
-                          )}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5">
+                      className={`transition-colors ${!mt.active ? 'opacity-60' : ''} ${isExpanded ? 'bg-slate-50' : 'hover:bg-gray-50'}`}>
+                      <td className="px-4 py-2.5 text-gray-500 font-mono text-xs whitespace-nowrap">{mt.id}</td>
+                      <td className="px-4 py-2.5 font-medium text-gray-800 whitespace-nowrap">{mt.name}</td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
                         <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{mt.category}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-gray-500 text-xs max-w-48 truncate">{mt.specs || '—'}</td>
-                      <td className="px-4 py-2.5 text-gray-500 font-mono text-xs">{mt.urdf || '—'}</td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-2.5 text-gray-500 text-xs whitespace-nowrap">{mt.specs || '—'}</td>
+                      <td className="px-4 py-2.5 text-gray-500 font-mono text-xs whitespace-nowrap">{mt.urdf || '—'}</td>
+                      <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">{referencedBy.length > 0 ? `${referencedBy.length} 个（${referencedBy.map((dt) => dt.name).join('、')}）` : '—'}</td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${mt.active !== false ? 'bg-green-100 text-green-700 border-green-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>
                           {mt.active !== false ? '启用' : '已停用'}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex gap-2 items-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                        <div className="flex items-center gap-x-3">
                           {canDo('edit_module_type') && (
-                            <button onClick={() => setEditingModule(mt)} className="text-xs text-slate-600 hover:underline">编辑</button>
+                            <button onClick={() => setEditingModule(mt)} className="text-slate-600 hover:underline">编辑</button>
                           )}
                           {canDo('edit_module_type') && (
                             <button
                               onClick={() => handleToggleActive(mt)}
-                              className={`text-xs hover:underline ${mt.active !== false ? 'text-red-500' : 'text-green-600'}`}
+                              className={`hover:underline ${mt.active !== false ? 'text-red-400 hover:text-red-600' : 'text-green-600'}`}
                             >
                               {mt.active !== false ? '停用' : '启用'}
                             </button>
                           )}
+                          <button onClick={() => toggleExpand(mt.id)} className="text-blue-600 hover:underline">{isExpanded ? '收起引用' : '查看引用'}</button>
                         </div>
                       </td>
                     </tr>
@@ -560,6 +567,7 @@ export default function DeviceTypes() {
           </table>
           </div>
           <Pagination page={moduleTypePaged.page} total={moduleTypePaged.total} totalPages={moduleTypePaged.totalPages} onChange={moduleTypePaged.setPage} />
+        </div>
         </div>
       )}
 
