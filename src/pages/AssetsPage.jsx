@@ -7,6 +7,7 @@ import DeviceTypes from './DeviceTypes';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import TertiaryTabs from '../components/TertiaryTabs';
+import { Pagination, usePaged } from '../components/Pagination';
 import { Link, useNavigate } from 'react-router-dom';
 import { deviceLifecycleStatus, deviceBusinessNode } from '../utils/status';
 
@@ -246,6 +247,7 @@ function AlertsSubTab({ state, dispatch, currentRole }) {
     })
     .sort((a, b) => b.alertTime.localeCompare(a.alertTime));
 
+  const paged = usePaged(filtered, 10);
   const pendingCount = alerts.filter(a => a.status === '待处理').length;
   const severeCount = alerts.filter(a => a.severity === '严重' && a.status === '待处理').length;
 
@@ -287,16 +289,17 @@ function AlertsSubTab({ state, dispatch, currentRole }) {
       </div>
 
       <div className="bg-white rounded shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
               {['告警时间', '设备SN', '项目', '严重程度', '描述', '状态', ''].map((h, i) => (
-                <th key={i} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
+                <th key={i} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.map(a => {
+            {paged.pageItems.map(a => {
               const isExpanded = expandedId === a.id;
               const isUrgent = a.severity === '严重' && a.status === '待处理';
               const cellCls = `px-4 py-2.5 border-t border-gray-100 cursor-pointer ${isUrgent ? 'bg-red-50' : 'hover:bg-gray-50'} transition-colors`;
@@ -341,6 +344,8 @@ function AlertsSubTab({ state, dispatch, currentRole }) {
             {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">暂无告警记录</td></tr>}
           </tbody>
         </table>
+        </div>
+        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </div>
 
       {showModal && <AddAlertModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleSave} devices={onlineDevices} />}
@@ -376,6 +381,7 @@ function AllDevicesSubTab({ state }) {
     const matchSearch = !search || d.sn.toLowerCase().includes(search.toLowerCase()) || getTypeName(d.deviceTypeId).toLowerCase().includes(search.toLowerCase());
     return matchStatus && matchSearch;
   });
+  const paged = usePaged(filtered, 10);
 
   return (
     <div>
@@ -401,7 +407,8 @@ function AllDevicesSubTab({ state }) {
         </div>
       </div>
 
-      <div className="bg-white rounded shadow-sm overflow-x-auto">
+      <div className="bg-white rounded shadow-sm">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
@@ -411,7 +418,7 @@ function AllDevicesSubTab({ state }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filtered.map(d => {
+            {paged.pageItems.map(d => {
               const days = daysSince(d.updatedAt || d.assemblyTime);
               const isStuck = days > 3 && d.lifecycle === '生产中';
               const project = d.projectId ? projects.find(p => p.id === d.projectId) : null;
@@ -442,6 +449,8 @@ function AllDevicesSubTab({ state }) {
             {filtered.length === 0 && <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">暂无数据</td></tr>}
           </tbody>
         </table>
+        </div>
+        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </div>
     </div>
   );
@@ -452,6 +461,7 @@ function LocationsTab({ state }) {
   const { locations = [], projects, devices, deliveryPlans = [] } = state;
   const getProjectName = id => projects.find(p => p.id === id)?.name || '—';
   const deliveryPlanNames = (projectId) => deliveryPlans.filter(dp => dp.projectId === projectId).map(dp => dp.batchNo || dp.name);
+  const paged = usePaged(locations, 10);
 
   return (
     <div>
@@ -468,7 +478,8 @@ function LocationsTab({ state }) {
           </div>
         ))}
       </div>
-      <div className="bg-white rounded shadow-sm overflow-x-auto">
+      <div className="bg-white rounded shadow-sm">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
@@ -478,21 +489,21 @@ function LocationsTab({ state }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {locations.map(loc => {
+            {paged.pageItems.map(loc => {
               const boundDevices = devices.filter(d => d.locationId === loc.id || (loc.deviceIds || []).includes(d.id));
               const onlineCount = boundDevices.filter(d => d.status === '在线运营').length;
               return (
                 <tr key={loc.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 text-gray-600 text-xs">
+                  <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">
                     <Link to={`/projects/${loc.projectId}`} className="text-slate-700 hover:underline">{getProjectName(loc.projectId)}</Link>
                   </td>
-                  <td className="px-4 py-2.5 text-gray-800 font-medium">{loc.name}</td>
-                  <td className="px-4 py-2.5 text-gray-500 text-xs">{loc.address || '—'}</td>
+                  <td className="px-4 py-2.5 text-gray-800 font-medium whitespace-nowrap">{loc.name}</td>
+                  <td className="px-4 py-2.5 text-gray-500 text-xs whitespace-nowrap">{loc.address || '—'}</td>
                   <td className="px-4 py-2.5 text-gray-600">{loc.plannedCount || (loc.deviceIds || []).length || '—'}</td>
                   <td className="px-4 py-2.5 text-gray-600">{boundDevices.length}</td>
                   <td className="px-4 py-2.5 text-gray-600">{onlineCount}</td>
-                  <td className="px-4 py-2.5 text-gray-500 text-xs">{deliveryPlanNames(loc.projectId).join('、') || '—'}</td>
-                  <td className="px-4 py-2.5 text-xs">
+                  <td className="px-4 py-2.5 text-gray-500 text-xs whitespace-nowrap">{deliveryPlanNames(loc.projectId).join('、') || '—'}</td>
+                  <td className="px-4 py-2.5 text-xs whitespace-nowrap">
                     <Link to={`/projects/${loc.projectId}`} className="text-slate-600 hover:underline">查看项目</Link>
                   </td>
                 </tr>
@@ -501,6 +512,8 @@ function LocationsTab({ state }) {
             {locations.length === 0 && <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">暂无点位</td></tr>}
           </tbody>
         </table>
+        </div>
+        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </div>
     </div>
   );

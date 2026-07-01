@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
+import { Pagination, usePaged } from '../components/Pagination';
 import { deviceBusinessNode } from '../utils/status';
 
 const CATEGORIES = ['底盘', '机械臂', '电机', '末端', '全身相机', '预控'];
@@ -159,6 +160,9 @@ export default function DeviceTypes() {
   const [editingDeviceType, setEditingDeviceType] = useState(null);
   const [expandedIds, setExpandedIds] = useState(new Set());
 
+  const deviceTypePaged = usePaged(state.deviceTypes, 10);
+  const moduleTypePaged = usePaged(state.moduleTypes, 10);
+
   const getModuleName = (id) => state.moduleTypes.find((m) => m.id === id)?.name || id;
   const getModuleCategory = (id) => state.moduleTypes.find((m) => m.id === id)?.category || '';
 
@@ -237,16 +241,17 @@ export default function DeviceTypes() {
               </button>
             )}
           </div>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
                 {['', '设备类型ID', '设备类型名称', 'URDF文件', '装配模板', '操作'].map((h) => (
-                  <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
+                  <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {state.deviceTypes.map((dt) => {
+              {deviceTypePaged.pageItems.map((dt) => {
                 const isExpanded = expandedIds.has(dt.id);
                 const slots = dt.slots || [];
                 return (
@@ -434,6 +439,8 @@ export default function DeviceTypes() {
               )}
             </tbody>
           </table>
+          </div>
+          <Pagination page={deviceTypePaged.page} total={deviceTypePaged.total} totalPages={deviceTypePaged.totalPages} onChange={deviceTypePaged.setPage} />
         </div>
       )}
 
@@ -449,6 +456,7 @@ export default function DeviceTypes() {
               </button>
             )}
           </div>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -458,7 +466,7 @@ export default function DeviceTypes() {
               </tr>
             </thead>
             <tbody>
-              {state.moduleTypes.map((mt) => {
+              {moduleTypePaged.pageItems.map((mt) => {
                 const isExpanded = expandedIds.has(mt.id);
                 const referencedBy = getReferencingDeviceTypes(mt.id);
                 return (
@@ -550,6 +558,8 @@ export default function DeviceTypes() {
               )}
             </tbody>
           </table>
+          </div>
+          <Pagination page={moduleTypePaged.page} total={moduleTypePaged.total} totalPages={moduleTypePaged.totalPages} onChange={moduleTypePaged.setPage} />
         </div>
       )}
 

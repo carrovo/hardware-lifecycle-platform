@@ -204,7 +204,7 @@ export default function Layout({ children }) {
       </aside>
 
       {/* Content */}
-      <main className="flex-1 ml-52 min-h-screen">
+      <main className="flex-1 min-w-0 ml-52 min-h-screen">
         {children}
       </main>
     </div>

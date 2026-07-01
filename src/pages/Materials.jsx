@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
+import { Pagination, usePaged } from '../components/Pagination';
 import { MATERIAL_CATEGORIES } from '../data/mockData';
 
 const RESULT_BADGE = {
@@ -176,9 +177,11 @@ function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [] }) {
   const riskBadge = (risk) => risk === '缺料'
     ? 'bg-red-100 text-red-700 border-red-300'
     : risk === '偏低' ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-green-100 text-green-700 border-green-300';
+  const paged = usePaged(inventory, 10);
 
   return (
-    <div className="bg-white rounded shadow-sm overflow-x-auto">
+    <div className="bg-white rounded shadow-sm">
+      <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-gray-50">
           <tr>
@@ -188,7 +191,7 @@ function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [] }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {inventory.map((mt) => (
+          {paged.pageItems.map((mt) => (
             <tr key={mt.id} className={`hover:bg-gray-50 ${!mt.active ? 'opacity-50' : ''}`}>
               <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">{mt.name}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{mt.category}</span></td>
               <td className="px-4 py-3 text-gray-600 text-xs">{mt.model}</td>
@@ -206,6 +209,8 @@ function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [] }) {
           ))}
         </tbody>
       </table>
+      </div>
+      <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
     </div>
   );
 }
@@ -224,6 +229,7 @@ function ModuleInstanceTab({ materials, devices, moduleTypes, batches = [] }) {
     const okQ = !q || m.sn.toLowerCase().includes(q.toLowerCase()) || (m.model || '').toLowerCase().includes(q.toLowerCase());
     return okStatus && okQ;
   });
+  const paged = usePaged(filtered, 10);
 
   return (
     <div>
@@ -235,7 +241,8 @@ function ModuleInstanceTab({ materials, devices, moduleTypes, batches = [] }) {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索模块SN / 型号..." className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-52" />
         <span className="ml-auto text-sm text-gray-400">共 {filtered.length} 个实例</span>
       </div>
-      <div className="bg-white rounded shadow-sm overflow-x-auto">
+      <div className="bg-white rounded shadow-sm">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>{['模块SN', '模块类型', '型号', '供应商', '来源批次', 'ERP采购单号', '当前状态', '锁定生产计划', '已装配设备SN', '当前所在设备', '最近更新', '操作'].map((h) => (
@@ -243,7 +250,7 @@ function ModuleInstanceTab({ materials, devices, moduleTypes, batches = [] }) {
             ))}</tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filtered.map((m) => (
+            {paged.pageItems.map((m) => (
               <tr key={m.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5 font-mono text-xs text-gray-800 font-medium whitespace-nowrap">{m.sn}</td>
                 <td className="px-4 py-2.5 text-gray-700">{typeName(m.category)}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{m.category}</span></td>
@@ -262,6 +269,8 @@ function ModuleInstanceTab({ materials, devices, moduleTypes, batches = [] }) {
             {filtered.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无模块实例</td></tr>}
           </tbody>
         </table>
+        </div>
+        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </div>
     </div>
   );
@@ -311,6 +320,7 @@ export default function Materials() {
       return matchCat && matchSupplier && matchResult && matchItemStatus && matchSearch;
     })
     .sort((a, b) => b.inspectionTime.localeCompare(a.inspectionTime));
+  const paged = usePaged(filtered, 10);
 
   const toggleExpand = (id) => {
     setExpandedIds((prev) => {
@@ -438,6 +448,7 @@ export default function Materials() {
 
           {/* Batch table */}
           <div className="bg-white rounded shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
@@ -447,7 +458,7 @@ export default function Materials() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((b) => {
+                {paged.pageItems.map((b) => {
                   const passCount = b.items.filter((it) => it.result === '合格' || it.result === '特批使用').length;
                   const failCount = b.items.filter((it) => it.result === '不合格').length;
                   const isExpanded = expandedIds.has(b.id);
@@ -549,6 +560,8 @@ export default function Materials() {
                 )}
               </tbody>
             </table>
+            </div>
+            <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
           </div>
         </>
       )}
