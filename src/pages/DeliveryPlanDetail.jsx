@@ -128,21 +128,27 @@ function DeviceSelectModal({ isOpen, onClose, eligibleDevices, locations, device
           </select>
         </div>
         <div className="border border-gray-200 rounded overflow-hidden max-h-80 overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 sticky top-0"><tr><th className="px-3 py-2 w-10" />{['设备SN', '整机类型', '状态', '当前点位'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {eligibleDevices.map((device) => (
-                <tr key={device.id} onClick={() => toggle(device.id)} className="hover:bg-gray-50 cursor-pointer">
-                  <td className="px-3 py-2"><input type="checkbox" checked={selected.has(device.id)} onChange={() => toggle(device.id)} onClick={(e) => e.stopPropagation()} /></td>
-                  <td className="px-3 py-2 font-mono text-xs font-medium">{device.sn}</td>
-                  <td className="px-3 py-2">{getTypeName(device.deviceTypeId)}</td>
-                  <td className="px-3 py-2"><StatusBadge status={device.status} /></td>
-                  <td className="px-3 py-2 text-gray-500">{locations.find((location) => location.id === device.locationId)?.name || '—'}</td>
-                </tr>
-              ))}
-              {eligibleDevices.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">暂无可交付设备</td></tr>}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 sticky top-0"><tr><th className="px-3 py-2 w-10" />{['设备SN', '设备类型', '来源生产计划', '入库时间', '当前状态', '当前点位', '预分配点位', '是否被其他交付计划占用'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {eligibleDevices.map((device) => (
+                  <tr key={device.id} onClick={() => toggle(device.id)} className="hover:bg-gray-50 cursor-pointer">
+                    <td className="px-3 py-2"><input type="checkbox" checked={selected.has(device.id)} onChange={() => toggle(device.id)} onClick={(e) => e.stopPropagation()} /></td>
+                    <td className="px-3 py-2 font-mono text-xs font-medium whitespace-nowrap">{device.sn}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{getTypeName(device.deviceTypeId)}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{device.productionPlanId || '—'}</td>
+                    <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{device.inboundTime || device.updatedAt || '—'}</td>
+                    <td className="px-3 py-2"><StatusBadge status={device.status} /></td>
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{locations.find((location) => location.id === device.locationId)?.name || '—'}</td>
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{locationId ? (locations.find((l) => l.id === locationId)?.name || '—') : '待分配'}</td>
+                    <td className="px-3 py-2 text-xs text-emerald-600 whitespace-nowrap">否</td>
+                  </tr>
+                ))}
+                {eligibleDevices.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">暂无可交付设备</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className={BTN_GHOST}>取消</button>
@@ -153,15 +159,24 @@ function DeviceSelectModal({ isOpen, onClose, eligibleDevices, locations, device
   );
 }
 
-function ResultModal({ isOpen, onClose, title, devices, defaultResult = 'Pass', requireLocation = false, locations, onSave }) {
-  const [form, setForm] = useState({ deviceId: '', result: defaultResult, operator: '', locationId: '', changeReason: '', notes: '' });
-  const selectedDevice = devices.find((device) => device.id === form.deviceId);
-  const preLocation = selectedDevice?.preAssignedLocationId || selectedDevice?.locationId || '';
+// variant: 'factory' | 'site' | 'accept'，按交付节点渲染差异化字段与校验。
+function ResultModal({ isOpen, onClose, title, variant, devices, locations, deviceTypes = [], onSave }) {
+  const [form, setForm] = useState({ deviceId: '', result: 'Pass', operator: '', locationId: '', changeReason: '', ngReason: '', notes: '', customerRep: '', genWorkOrder: true, genQualityIssue: false });
+  const device = devices.find((d) => d.id === form.deviceId);
+  const preLocation = device?.preAssignedLocationId || device?.locationId || '';
+  const preLocationName = locations.find((l) => l.id === preLocation)?.name || '—';
+  const siteLocationName = locations.find((l) => l.id === (device?.locationId || preLocation))?.name || '—';
+  const typeName = deviceTypes.find((t) => t.id === device?.deviceTypeId)?.name || device?.deviceTypeId || '—';
+  const requireLocation = variant === 'site';
   const locationChanged = requireLocation && form.locationId && preLocation && form.locationId !== preLocation;
+  const isNG = form.result === 'NG';
+  const operatorLabel = variant === 'factory' ? '检验人' : variant === 'site' ? '安装调试人' : '验收人';
+  const timeLabel = variant === 'factory' ? '检验时间' : variant === 'site' ? '安装调试时间' : '验收时间';
 
   const submit = (e) => {
     e.preventDefault();
-    onSave({ ...form, deviceSN: selectedDevice?.sn || '', preLocationId: preLocation });
+    onSave({ ...form, deviceSN: device?.sn || '', preLocationId: preLocation });
+    setForm({ deviceId: '', result: 'Pass', operator: '', locationId: '', changeReason: '', ngReason: '', notes: '', customerRep: '', genWorkOrder: true, genQualityIssue: false });
     onClose();
   };
 
@@ -169,13 +184,29 @@ function ResultModal({ isOpen, onClose, title, devices, defaultResult = 'Pass', 
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">设备</label><select className={INPUT} required value={form.deviceId} onChange={(e) => setForm({ ...form, deviceId: e.target.value })}><option value="">-- 选择设备 --</option>{devices.map((device) => <option key={device.id} value={device.id}>{device.sn}</option>)}</select></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">结果</label><select className={INPUT} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}><option>Pass</option><option>NG</option></select></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">操作人</label><input className={INPUT} value={form.operator} onChange={(e) => setForm({ ...form, operator: e.target.value })} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">设备SN</label><select className={INPUT} required value={form.deviceId} onChange={(e) => setForm({ ...form, deviceId: e.target.value })}><option value="">-- 选择设备 --</option>{devices.map((d) => <option key={d.id} value={d.id}>{d.sn}</option>)}</select></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">设备类型</label><input className={`${INPUT} bg-gray-50`} readOnly value={typeName} /></div>
+          {variant === 'site' && <div><label className="block text-sm font-medium text-gray-700 mb-1">预分配点位</label><input className={`${INPUT} bg-gray-50`} readOnly value={preLocationName} /></div>}
+          {variant === 'accept' && <div><label className="block text-sm font-medium text-gray-700 mb-1">现场确认点位</label><input className={`${INPUT} bg-gray-50`} readOnly value={siteLocationName} /></div>}
           {requireLocation && <div><label className="block text-sm font-medium text-gray-700 mb-1">现场确认点位 *</label><select className={INPUT} required value={form.locationId} onChange={(e) => setForm({ ...form, locationId: e.target.value })}><option value="">-- 选择点位 --</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></div>}
-          {locationChanged && <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">点位变更原因 *</label><textarea className={INPUT} required rows={2} value={form.changeReason} onChange={(e) => setForm({ ...form, changeReason: e.target.value })} /></div>}
-          <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">备注 / NG原因</label><textarea className={INPUT} rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">{variant === 'factory' ? '检验结果' : variant === 'site' ? '安装调试结果' : '验收结果'}</label><select className={INPUT} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}><option>Pass</option><option>NG</option></select></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">{operatorLabel}</label><input className={INPUT} value={form.operator} onChange={(e) => setForm({ ...form, operator: e.target.value })} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">{timeLabel}</label><input className={`${INPUT} bg-gray-50`} readOnly value={nowText()} /></div>
+          {variant === 'accept' && <div><label className="block text-sm font-medium text-gray-700 mb-1">客户代表</label><input className={INPUT} value={form.customerRep} onChange={(e) => setForm({ ...form, customerRep: e.target.value })} placeholder="客户签收代表" /></div>}
+          {locationChanged && <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">点位变更原因 *</label><textarea className={INPUT} required rows={2} value={form.changeReason} onChange={(e) => setForm({ ...form, changeReason: e.target.value })} placeholder="现场确认点位与预分配点位不一致，请说明原因" /></div>}
+          {isNG && <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">NG原因 *</label><input className={INPUT} required value={form.ngReason} onChange={(e) => setForm({ ...form, ngReason: e.target.value })} /></div>}
+          <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">{variant === 'accept' ? '验收备注' : '异常说明 / 备注'}</label><textarea className={INPUT} rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">{variant === 'accept' ? '附件 / 验收单' : '附件 / 报告'}</label><input className={`${INPUT} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）上传附件" /></div>
         </div>
+        {isNG && (
+          <div className="bg-red-50 border border-red-100 rounded p-3 space-y-2">
+            <div className="text-xs text-red-600">NG 时不允许进入下一节点，需先处理工单 / 质量问题。</div>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-700">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={form.genWorkOrder} onChange={(e) => setForm({ ...form, genWorkOrder: e.target.checked })} />是否生成交付工单</label>
+              {variant === 'accept' && <label className="flex items-center gap-2"><input type="checkbox" checked={form.genQualityIssue} onChange={(e) => setForm({ ...form, genQualityIssue: e.target.checked })} />是否生成质量问题</label>}
+            </div>
+          </div>
+        )}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className={BTN_GHOST}>取消</button>
           <button type="submit" className={BTN_PRIMARY}>保存结果</button>
@@ -472,8 +503,12 @@ export default function DeliveryPlanDetail() {
     if (key === 'siteInstall' && resultForm.locationId) {
       dispatch({ type: 'UPDATE_DEVICE', payload: { id: resultForm.deviceId, locationId: resultForm.locationId, updatedAt: nowText() } });
     }
-    if (resultForm.result === 'NG') {
-      dispatch({ type: 'ADD_DELIVERY_WORK_ORDER', payload: { id: `DWO-${plan.id}-${resultForm.deviceId}-${nextIndex}`, type: 'delivery', deliveryPlanId: plan.id, deviceId: resultForm.deviceId, deviceSN: resultForm.deviceSN, description: resultForm.notes || `${key}节点NG`, severity: '中', status: '待处理', assignedTo: '', createdAt: nowText(), updatedAt: nowText(), processLogs: [] } });
+    const ngText = resultForm.ngReason || resultForm.notes || `${key}节点NG`;
+    if (resultForm.result === 'NG' && resultForm.genWorkOrder !== false) {
+      dispatch({ type: 'ADD_DELIVERY_WORK_ORDER', payload: { id: `DWO-${plan.id}-${resultForm.deviceId}-${nextIndex}`, type: 'delivery', deliveryPlanId: plan.id, deviceId: resultForm.deviceId, deviceSN: resultForm.deviceSN, description: ngText, severity: '中', status: '待处理', assignedTo: '', createdAt: nowText(), updatedAt: nowText(), processLogs: [] } });
+    }
+    if (resultForm.result === 'NG' && resultForm.genQualityIssue) {
+      dispatch({ type: 'ADD_QUALITY_ISSUE', payload: { id: `QI-${plan.id}-${resultForm.deviceId}-${nextIndex}`, deviceId: resultForm.deviceId, deviceSN: resultForm.deviceSN, projectId: plan.projectId, sourceStage: '客户验收', issueType: '现场质量问题', severity: '中', description: ngText, status: '待处理', createdAt: nowText(), updatedAt: nowText() } });
     }
     dispatch({ type: 'ADD_OPERATION_LOG', payload: { id: `LOG-${Date.now()}-${plan.id}-${key}`, deliveryPlanId: plan.id, projectId: plan.projectId, deviceId: resultForm.deviceId, operator: state.currentUser, timestamp: nowText(), actionType: `录入${key}结果`, fromStatus: plan.status, toStatus: plan.status, notes: `${resultForm.deviceSN} ${resultForm.result}` } });
   };
@@ -588,25 +623,30 @@ export default function DeliveryPlanDetail() {
         isOpen={modal === 'factoryResult'}
         onClose={() => setModal(null)}
         title="录入出厂检验结果"
+        variant="factory"
         devices={boundDevices}
         locations={projectLocations}
+        deviceTypes={state.deviceTypes}
         onSave={(form) => saveStageResult('factoryInspection', form)}
       />
       <ResultModal
         isOpen={modal === 'siteResult'}
         onClose={() => setModal(null)}
         title="录入安装调试结果"
+        variant="site"
         devices={factoryPassDevices.length ? factoryPassDevices : boundDevices}
         locations={projectLocations}
-        requireLocation
+        deviceTypes={state.deviceTypes}
         onSave={(form) => saveStageResult('siteInstall', form)}
       />
       <ResultModal
         isOpen={modal === 'acceptResult'}
         onClose={() => setModal(null)}
         title="录入客户验收结果"
+        variant="accept"
         devices={sitePassDevices.length ? sitePassDevices : boundDevices}
         locations={projectLocations}
+        deviceTypes={state.deviceTypes}
         onSave={(form) => saveStageResult('customerAccept', form)}
       />
       <ActionPlaceholderModal isOpen={!!actionName} onClose={() => setActionName(null)} title={actionName} />

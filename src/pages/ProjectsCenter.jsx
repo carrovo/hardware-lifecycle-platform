@@ -216,7 +216,7 @@ function ProjectListTab() {
       已关闭: [view, logsBtn],
       已作废: [view, logsBtn],
     };
-    return <div className="flex flex-wrap gap-x-3 gap-y-1 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>{(map[project.status] || [view]).map((node, i) => <span key={i}>{node}</span>)}</div>;
+    return <div className="flex items-center gap-x-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>{(map[project.status] || [view]).map((node, i) => <span key={i}>{node}</span>)}</div>;
   };
 
   return (
@@ -281,7 +281,7 @@ function ProjectListTab() {
                       {project.erpLinked ? '已关联' : '未关联'}
                     </span>
                   </td>
-                  <td className="px-4 py-3">{actionButtons(project)}</td>
+                  <td className="px-4 py-3 min-w-[320px]">{actionButtons(project)}</td>
                 </tr>
               ))}
               {filtered.length === 0 && <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">暂无匹配项目</td></tr>}
@@ -544,8 +544,8 @@ function ProductionPlanTab() {
                   <td className="px-4 py-3"><StatusBadge status={plan.status} /></td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{plan.owner}</td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">{plan.erpProductionOrderNo || '—'}</td>
-                  <td className="px-4 py-3" onClick={stop}>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs whitespace-nowrap">
+                  <td className="px-4 py-3 min-w-[300px]" onClick={stop}>
+                    <div className="flex items-center gap-x-3 text-xs whitespace-nowrap">
                       <button className="text-slate-600 hover:underline" onClick={() => navigate(`/production-plans/${plan.id}`)}>查看</button>
                       <button className="text-emerald-600 hover:underline" onClick={() => enterCurrentNode(plan)}>进入当前节点</button>
                       <button className="text-blue-600 hover:underline" onClick={() => setPlaceholder({ title: '编辑生产计划', text: `编辑「${plan.name || plan.id}」的入口已保留，后续接入表单与校验。` })}>编辑</button>
@@ -665,8 +665,8 @@ function DeliveryPlanTab() {
                   <td className="px-4 py-3"><StatusBadge status={plan.currentNode} /></td>
                   <td className="px-4 py-3"><StatusBadge status={plan.status} /></td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{plan.owner}</td>
-                  <td className="px-4 py-3" onClick={stop}>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs whitespace-nowrap">
+                  <td className="px-4 py-3 min-w-[340px]" onClick={stop}>
+                    <div className="flex items-center gap-x-3 text-xs whitespace-nowrap">
                       <button className="text-slate-600 hover:underline" onClick={() => navigate(`/delivery-plans/${plan.id}`)}>查看</button>
                       <button className="text-emerald-600 hover:underline" onClick={() => navigate(`/delivery-plans/${plan.id}?node=${NODE_KEY[plan.currentNode] || 'binding'}`)}>进入当前节点</button>
                       <button className="text-indigo-600 hover:underline" onClick={() => navigate(`/delivery-plans/${plan.id}?node=binding`)}>选择设备</button>
@@ -674,6 +674,7 @@ function DeliveryPlanTab() {
                       {!['已验收', '已作废'].includes(plan.status) && (
                         <button className="text-red-400 hover:text-red-600 hover:underline" onClick={() => setPlaceholder({ title: '作废交付计划', text: `作废「${plan.name || plan.id}」的入口已保留，后续接入审批流程。` })}>作废</button>
                       )}
+                      <button className="text-gray-600 hover:underline" onClick={() => navigate(`/projects/${plan.projectId}`)}>查看日志</button>
                     </div>
                   </td>
                 </tr>

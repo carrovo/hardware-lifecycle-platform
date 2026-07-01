@@ -70,7 +70,7 @@ function Section({ title, action, children }) {
 
 // 生产计划详情内的通用动作占位弹窗，按动作名展示对应字段。
 const ACTION_FIELDS = {
-  关联来料批次: ['生产计划', '模块类型', '型号', '供应商', '需求数量', '可选来料批次', 'ERP采购单号', '批次到货数量', '批次可用数量', '本次锁定数量', '关联说明'],
+  关联来料批次: ['生产计划', '模块类型', '型号', '供应商', '需求数量', '可选来料批次', 'ERP采购单号', 'ERP到货通知单号', '批次到货数量', '批次可用数量', '本次锁定数量', '关联说明'],
   新增计划外模块: ['模块类型', '型号', '供应商', '是否必填', '需求数量', 'ERP采购单号', '备注'],
   查看关联批次: ['批次号', '模块类型', '供应商', 'ERP采购单号', '可用数量', '本计划锁定数量'],
   生成生产返修记录: ['设备SN', '来源工站', 'NG原因', '返修说明', '负责人', '状态'],
@@ -296,37 +296,44 @@ function RecordDeviceModal({ isOpen, onClose, plan, state, dispatch }) {
           <div><label className="block text-xs text-gray-600 mb-1">配置版本</label><input className={`${INPUT} bg-gray-50`} readOnly value={deviceType?.version || 'V1'} /></div>
           <div><label className="block text-xs text-gray-600 mb-1">所属生产计划</label><input className={`${INPUT} bg-gray-50`} readOnly value={plan.name || plan.id} /></div>
           <div><label className="block text-xs text-gray-600 mb-1">装配人</label><input className={INPUT} value={assembler} onChange={(e) => setAssembler(e.target.value)} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">装配时间</label><input className={`${INPUT} bg-gray-50`} readOnly value={nowText()} /></div>
           <div><label className="block text-xs text-gray-600 mb-1">装配照片/附件</label><input className={`${INPUT} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）上传照片" /></div>
         </div>
 
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">模块绑定（模块SN 只能从在库可用实例中选择）</div>
+        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">模块绑定（模块SN 只能从在库可用实例中选择：已装配 / 维修中 / 已报废 / 锁定其他计划的模块不可选）</div>
         <div className="border border-gray-200 rounded overflow-hidden max-h-72 overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 sticky top-0"><tr>{['装配位置', '需要模块类型', '必填', '模块SN', '来源批次'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {slots.map((s) => {
-                const mt = state.moduleTypes.find((m) => m.id === s.moduleTypeId);
-                const opts = availableFor(s.moduleTypeId);
-                const chosen = matById(bindings[s.id]);
-                return (
-                  <tr key={s.id}>
-                    <td className="px-3 py-2 text-gray-700">{s.slotName}</td>
-                    <td className="px-3 py-2 text-gray-600">{mt?.name || s.moduleTypeId}</td>
-                    <td className="px-3 py-2 text-xs text-gray-500">是</td>
-                    <td className="px-3 py-2">
-                      <select className="border border-gray-300 rounded px-2 py-1 text-xs w-44" value={bindings[s.id] || ''} onChange={(e) => setBindings({ ...bindings, [s.id]: e.target.value })}>
-                        <option value="">-- 选择在库可用SN --</option>
-                        {chosen && !opts.some((o) => o.id === chosen.id) && <option value={chosen.id}>{chosen.sn}</option>}
-                        {opts.map((o) => <option key={o.id} value={o.id}>{o.sn}（{o.supplier}）</option>)}
-                      </select>
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs text-gray-500">{chosen?.batchNo || '—'}</td>
-                  </tr>
-                );
-              })}
-              {slots.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-400">该设备类型暂无装配 BOM 模板</td></tr>}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 sticky top-0"><tr>{['装配位置', '需要模块类型', '是否必填', '模块SN', '模块型号', '供应商', '来源批次', '当前状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {slots.map((s) => {
+                  const mt = state.moduleTypes.find((m) => m.id === s.moduleTypeId);
+                  const opts = availableFor(s.moduleTypeId);
+                  const chosen = matById(bindings[s.id]);
+                  return (
+                    <tr key={s.id}>
+                      <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.slotName}</td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{mt?.name || s.moduleTypeId}</td>
+                      <td className="px-3 py-2 text-xs text-gray-500">是</td>
+                      <td className="px-3 py-2">
+                        <select className="border border-gray-300 rounded px-2 py-1 text-xs w-44" value={bindings[s.id] || ''} onChange={(e) => setBindings({ ...bindings, [s.id]: e.target.value })}>
+                          <option value="">-- 选择在库可用SN --</option>
+                          {chosen && !opts.some((o) => o.id === chosen.id) && <option value={chosen.id}>{chosen.sn}</option>}
+                          {opts.map((o) => <option key={o.id} value={o.id}>{o.sn}（{o.supplier}）</option>)}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{chosen?.model || mt?.model || '—'}</td>
+                      <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{chosen?.supplier || '—'}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{chosen?.batchNo || '—'}</td>
+                      <td className="px-3 py-2"><StatusBadge status={chosen ? '待装配' : '待关联'} /></td>
+                      <td className="px-3 py-2 text-xs whitespace-nowrap">{chosen ? <button type="button" className="text-red-400 hover:text-red-600 hover:underline" onClick={() => setBindings({ ...bindings, [s.id]: '' })}>解绑</button> : <span className="text-gray-300">未绑定</span>}</td>
+                    </tr>
+                  );
+                })}
+                {slots.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-400">该设备类型暂无装配 BOM 模板</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">设备标签（按设备类型标签模板）</div>
@@ -442,9 +449,17 @@ function stationPassed(records, deviceId, idx) {
   const rec = latestStationRec(records, deviceId, STATIONS[idx]);
   return rec && isPassRecord(rec);
 }
+// 整条前缀（0..upToIdx）全部 Pass 才算“可以进入下一工站”。
+// 只看相邻工站会漏掉乱序数据（如初测 NG 但中测有 Pass 记录），这里逐级校验。
+function chainPassed(records, deviceId, upToIdx) {
+  for (let i = 0; i <= upToIdx; i++) {
+    if (!stationPassed(records, deviceId, i)) return false;
+  }
+  return true;
+}
 function cellStatus(device, records, idx) {
-  const prevPass = idx === 0 || stationPassed(records, device.id, idx - 1);
-  // 严格顺序：上一工站未 Pass 前，本工站一律显示 —，避免出现“半成品检验待测但初测已 Pass”。
+  const prevPass = idx === 0 || chainPassed(records, device.id, idx - 1);
+  // 严格顺序：前序工站未全部 Pass 前，本工站一律显示 —，杜绝“前序待测/NG 但后序 Pass”。
   if (!prevPass) return '—';
   const rec = latestStationRec(records, device.id, STATIONS[idx]);
   if (!rec) return '待测';
@@ -456,40 +471,67 @@ const CELL_STYLE = {
   待测: 'bg-gray-100 text-gray-500', 返修中: 'bg-amber-100 text-amber-700', '—': 'text-gray-300',
 };
 
+// 计算某设备当前可录入的工站下标（第一个非 Pass 的工站；全部 Pass 返回 -1）。
+function currentStationIdx(device, records) {
+  for (let idx = 0; idx < STATIONS.length; idx++) {
+    if (cellStatus(device, records, idx) !== 'Pass') return idx;
+  }
+  return -1;
+}
+
 function TestResultModal({ isOpen, onClose, planDevices, records, state, dispatch }) {
-  const [form, setForm] = useState({ deviceId: '', stationKey: 'semi', testType: '功能测试', result: 'Pass', operator: state.currentUser, ngReason: '', notes: '' });
-  const stationName = STATION_KEY_LABEL[form.stationKey];
+  const [form, setForm] = useState({ deviceId: '', testType: '功能测试', result: 'Pass', operator: state.currentUser, ngReason: '', notes: '', genRepair: true, repairOwner: '' });
+  const device = planDevices.find((item) => item.id === form.deviceId);
+  const stationIdx = device ? currentStationIdx(device, records) : -1;
+  // 工站由设备当前进度自动带出，用户不能自由选择，避免跳站破坏流程。
+  const stationKey = stationIdx >= 0 ? STATION_KEYS[stationIdx] : null;
+  const stationName = stationIdx >= 0 ? STATIONS[stationIdx] : (device ? '已完成（全部工站 Pass）' : '请先选择设备');
+  const cellNow = device && stationIdx >= 0 ? cellStatus(device, records, stationIdx) : null;
+  const canRecord = !!device && stationIdx >= 0;
+  const isNG = form.result === 'NG';
+
   const submit = (e) => {
     e.preventDefault();
+    if (!canRecord) return;
     const idSeed = Date.now();
-    const device = planDevices.find((item) => item.id === form.deviceId);
     dispatch({
       type: 'ADD_TEST_RECORD',
-      payload: { id: `TEST-${idSeed}`, deviceId: form.deviceId, stationKey: form.stationKey, stationResult: form.result, testType: form.testType, result: form.result === 'Pass' ? '合格' : '不合格', operator: form.operator, testTime: nowText(), status: '有效', notes: form.notes, ngReason: form.ngReason },
+      payload: { id: `TEST-${idSeed}`, deviceId: form.deviceId, stationKey, stationResult: form.result, testType: form.testType, result: form.result === 'Pass' ? '合格' : '不合格', operator: form.operator, testTime: nowText(), status: '有效', notes: form.notes, ngReason: form.ngReason },
     });
-    dispatch({ type: 'UPDATE_DEVICE', payload: { id: form.deviceId, status: form.result === 'Pass' && form.stationKey === 'oqt' ? '待入库' : form.result === 'NG' ? '生产返修中' : device?.status, updatedAt: nowText() } });
-    if (form.result === 'NG') {
-      dispatch({ type: 'ADD_PRODUCTION_WORK_ORDER', payload: { id: `PWO-${idSeed}`, type: 'production', productionPlanId: device?.productionPlanId, deviceId: form.deviceId, deviceSN: device?.sn || '', ngStation: stationName, description: `${stationName}测试NG：${form.ngReason || form.notes || '待补充原因'}`, severity: '中', status: '待处理', assignedTo: '', createdAt: nowText(), updatedAt: nowText(), processLogs: [] } });
+    dispatch({ type: 'UPDATE_DEVICE', payload: { id: form.deviceId, status: form.result === 'Pass' && stationKey === 'oqt' ? '待入库' : form.result === 'NG' ? '生产返修中' : device?.status, updatedAt: nowText() } });
+    if (form.result === 'NG' && form.genRepair) {
+      dispatch({ type: 'ADD_PRODUCTION_WORK_ORDER', payload: { id: `PWO-${idSeed}`, type: 'production', productionPlanId: device?.productionPlanId, deviceId: form.deviceId, deviceSN: device?.sn || '', ngStation: stationName, description: `${stationName}测试NG：${form.ngReason || form.notes || '待补充原因'}`, severity: '中', status: '待处理', assignedTo: form.repairOwner || '', createdAt: nowText(), updatedAt: nowText(), processLogs: [] } });
     }
+    setForm({ deviceId: '', testType: '功能测试', result: 'Pass', operator: state.currentUser, ngReason: '', notes: '', genRepair: true, repairOwner: '' });
     onClose();
   };
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="录入测试结果" size="lg">
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">设备SN</label><select className={INPUT} required value={form.deviceId} onChange={(e) => setForm({ ...form, deviceId: e.target.value })}><option value="">-- 选择设备 --</option>{planDevices.map((device) => <option key={device.id} value={device.id}>{device.sn}</option>)}</select></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">当前工站</label><select className={INPUT} value={form.stationKey} onChange={(e) => setForm({ ...form, stationKey: e.target.value })}>{Object.entries(STATION_KEY_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">设备SN</label><select className={INPUT} required value={form.deviceId} onChange={(e) => setForm({ ...form, deviceId: e.target.value })}><option value="">-- 选择设备 --</option>{planDevices.map((d) => <option key={d.id} value={d.id}>{d.sn}</option>)}</select></div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">当前可录入工站</label>
+            <input className={`${INPUT} bg-gray-50 ${!canRecord && device ? 'text-gray-400' : 'text-gray-700'}`} readOnly value={stationName} />
+            <p className="text-xs text-gray-400 mt-1">工站由设备测试进度自动带出，需上一工站 Pass 后才能录入下一工站。</p>
+          </div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">测试内容类型</label><select className={INPUT} value={form.testType} onChange={(e) => setForm({ ...form, testType: e.target.value })}>{['功能测试', '老化测试', 'OQT终测', '其他'].map((s) => <option key={s}>{s}</option>)}</select></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">测试结果</label><select className={INPUT} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}><option>Pass</option><option>NG</option></select></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">测试人</label><input className={INPUT} value={form.operator} onChange={(e) => setForm({ ...form, operator: e.target.value })} /></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">测试时间</label><input className={`${INPUT} bg-gray-50`} readOnly value={nowText()} /></div>
-          {form.result === 'NG' && <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">NG原因</label><input className={INPUT} value={form.ngReason} onChange={(e) => setForm({ ...form, ngReason: e.target.value })} /></div>}
+          {isNG && <>
+            <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">NG原因 *</label><input className={INPUT} required value={form.ngReason} onChange={(e) => setForm({ ...form, ngReason: e.target.value })} /></div>
+            <div className="flex items-center gap-2 pt-6"><input id="genRepair" type="checkbox" checked={form.genRepair} onChange={(e) => setForm({ ...form, genRepair: e.target.checked })} /><label htmlFor="genRepair" className="text-sm text-gray-700">生成生产返修记录</label></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1">返修负责人</label><select className={INPUT} value={form.repairOwner} onChange={(e) => setForm({ ...form, repairOwner: e.target.value })}><option value="">-- 选择返修负责人 --</option>{['张三', '李四', '王五', '赵六'].map((p) => <option key={p}>{p}</option>)}</select></div>
+          </>}
           <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">异常说明 / 备注</label><textarea className={INPUT} rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">附件 / 报告</label><input className={`${INPUT} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）上传测试报告" /></div>
         </div>
+        {device && !canRecord && <div className="bg-amber-50 border border-amber-100 rounded p-3 text-xs text-amber-700">该设备已全部工站 Pass，无可录入工站，请前往整机入库节点。</div>}
+        {canRecord && cellNow === 'NG' && <div className="bg-red-50 border border-red-100 rounded p-3 text-xs text-red-600">该设备当前工站为 NG / 返修中，返修完成后在原工站（{stationName}）重新录入结果。</div>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className={BTN_GHOST}>取消</button>
-          <button type="submit" className={BTN_PRIMARY}>保存测试结果</button>
+          <button type="submit" disabled={!canRecord} className={`${BTN_PRIMARY} disabled:opacity-40`}>保存测试结果</button>
         </div>
       </form>
     </Modal>
@@ -510,17 +552,24 @@ function QualityNode({ planDevices, testRecords, workOrders, openTest, openActio
 
   const matrix = planDevices.map((d) => {
     const cells = STATIONS.map((_, idx) => cellStatus(d, records, idx));
+    // 当前工站 = 第一个非 Pass 的工站；全 Pass 则已完成。
     const currentIdx = cells.findIndex((c) => c !== 'Pass');
+    const currentCell = currentIdx === -1 ? null : cells[currentIdx];
     const ngCount = records.filter((r) => r.deviceId === d.id && isNGRecord(r)).length;
     const hasNG = cells.includes('NG') || cells.includes('返修中');
+    // 当前状态严格由当前工站单元格推导：NG→待返修、返修中→返修中、待测→测试中、全过→测试通过。
+    const currentStatus = currentIdx === -1 ? '测试通过'
+      : currentCell === '返修中' ? '返修中'
+      : currentCell === 'NG' ? '待返修'
+      : '测试中';
     return {
       device: d,
       cells,
-      currentStation: currentIdx === -1 ? '全部通过' : STATIONS[currentIdx],
-      currentStatus: cells.includes('返修中') ? '返修中' : currentIdx === -1 ? '测试通过' : cells[currentIdx] === 'NG' ? '测试NG' : '测试中',
+      currentStation: currentIdx === -1 ? '已完成' : STATIONS[currentIdx],
+      currentStatus,
       ngCount,
       hasNG,
-      repair: d.status === '生产返修中' ? '返修中' : '—',
+      repair: currentCell === '返修中' ? '返修中' : currentCell === 'NG' ? '待返修' : '—',
     };
   });
   const paged = usePaged(matrix, 10);

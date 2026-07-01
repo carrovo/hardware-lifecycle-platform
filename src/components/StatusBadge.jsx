@@ -134,6 +134,7 @@ const statusColorMap = {
   '待录入':       'bg-gray-100 text-gray-500 border-gray-300',
   '待补齐模块':   'bg-amber-100 text-amber-700 border-amber-300',
   '待补齐标签':   'bg-amber-100 text-amber-700 border-amber-300',
+  '待返修':       'bg-red-100 text-red-700 border-red-300',
 };
 
 export default function StatusBadge({ status, size = 'sm' }) {
