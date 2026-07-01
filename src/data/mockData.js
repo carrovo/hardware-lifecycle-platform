@@ -366,8 +366,8 @@ export const materialBatches = [
 
 export const projects = [
   { id: 'PROJ-001', name: '智魔方项目', client: '智魔方科技有限公司', contactPerson: '采购负责人', contactPhone: '13800138001', background: '为智魔方科技园区引入智能搬运机器人，提升产线自动化水平，降低人力成本约30%。', notes: '优先保障A厂房产线交付', targetCount: 5, manager: '张三', createdAt: '2026-05-15 09:00', updatedAt: '2026-06-10 10:00' },
-  { id: 'PROJ-002', name: '华熙生物项目', client: '华熙生物科技股份有限公司', contactPerson: '项目对接人', contactPhone: '13900139002', background: '为华熙生物园区部署智能物流机器人，实现原料、样品及成品的自动化配送，提升园区运营效率。', notes: '需满足生物园区洁净环境要求', targetCount: 3, manager: '李四', createdAt: '2026-05-20 10:00', updatedAt: '2026-06-12 09:00' },
-  { id: 'PROJ-003', name: '机场项目', client: '首都国际机场集团', contactPerson: '运营负责人', contactPhone: '13700137003', background: '在机场航站楼部署巡检机器人，覆盖安防巡逻、设备状态监测及旅客引导等功能。', notes: '防护等级需IP65以上，需通过民航安全认证', targetCount: 4, manager: '王五', createdAt: '2026-06-01 10:00', updatedAt: '2026-06-18 14:00' },
+  { id: 'PROJ-002', name: '华熙生物项目', client: '华熙生物科技股份有限公司', contactPerson: '项目对接人', contactPhone: '13900139002', background: '为华熙生物园区部署智能物流机器人，实现原料、样品及成品的自动化配送，提升园区运营效率。', notes: '需满足生物园区洁净环境要求', targetCount: 4, manager: '李四', createdAt: '2026-05-20 10:00', updatedAt: '2026-06-12 09:00' },
+  { id: 'PROJ-003', name: '机场项目', client: '首都国际机场集团', contactPerson: '运营负责人', contactPhone: '13700137003', background: '在机场航站楼部署巡检机器人，覆盖安防巡逻、设备状态监测及旅客引导等功能。', notes: '防护等级需IP65以上，需通过民航安全认证', targetCount: 5, manager: '王五', createdAt: '2026-06-01 10:00', updatedAt: '2026-06-18 14:00' },
   { id: 'PROJ-004', name: '苏州高新园区项目', client: '苏州高新产业园运营有限公司', contactPerson: '园区项目经理', contactPhone: '13600136004', background: '园区一期部署巡检与配送复合机器人，覆盖公共区域巡检、物资转运和夜间异常告警。', notes: '首批仅做样板区，验收后扩展到二期', targetCount: 6, manager: '赵六', status: '进行中', erpProjectNo: 'ERP-PJ-2026-044', createdAt: '2026-06-08 09:30', updatedAt: '2026-06-25 16:00' },
   { id: 'PROJ-005', name: '南山医院物流项目', client: '深圳南山医院', contactPerson: '设备科负责人', contactPhone: '13500135005', background: '用于院内药品、耗材、检验样本跨楼层配送，降低人工往返频次。', notes: '电梯联动接口暂未开放，先做单楼层闭环演示', targetCount: 2, manager: '蔡八', status: '未开始', createdAt: '2026-06-18 11:00', updatedAt: '2026-06-18 11:00' },
   { id: 'PROJ-006', name: '杭州东站验收项目', client: '杭州铁路枢纽运营公司', contactPerson: '现场验收负责人', contactPhone: '13400134006', background: '站内巡检机器人完成试运行，进入客户最终验收阶段。', notes: '验收资料已同步ERP', targetCount: 3, manager: '李四', status: '已交付', erpProjectNo: 'ERP-PJ-2026-032', createdAt: '2026-04-10 08:30', updatedAt: '2026-06-26 17:30' },
@@ -742,7 +742,7 @@ export const deliveryPlans = [
     records: {
       binding: [
         { id: 'BIND-010', deviceId: 'DEV-010', preAssignedLocationId: 'LOC-001', operator: '张三', time: '2026-06-07 09:00' },
-        { id: 'BIND-011', deviceId: 'DEV-011', preAssignedLocationId: 'LOC-002', operator: '张三', time: '2026-06-07 09:10' },
+        { id: 'BIND-011', deviceId: 'DEV-011', preAssignedLocationId: 'LOC-001', operator: '张三', time: '2026-06-07 09:10' },
         { id: 'BIND-013', deviceId: 'DEV-013', preAssignedLocationId: 'LOC-001', operator: '张三', time: '2026-06-07 09:20' },
       ],
       factoryInspection: [

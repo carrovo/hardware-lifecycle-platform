@@ -27,6 +27,16 @@ function Section({ title, action, children }) {
   );
 }
 
+function StatCard({ title, value, sub }) {
+  return (
+    <div className="bg-white rounded shadow-sm p-4 border border-gray-100">
+      <div className="text-sm text-gray-500 mb-2">{title}</div>
+      <div className="text-2xl font-semibold text-gray-900">{value}</div>
+      {sub && <div className="text-xs text-gray-400 mt-2">{sub}</div>}
+    </div>
+  );
+}
+
 function ProgressCard({ title, done, total, color }) {
   const pct = total > 0 ? Math.min(Math.round((done / total) * 100), 100) : 0;
   return (
@@ -225,6 +235,8 @@ export default function ProjectDetail() {
   }).length;
   const acceptedCount = projDeliveryPlans.reduce((sum, plan) => sum + (plan.records?.customerAccept || []).filter(isPass).length, 0);
   const pendingIssues = projIssues.filter((q) => q.status !== '已关闭').length + projWorkOrders.filter((w) => !['已关闭', '已作废'].includes(w.status)).length;
+  const prodActiveCount = projProductionPlans.filter((p) => productionPlanStatus(p) === '生产中').length;
+  const prodDoneCount = projProductionPlans.filter((p) => productionPlanStatus(p) === '已完成').length;
 
   const availableDevices = devices.filter((d) =>
     ['已入库', '待分配项目'].includes(d.status)
@@ -253,8 +265,7 @@ export default function ProjectDetail() {
   let topActions = [
     { label: '编辑', modal: 'edit', cls: BTN_GHOST },
     { label: '创建生产计划', modal: 'production', cls: BTN_GHOST },
-    { label: '创建交付计划', modal: 'delivery', cls: BTN_GHOST },
-    { label: '绑定设备', modal: 'bind', cls: BTN_PRIMARY },
+    { label: '创建交付计划', modal: 'delivery', cls: BTN_PRIMARY },
     { label: '查看日志', modal: 'logs', cls: BTN_GHOST },
   ];
   if (status === '已作废' || status === '已关闭') {
@@ -298,10 +309,10 @@ export default function ProjectDetail() {
       </div>
 
       <div className="grid grid-cols-4 gap-4">
-        <ProgressCard title="设备进度" done={Math.max(producedCount, projDevices.length)} total={project.targetCount} color="bg-blue-500" />
+        <ProgressCard title="设备进度" done={Math.min(Math.max(producedCount, projDevices.length), project.targetCount)} total={project.targetCount} color="bg-blue-500" />
         <ProgressCard title="交付进度" done={acceptedCount} total={project.targetCount} color="bg-emerald-500" />
-        <ProgressCard title="生产计划" done={projProductionPlans.length} total={Math.max(projProductionPlans.length, 1)} color="bg-indigo-500" />
-        <ProgressCard title="待处理问题/工单" done={pendingIssues} total={Math.max(pendingIssues, 1)} color={pendingIssues > 0 ? 'bg-red-500' : 'bg-green-500'} />
+        <StatCard title="生产计划数" value={projProductionPlans.length} sub={`生产中 ${prodActiveCount} · 已完成 ${prodDoneCount}`} />
+        <StatCard title="待处理问题/工单" value={pendingIssues} sub={pendingIssues > 0 ? '需要跟进' : '暂无待处理'} />
       </div>
 
       <Section title="项目基础信息">
@@ -343,21 +354,29 @@ export default function ProjectDetail() {
 
         <Section title="交付计划列表摘要" action={<Link to="/projects?tab=delivery" className="text-xs text-blue-600 hover:underline">查看全部</Link>}>
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-gray-500">{['计划ID', '计划名称', '状态', '当前节点', '验收'].map((h) => <th key={h} className="py-2">{h}</th>)}</tr></thead>
+            <thead><tr className="text-left text-xs text-gray-500">{['计划ID', '交付批次', '状态', '当前节点', '验收进度', '计划验收', '操作'].map((h) => <th key={h} className="py-2">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-100">
               {projDeliveryPlans.slice(0, 5).map((plan) => {
                 const accepted = (plan.records?.customerAccept || []).filter(isPass).length;
+                const nodeKey = { 绑定设备: 'binding', 出厂检验: 'factoryInspection', 现场安装调试: 'siteInstall', 客户验收: 'customerAccept' }[plan.currentNode] || 'binding';
                 return (
                   <tr key={plan.id} className="hover:bg-gray-50">
                     <td className="py-2 font-mono text-xs"><Link to={`/delivery-plans/${plan.id}`} className="text-blue-600 hover:underline">{plan.id}</Link></td>
-                    <td className="py-2 text-gray-700">{plan.name}</td>
+                    <td className="py-2 text-gray-700">{plan.batchNo || plan.name}</td>
                     <td className="py-2"><StatusBadge status={deliveryPlanStatus(plan)} /></td>
                     <td className="py-2"><StatusBadge status={plan.currentNode || '绑定设备'} /></td>
                     <td className="py-2 text-gray-600">{accepted}/{plan.targetCount || 0}</td>
+                    <td className="py-2 text-xs text-gray-500">{plan.acceptanceDate || plan.dueDate || '—'}</td>
+                    <td className="py-2">
+                      <div className="flex gap-2 text-xs">
+                        <Link to={`/delivery-plans/${plan.id}?node=${nodeKey}`} className="text-emerald-600 hover:underline">进入流程</Link>
+                        <Link to={`/delivery-plans/${plan.id}?node=binding`} className="text-indigo-600 hover:underline">绑定设备</Link>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
-              {projDeliveryPlans.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-gray-400">暂无交付计划</td></tr>}
+              {projDeliveryPlans.length === 0 && <tr><td colSpan={7} className="py-8 text-center text-gray-400">暂无交付计划</td></tr>}
             </tbody>
           </table>
         </Section>

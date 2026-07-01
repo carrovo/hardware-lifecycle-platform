@@ -194,8 +194,13 @@ function BindingNode({ plan, boundDevices, eligibleDevices, locations, deviceTyp
                   <td className="px-3 py-2 font-mono text-xs text-gray-500">{device.productionPlanId || '—'}</td>
                   <td className="px-3 py-2"><StatusBadge status={bindingDeviceStatus(device, true)} /></td>
                   <td className="px-3 py-2">{location?.name || '—'}</td>
-                  <td className="px-3 py-2"><StatusBadge status="绑定设备" /></td>
-                  <td className="px-3 py-2"><button className="text-xs text-red-500 hover:underline" onClick={() => openAction('解绑设备')}>解绑</button></td>
+                  <td className="px-3 py-2"><StatusBadge status="已绑定" /></td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-2">
+                      <button className="text-xs text-slate-600 hover:underline" onClick={() => openAction('调整点位')}>调整点位</button>
+                      <button className="text-xs text-red-500 hover:underline" onClick={() => openAction('解绑设备')}>解绑</button>
+                    </div>
+                  </td>
                 </tr>
               );
             })}
@@ -345,7 +350,12 @@ export default function DeliveryPlanDetail() {
     .filter((item) => item.id !== plan.id && !['已验收', '已作废'].includes(item.status))
     .flatMap(getBoundDeviceIds));
   const boundIds = getBoundDeviceIds(plan);
-  const boundDevices = boundIds.map((deviceId) => state.devices.find((device) => device.id === deviceId)).filter(Boolean);
+  // 从绑定记录取预分配点位，补到设备对象上，保证出厂检验 / 现场安装调试节点都能显示预分配点位。
+  const preLocMap = Object.fromEntries((plan.records?.binding || []).map((b) => [b.deviceId, b.preAssignedLocationId]));
+  const boundDevices = boundIds
+    .map((deviceId) => state.devices.find((device) => device.id === deviceId))
+    .filter(Boolean)
+    .map((device) => ({ ...device, preAssignedLocationId: device.preAssignedLocationId || preLocMap[device.id] || null }));
   const eligibleDevices = state.devices.filter((device) =>
     device.projectId === plan.projectId
     && ['已入库', '待分配项目', '已分配项目'].includes(device.status)

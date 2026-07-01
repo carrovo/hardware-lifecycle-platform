@@ -203,7 +203,7 @@ function MaterialPrepNode({ plan, state, openAction }) {
   return (
     <div className="space-y-5">
       <MetricCards items={[
-        { label: '齐套类别', value: `${readyCount}/${requiredModules.length}`, color: 'border-cyan-500' },
+        { label: '齐套进度', value: `${readyCount}/${requiredModules.length}`, color: 'border-cyan-500' },
         { label: '关联批次', value: linkedBatches.length, color: 'border-blue-500' },
         { label: 'ERP生产订单号', value: plan.erpProductionOrderNo ? '已关联' : '未关联', color: plan.erpProductionOrderNo ? 'border-green-500' : 'border-amber-500' },
         { label: '计划数量', value: plan.targetCount || 0, color: 'border-slate-500' },
@@ -310,18 +310,34 @@ const testResultLabel = (record) => {
   return '待测试';
 };
 
+// 把测试记录归到 4 个工站：优先用 stationKey，其次把旧的测试类型折算到对应工站，
+// 保证上方指标与工站卡片统计口径一致。
+const LEGACY_TESTTYPE_STATION = { 功能测试: '初测', 老化测试: '中测', 终测: 'OQT终测', 半成品检验: '半成品检验', 初测: '初测', 中测: '中测', OQT终测: 'OQT终测' };
+const stationOf = (record) => STATION_KEY_LABEL[record.stationKey] || LEGACY_TESTTYPE_STATION[record.testType] || null;
+const isPassRecord = (record) => record.stationResult === 'Pass' || (!record.stationResult && ['合格', 'Pass', '通过'].includes(record.result));
+const isNGRecord = (record) => record.stationResult === 'NG' || (!record.stationResult && ['不合格', 'NG', '不通过'].includes(record.result));
+
 function QualityNode({ planDevices, testRecords, workOrders, openTest, openAction }) {
   const stationStats = STATIONS.map((label) => {
-    const records = testRecords.filter((record) => (STATION_KEY_LABEL[record.stationKey] || record.testType) === label);
-    return { label, total: records.length, pass: records.filter((record) => record.stationResult === 'Pass' || record.result === '合格').length, ng: records.filter((record) => record.stationResult === 'NG' || record.result === '不合格').length };
+    const records = testRecords.filter((record) => stationOf(record) === label);
+    return { label, total: records.length, pass: records.filter(isPassRecord).length, ng: records.filter(isNGRecord).length };
   });
+  // 指标从工站统计汇总，避免与工站卡片不一致。
+  const passTotal = stationStats.reduce((sum, s) => sum + s.pass, 0);
+  const ngTotal = stationStats.reduce((sum, s) => sum + s.ng, 0);
+
+  const rowOps = (qStatus) => {
+    if (qStatus === '测试通过') return [{ label: '查看记录', fn: () => openAction('查看测试记录'), cls: 'text-slate-600' }];
+    if (qStatus === '测试NG' || qStatus === '返修中') return [{ label: '生成返修记录', fn: () => openAction('生成返修记录'), cls: 'text-red-600' }, { label: '查看返修', fn: () => openAction('查看返修'), cls: 'text-slate-600' }];
+    return [{ label: '录入测试结果', fn: openTest, cls: 'text-blue-600' }];
+  };
 
   return (
     <div className="space-y-5">
       <MetricCards items={[
         { label: '测试设备', value: planDevices.length, color: 'border-purple-500' },
-        { label: 'Pass记录', value: testRecords.filter((r) => r.stationResult === 'Pass' || r.result === '合格').length, color: 'border-green-500' },
-        { label: 'NG记录', value: testRecords.filter((r) => r.stationResult === 'NG' || r.result === '不合格').length, color: 'border-red-500' },
+        { label: 'Pass记录', value: passTotal, color: 'border-green-500' },
+        { label: 'NG记录', value: ngTotal, color: 'border-red-500' },
         { label: '生产返修', value: workOrders.length, color: 'border-amber-500' },
       ]} />
       <Section title="工站流程" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={() => openAction('查看测试记录')}>查看测试记录</button><button className={BTN_PRIMARY} onClick={openTest}>录入测试结果</button></div>}>
@@ -336,7 +352,20 @@ function QualityNode({ planDevices, testRecords, workOrders, openTest, openActio
             {planDevices.map((device) => {
               const latest = testRecords.filter((record) => record.deviceId === device.id).sort((a, b) => (b.testTime || '').localeCompare(a.testTime || ''))[0];
               const wo = workOrders.find((item) => item.deviceId === device.id);
-              return <tr key={device.id}><td className="px-3 py-2 font-mono text-xs">{device.sn}</td><td className="px-3 py-2"><StatusBadge status={qualityStatus(device, latest)} /></td><td className="px-3 py-2"><StatusBadge status={testResultLabel(latest)} /></td><td className="px-3 py-2">{wo ? <StatusBadge status={wo.status} /> : '—'}</td><td className="px-3 py-2"><button className="text-xs text-red-600 hover:underline" onClick={() => openAction('生成返修记录')}>生成返修记录</button></td></tr>;
+              const qStatus = qualityStatus(device, latest);
+              return (
+                <tr key={device.id}>
+                  <td className="px-3 py-2 font-mono text-xs">{device.sn}</td>
+                  <td className="px-3 py-2"><StatusBadge status={qStatus} /></td>
+                  <td className="px-3 py-2"><StatusBadge status={testResultLabel(latest)} /></td>
+                  <td className="px-3 py-2">{wo ? <StatusBadge status={wo.status} /> : '—'}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-2">
+                      {rowOps(qStatus).map((op) => <button key={op.label} className={`text-xs hover:underline ${op.cls}`} onClick={op.fn}>{op.label}</button>)}
+                    </div>
+                  </td>
+                </tr>
+              );
             })}
             {planDevices.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">暂无测试设备</td></tr>}
           </tbody>
