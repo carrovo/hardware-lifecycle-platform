@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
+import { Pagination, usePaged } from '../components/Pagination';
 import { FEISHU_USERS } from '../data/mockData';
 
 const TABS = [
@@ -533,11 +534,12 @@ const woStageOf = (wo) => wo.stage || wo.sourceNode || wo.ngStation || (wo._kind
 
 function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
   const { projects, devices, moduleTypes = [], materials = [], deliveryPlans = [] } = state;
-  const [form, setForm] = useState({ woClass: '换件工单', projectId: '', deviceId: '', deliveryPlanId: '', stage: '', needModuleType: '', oldModuleSN: '', newModuleId: '', softwareVersion: '', issueType: '功能异常', repro: '', description: '', severity: '高', assignedTo: '', notes: '' });
+  const [form, setForm] = useState({ woClass: '换件工单', projectId: '', deviceId: '', deliveryPlanId: '', stage: '', needModuleType: '', oldModuleSN: '', newModuleId: '', softwareVersion: '', issueType: '功能异常', repro: '', expectBehavior: '', actualBehavior: '', otherCategory: '体验优化', feedbackSource: '', description: '', severity: '高', assignedTo: '', notes: '' });
   const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
   const projDevices = form.projectId ? devices.filter(d => d.projectId === form.projectId) : devices;
   const chosenType = moduleTypes.find(m => m.id === form.needModuleType);
   const availableNew = materials.filter(m => m.status === '待装配' && (!chosenType || m.category === chosenType.category));
+  const chosenNew = materials.find(m => m.id === form.newModuleId);
 
   const submit = (e) => {
     e.preventDefault();
@@ -555,6 +557,10 @@ function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
       softwareVersion: form.woClass === '软件问题工单' ? form.softwareVersion : undefined,
       issueType: form.woClass === '软件问题工单' ? form.issueType : undefined,
       repro: form.woClass === '软件问题工单' ? form.repro : undefined,
+      expectBehavior: form.woClass === '软件问题工单' ? form.expectBehavior : undefined,
+      actualBehavior: form.woClass === '软件问题工单' ? form.actualBehavior : undefined,
+      problemCategory: form.woClass === '其他问题工单' ? form.otherCategory : undefined,
+      feedbackSource: form.woClass === '其他问题工单' ? form.feedbackSource : undefined,
       description: form.description, severity: form.severity, status: '待处理',
       assignedTo: form.assignedTo, notes: form.notes, createdAt: now, updatedAt: now, closedAt: null, processLogs: [],
     });
@@ -563,6 +569,7 @@ function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
 
   const isSwap = form.woClass === '换件工单';
   const isSoft = form.woClass === '软件问题工单';
+  const isOther = form.woClass === '其他问题工单';
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="新增工单" size="lg">
@@ -615,6 +622,10 @@ function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
                 {availableNew.map(m => <option key={m.id} value={m.id}>{m.sn}（{m.supplier}）</option>)}
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">新模块库存状态</label>
+              <input className={`${inp} bg-gray-50`} readOnly value={form.newModuleId ? '在库可用' : '—'} />
+            </div>
           </>}
 
           {isSoft && <>
@@ -631,6 +642,27 @@ function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">复现步骤</label>
               <textarea rows={2} className={inp} value={form.repro} onChange={e => setForm({ ...form, repro: e.target.value })} placeholder="描述如何复现该问题" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">期望表现</label>
+              <textarea rows={2} className={inp} value={form.expectBehavior} onChange={e => setForm({ ...form, expectBehavior: e.target.value })} placeholder="正常情况下应有的表现" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">实际表现</label>
+              <textarea rows={2} className={inp} value={form.actualBehavior} onChange={e => setForm({ ...form, actualBehavior: e.target.value })} placeholder="实际观察到的异常表现" />
+            </div>
+          </>}
+
+          {isOther && <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">问题分类</label>
+              <select className={inp} value={form.otherCategory} onChange={e => setForm({ ...form, otherCategory: e.target.value })}>
+                {['体验优化', '客户建议', '需求变更', '非硬件非软件', '其他'].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">客户反馈来源</label>
+              <input className={inp} value={form.feedbackSource} onChange={e => setForm({ ...form, feedbackSource: e.target.value })} placeholder="如 客户现场 / 电话 / 飞书群" />
             </div>
           </>}
 
@@ -674,6 +706,30 @@ function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
   );
 }
 
+/* 分配负责人弹窗 */
+function AssignOwnerModal({ isOpen, onClose, wo, onConfirm }) {
+  const [assignee, setAssignee] = useState(wo?.assignedTo || '');
+  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="分配负责人">
+      <div className="space-y-4">
+        <div className="text-sm text-gray-600">工单号：<span className="font-mono font-medium">{wo?.id}</span></div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">负责人 *</label>
+          <select className={inp} value={assignee} onChange={e => setAssignee(e.target.value)}>
+            <option value="">-- 选择负责人 --</option>
+            {FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}（{u.dept}）</option>)}
+          </select>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button onClick={() => { if (assignee) { onConfirm(assignee); onClose(); } }} disabled={!assignee} className="px-4 py-2 text-sm text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-40">确认分配</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 /* ─────── 工单中心：交付工单 + 售后工单 ─────── */
 function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
   const [search, setSearch] = useState('');
@@ -681,15 +737,25 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
   const [filterClass, setFilterClass] = useState('全部');
   const [filterStage, setFilterStage] = useState('全部');
   const [filterSeverity, setFilterSeverity] = useState('全部');
+  const [filterOwner, setFilterOwner] = useState('全部');
+  const [filterSwap, setFilterSwap] = useState('全部');
+  const [filterProject, setFilterProject] = useState('全部');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [expandedId, setExpandedId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [assignWO, setAssignWO] = useState(null);
+  const [voidTarget, setVoidTarget] = useState(null);
   const { projects } = state;
   const getProjectName = id => projects.find(p => p.id === id)?.name || '—';
+  const nowText = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const updTypeOf = wo => wo._kind === 'delivery' ? 'UPDATE_DELIVERY_WORK_ORDER' : 'UPDATE_WORK_ORDER';
 
   const deliveryWOs = (state.deliveryWorkOrders || []).map(w => ({ ...w, _kind: 'delivery' }));
   const aftersalesWOs = (state.workOrders || []).map(w => ({ ...w, _kind: 'aftersales' }));
   const allOrders = [...deliveryWOs, ...aftersalesWOs].map(w => ({ ...w, _class: woClassOf(w), _stage: woStageOf(w) }));
   const open = allOrders.filter(w => !['已关闭', '已作废'].includes(w.status));
+  const owners = [...new Set(allOrders.map(w => w.assignedTo).filter(Boolean))];
 
   const cover = {
     pending: allOrders.filter(w => w.status === '待处理').length,
@@ -704,10 +770,45 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
     .filter(w => filterClass === '全部' || w._class === filterClass)
     .filter(w => filterStage === '全部' || w._stage === filterStage)
     .filter(w => filterSeverity === '全部' || w.severity === filterSeverity)
+    .filter(w => filterOwner === '全部' || w.assignedTo === filterOwner)
+    .filter(w => filterSwap === '全部' || (filterSwap === '是' ? w._class === '换件工单' : w._class !== '换件工单'))
+    .filter(w => filterProject === '全部' || w.projectId === filterProject)
+    .filter(w => !dateFrom || (w.createdAt || '') >= dateFrom)
+    .filter(w => !dateTo || (w.createdAt || '') <= `${dateTo} 23:59`)
     .filter(w => !search || (w.deviceSN || '').toLowerCase().includes(search.toLowerCase()) || (w.id || '').toLowerCase().includes(search.toLowerCase()) || (w.description || '').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  const paged = usePaged(filtered, 10);
 
   const handleAdd = (wo) => dispatch({ type: 'ADD_WORK_ORDER', payload: wo });
+
+  const advance = (wo) => {
+    const next = wo.status === '待处理' ? '处理中' : wo.status === '处理中' ? '复检中' : wo.status === '复检中' ? '已关闭' : null;
+    if (!next) return;
+    const t = nowText();
+    const patch = { id: wo.id, status: next, updatedAt: t, processLogs: [...(wo.processLogs || []), { time: t, operator: currentUser, fromStatus: wo.status, toStatus: next, notes: '推进工单状态' }] };
+    if (next === '处理中' && !wo.assignedTo) patch.assignedTo = currentUser;
+    if (next === '已关闭') patch.closedAt = t;
+    dispatch({ type: updTypeOf(wo), payload: patch });
+  };
+  const doAssign = (wo, assignee) => {
+    const t = nowText();
+    dispatch({ type: updTypeOf(wo), payload: { id: wo.id, assignedTo: assignee, updatedAt: t, processLogs: [...(wo.processLogs || []), { time: t, operator: currentUser, fromStatus: wo.status, toStatus: wo.status, notes: `分配负责人：${assignee}` }] } });
+  };
+  const closeWO = (wo) => {
+    const t = nowText();
+    dispatch({ type: updTypeOf(wo), payload: { id: wo.id, status: '已关闭', closedAt: t, updatedAt: t, processLogs: [...(wo.processLogs || []), { time: t, operator: currentUser, fromStatus: wo.status, toStatus: '已关闭', notes: '关闭工单' }] } });
+  };
+  const doVoid = (wo, reason) => {
+    const t = nowText();
+    dispatch({ type: updTypeOf(wo), payload: { id: wo.id, status: '已作废', voidReason: reason, updatedAt: t, processLogs: [...(wo.processLogs || []), { time: t, operator: currentUser, fromStatus: wo.status, toStatus: '已作废', notes: `工单作废：${reason}` }] } });
+  };
+  const genQuality = (wo) => {
+    if (wo.linkedQualityIssueId || wo.status === '已作废') return;
+    const t = nowText();
+    const qiId = `QI-${Date.now().toString().slice(-6)}`;
+    dispatch({ type: 'ADD_QUALITY_ISSUE', payload: { id: qiId, deviceId: wo.deviceId, deviceSN: wo.deviceSN, projectId: wo.projectId, sourceStage: wo._stage, issueType: '工单转质量问题', severity: wo.severity || '中', issueDesc: wo.description, reporterName: currentUser, owner: currentUser, reportTime: t, status: '待处理', source: '工单转入', linkedWorkOrder: true, linkedWorkOrderId: wo.id, processLogs: [] } });
+    dispatch({ type: updTypeOf(wo), payload: { id: wo.id, linkedQualityIssueId: qiId, updatedAt: t, processLogs: [...(wo.processLogs || []), { time: t, operator: currentUser, fromStatus: wo.status, toStatus: wo.status, notes: `生成质量问题 ${qiId}` }] } });
+  };
 
   const COVER = [
     { label: '待处理工单', value: cover.pending, color: 'border-orange-500' },
@@ -715,6 +816,12 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
     { label: '软件问题工单', value: cover.software, color: 'border-blue-500' },
     { label: '超时工单', value: cover.overdue, color: 'border-red-500' },
   ];
+  const selInp = 'border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600 focus:outline-none';
+  const opBtn = (label, onClick, { disabled = false, title = '', danger = false } = {}) => (
+    disabled
+      ? <span className={`cursor-not-allowed ${danger ? 'text-red-300' : 'text-gray-300'}`} title={title}>{label}</span>
+      : <button className={`hover:underline ${danger ? 'text-red-400 hover:text-red-600' : 'text-blue-600'}`} title={title} onClick={(e) => { e.stopPropagation(); onClick(); }}>{label}</button>
+  );
 
   return (
     <div className="space-y-5">
@@ -745,95 +852,131 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
         <div className="bg-white rounded-xl shadow-sm p-4">
           <div className="text-sm font-semibold text-gray-700 mb-3">工单分类说明</div>
           <ul className="text-xs text-gray-500 space-y-1.5 leading-relaxed">
-            <li>· 换件工单：涉及模块更换，需选择新模块SN（在库可用）。</li>
-            <li>· 软件问题工单：软件/固件/版本问题，流转研发处理。</li>
-            <li>· 其他问题工单：体验优化、客户反馈等。</li>
-            <li className="text-gray-400 pt-1">生产测试 NG 属于生产返修记录，不在工单中心。</li>
+            <li>· 换件工单：涉及模块更换，需要选择新模块 SN（在库可用）。</li>
+            <li>· 软件问题工单：软件 / 算法 / 版本问题，流转到研发或软件处理人。</li>
+            <li>· 其他问题工单：体验优化、客户反馈、非明确硬件/软件归因。</li>
+            <li className="text-gray-400 pt-1">生产测试 NG 属于生产返修记录，不在工单中心处理。</li>
           </ul>
         </div>
       </div>
 
-      {/* 筛选 */}
-      <div className="bg-white rounded shadow-sm px-4 py-3 flex flex-wrap gap-2 items-center">
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜索工单ID / 设备SN / 描述" className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-56" />
-        <select className="border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600" value={filterClass} onChange={e => setFilterClass(e.target.value)}>
-          <option value="全部">全部类型</option>
-          {WO_CLASSES.map(c => <option key={c}>{c}</option>)}
-        </select>
-        <select className="border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600" value={filterStage} onChange={e => setFilterStage(e.target.value)}>
-          <option value="全部">全部阶段</option>
-          {WO_STAGES.map(s => <option key={s}>{s}</option>)}
-        </select>
-        <select className="border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-          <option value="全部">全部状态</option>
-          {['待处理', '处理中', '复检中', '已关闭', '已作废'].map(s => <option key={s}>{s}</option>)}
-        </select>
-        <select className="border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
-          <option value="全部">全部严重程度</option>
-          {['高', '中', '低'].map(s => <option key={s}>{s}</option>)}
-        </select>
-        <span className="text-xs text-gray-400">共 {filtered.length} 条</span>
-        {canDo('update_work_order') && (
-          <button onClick={() => setShowAddModal(true)} className="ml-auto px-4 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">+ 新增工单</button>
-        )}
+      {/* 筛选（两行） */}
+      <div className="bg-white rounded shadow-sm px-4 py-3 space-y-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜索工单ID / 设备SN / 描述" className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-56" />
+          <select className={selInp} value={filterClass} onChange={e => setFilterClass(e.target.value)}>
+            <option value="全部">全部类型</option>
+            {WO_CLASSES.map(c => <option key={c}>{c}</option>)}
+          </select>
+          <select className={selInp} value={filterStage} onChange={e => setFilterStage(e.target.value)}>
+            <option value="全部">全部阶段</option>
+            {WO_STAGES.map(s => <option key={s}>{s}</option>)}
+          </select>
+          <select className={selInp} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <option value="全部">全部状态</option>
+            {['待处理', '处理中', '复检中', '已关闭', '已作废'].map(s => <option key={s}>{s}</option>)}
+          </select>
+          <select className={selInp} value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
+            <option value="全部">全部严重程度</option>
+            {['高', '中', '低'].map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          <select className={selInp} value={filterOwner} onChange={e => setFilterOwner(e.target.value)}>
+            <option value="全部">全部负责人</option>
+            {owners.map(o => <option key={o}>{o}</option>)}
+          </select>
+          <select className={selInp} value={filterSwap} onChange={e => setFilterSwap(e.target.value)}>
+            <option value="全部">是否涉及换件</option>
+            <option value="是">涉及换件</option>
+            <option value="否">不涉及换件</option>
+          </select>
+          <select className={selInp} value={filterProject} onChange={e => setFilterProject(e.target.value)}>
+            <option value="全部">全部项目</option>
+            {projects.filter(p => !p.voided).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <label className="text-xs text-gray-500">时间</label>
+          <input type="date" className={selInp} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+          <span className="text-xs text-gray-400">~</span>
+          <input type="date" className={selInp} value={dateTo} onChange={e => setDateTo(e.target.value)} />
+          <span className="text-xs text-gray-400">共 {filtered.length} 条</span>
+          {canDo('update_work_order') && (
+            <button onClick={() => setShowAddModal(true)} className="ml-auto px-4 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">+ 新增工单</button>
+          )}
+        </div>
       </div>
 
-      <div className="bg-white rounded shadow-sm overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              {['工单ID', '工单类型', '所属阶段', '关联设备SN', '是否涉及换件', '需更换模块类型', '问题描述', '严重程度', '状态', '负责人', '创建时间', ''].map(h => (
-                <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(wo => {
-              const isExpanded = expandedId === wo.id;
-              const isVoided = wo.status === '已作废';
-              return (
-                <React.Fragment key={wo.id}>
-                  <tr onClick={() => setExpandedId(isExpanded ? null : wo.id)}
-                    className={`cursor-pointer border-t border-gray-100 hover:bg-blue-50 ${isExpanded ? 'bg-slate-50' : ''} ${isVoided ? 'opacity-50' : ''}`}>
-                    <td className="px-3 py-2.5 font-mono text-xs text-gray-600 whitespace-nowrap">{wo.id}</td>
-                    <td className="px-3 py-2.5 text-xs whitespace-nowrap"><span className={`px-2 py-0.5 rounded-full border ${WO_CLASS_STYLE[wo._class]}`}>{wo._class}</span></td>
-                    <td className="px-3 py-2.5 text-xs"><StatusBadge status={wo._stage} /></td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-gray-800 font-medium whitespace-nowrap">{wo.deviceSN}</td>
-                    <td className="px-3 py-2.5 text-xs">{wo._class === '换件工单' ? <span className="text-orange-600 font-medium">是</span> : <span className="text-gray-400">否</span>}</td>
-                    <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{wo.needModuleType || '—'}</td>
-                    <td className="px-3 py-2.5 text-gray-700 max-w-[180px]"><div className="truncate">{wo.description}</div></td>
-                    <td className="px-3 py-2.5"><StatusBadge status={wo.severity} /></td>
-                    <td className="px-3 py-2.5"><StatusBadge status={wo.status} /></td>
-                    <td className="px-3 py-2.5 text-gray-600 text-xs">{wo.assignedTo || '—'}</td>
-                    <td className="px-3 py-2.5 text-gray-400 text-xs whitespace-nowrap">{wo.createdAt}</td>
-                    <td className="px-3 py-2.5 text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</td>
-                  </tr>
-                  {isExpanded && !isVoided && (
-                    <tr>
-                      <td colSpan={12} className="p-0">
-                        {(wo._class === '换件工单' && (wo.oldModuleSN || wo.newModuleSN)) && (
+      <div className="bg-white rounded shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                {['工单ID', '工单类型', '所属阶段', '关联项目', '关联设备SN', '是否涉及换件', '需更换模块类型', '旧模块SN', '新模块SN', '问题描述', '严重程度', '状态', '负责人', '创建时间', '操作'].map(h => (
+                  <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {paged.pageItems.map(wo => {
+                const isExpanded = expandedId === wo.id;
+                const isVoided = wo.status === '已作废';
+                const closed = ['已关闭', '已作废'].includes(wo.status);
+                return (
+                  <React.Fragment key={wo.id}>
+                    <tr className={`hover:bg-blue-50 ${isExpanded ? 'bg-slate-50' : ''} ${isVoided ? 'opacity-50' : ''}`}>
+                      <td className="px-3 py-2.5 font-mono text-xs text-gray-600 whitespace-nowrap">{wo.id}</td>
+                      <td className="px-3 py-2.5 text-xs whitespace-nowrap"><span className={`px-2 py-0.5 rounded-full border ${WO_CLASS_STYLE[wo._class]}`}>{wo._class}</span></td>
+                      <td className="px-3 py-2.5 text-xs whitespace-nowrap"><StatusBadge status={wo._stage} /></td>
+                      <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{getProjectName(wo.projectId)}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-gray-800 font-medium whitespace-nowrap">{wo.deviceSN}</td>
+                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">{wo._class === '换件工单' ? <span className="text-orange-600 font-medium">是</span> : <span className="text-gray-400">否</span>}</td>
+                      <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{wo.needModuleType || '—'}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{wo.oldModuleSN || '—'}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{wo.newModuleSN || '—'}</td>
+                      <td className="px-3 py-2.5 text-gray-700 max-w-[180px]"><div className="truncate">{wo.description}</div></td>
+                      <td className="px-3 py-2.5"><StatusBadge status={wo.severity} /></td>
+                      <td className="px-3 py-2.5"><StatusBadge status={wo.status} /></td>
+                      <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{wo.assignedTo || '—'}</td>
+                      <td className="px-3 py-2.5 text-gray-400 text-xs whitespace-nowrap">{wo.createdAt}</td>
+                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+                        <div className="flex items-center gap-x-3">
+                          <button className="text-slate-600 hover:underline" onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : wo.id); }}>查看详情</button>
+                          {opBtn('推进状态', () => advance(wo), { disabled: closed, title: closed ? '已关闭/已作废工单不可推进' : '' })}
+                          {opBtn('分配负责人', () => setAssignWO(wo), { disabled: closed, title: closed ? '已关闭/已作废工单不可分配' : '' })}
+                          {opBtn('生成质量问题', () => genQuality(wo), { disabled: closed || !!wo.linkedQualityIssueId, title: wo.linkedQualityIssueId ? `已生成质量问题 ${wo.linkedQualityIssueId}` : closed ? '已关闭/已作废工单不可生成' : '' })}
+                          {opBtn('关闭', () => closeWO(wo), { disabled: closed, title: closed ? '工单已关闭/作废' : '', danger: true })}
+                          {opBtn('作废', () => setVoidTarget(wo), { disabled: !['待处理', '处理中'].includes(wo.status), title: !['待处理', '处理中'].includes(wo.status) ? '仅待处理/处理中可作废' : '', danger: true })}
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && !isVoided && (
+                      <tr>
+                        <td colSpan={15} className="p-0">
                           <div className="px-6 pt-4 bg-slate-50 text-xs text-gray-600 flex flex-wrap gap-x-6 gap-y-1">
                             <span>关联项目：{getProjectName(wo.projectId)}</span>
                             <span>关联交付计划：{wo.deliveryPlanId || '—'}</span>
-                            <span>旧模块SN：<span className="font-mono">{wo.oldModuleSN || '—'}</span></span>
-                            <span>新模块SN：<span className="font-mono">{wo.newModuleSN || '—'}</span></span>
+                            <span>关联质量问题：<span className="font-mono">{wo.linkedQualityIssueId || wo.sourceQualityIssueId || '—'}</span></span>
+                            {wo._class === '换件工单' && <span>换件记录：旧 <span className="font-mono">{wo.oldModuleSN || '—'}</span><span className="px-1">至新</span><span className="font-mono">{wo.newModuleSN || '—'}</span></span>}
                           </div>
-                        )}
-                        <WorkOrderDetail wo={wo} state={state} dispatch={dispatch} currentUser={currentUser} canDo={canDo} actionType={wo._kind} />
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-            {filtered.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无工单</td></tr>}
-          </tbody>
-        </table>
+                          <WorkOrderDetail wo={wo} state={state} dispatch={dispatch} currentUser={currentUser} canDo={canDo} actionType={wo._kind} />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+              {filtered.length === 0 && <tr><td colSpan={15} className="px-4 py-8 text-center text-gray-400">暂无工单</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </div>
 
       {showAddModal && (
         <OrderCenterAddModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onSave={handleAdd} state={state} />
       )}
+      {assignWO && <AssignOwnerModal isOpen={!!assignWO} onClose={() => setAssignWO(null)} wo={assignWO} onConfirm={(a) => doAssign(assignWO, a)} />}
+      {voidTarget && <VoidWorkOrderModal isOpen={!!voidTarget} onClose={() => setVoidTarget(null)} wo={voidTarget} onConfirm={(r) => doVoid(voidTarget, r)} />}
     </div>
   );
 }
@@ -1110,102 +1253,194 @@ function QualityIssueDetail({ qi, state, dispatch, canDo }) {
 }
 
 /* ─────── Quality Issue Table ─────── */
+const QI_SOURCE_STAGES = ['生产测试', '出厂检验', '现场安装调试', '客户验收', '在线运营'];
+const QI_ISSUE_TYPES = ['功能异常', '外观缺陷', '性能不达标', '通信异常', '工单转质量问题', '其他'];
+
 function QualityIssueTable({ state, dispatch, canDo }) {
-  const { qualityIssues = [], projects, locations = [] } = state;
+  const { qualityIssues = [], projects, locations = [], devices = [], deviceTypes = [] } = state;
   const [filterStatus, setFilterStatus] = useState('全部');
   const [filterProject, setFilterProject] = useState('');
+  const [filterDeviceType, setFilterDeviceType] = useState('');
+  const [searchSN, setSearchSN] = useState('');
+  const [filterStage, setFilterStage] = useState('');
+  const [filterIssueType, setFilterIssueType] = useState('');
+  const [filterSeverity, setFilterSeverity] = useState('');
+  const [filterSource, setFilterSource] = useState('');
+  const [filterHasWO, setFilterHasWO] = useState('');
+  const [filterOwner, setFilterOwner] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [expandedId, setExpandedId] = useState(null);
   const [showScanModal, setShowScanModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
 
   const getLocationName = id => locations.find(l => l.id === id)?.name || '—';
   const getProjectName = id => projects.find(p => p.id === id)?.name || '—';
+  const deviceTypeOf = qi => {
+    const dev = devices.find(d => d.id === qi.deviceId || d.sn === qi.deviceSN);
+    return qi.deviceName || deviceTypes.find(dt => dt.id === dev?.deviceTypeId)?.name || '—';
+  };
+  const owners = [...new Set(qualityIssues.map(q => q.owner).filter(Boolean))];
+  const nowText = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const hasWO = qi => !!(qi.linkedWorkOrder || qi.linkedWorkOrderId);
 
   const filtered = qualityIssues.filter(qi => {
-    const matchStatus = filterStatus === '全部' || qi.status === filterStatus;
-    const matchProject = !filterProject || qi.projectId === filterProject;
-    return matchStatus && matchProject;
-  }).sort((a, b) => b.reportTime.localeCompare(a.reportTime));
+    return (filterStatus === '全部' || qi.status === filterStatus)
+      && (!filterProject || qi.projectId === filterProject)
+      && (!filterDeviceType || deviceTypeOf(qi) === filterDeviceType)
+      && (!searchSN || (qi.deviceSN || '').toLowerCase().includes(searchSN.toLowerCase()))
+      && (!filterStage || (qi.sourceStage || '在线运营') === filterStage)
+      && (!filterIssueType || qi.issueType === filterIssueType)
+      && (!filterSeverity || (qi.severity || '中') === filterSeverity)
+      && (!filterSource || qi.source === filterSource)
+      && (!filterHasWO || (filterHasWO === '是' ? hasWO(qi) : !hasWO(qi)))
+      && (!filterOwner || qi.owner === filterOwner)
+      && (!dateFrom || (qi.reportTime || '') >= dateFrom)
+      && (!dateTo || (qi.reportTime || '') <= `${dateTo} 23:59`);
+  }).sort((a, b) => (b.reportTime || '').localeCompare(a.reportTime || ''));
+  const paged = usePaged(filtered, 10);
 
-  const statusCounts = { '待处理': 0, '处理中': 0, '已关闭': 0 };
-  qualityIssues.forEach(qi => { if (statusCounts[qi.status] !== undefined) statusCounts[qi.status]++; });
+  const handleSave = (qi) => dispatch({ type: 'ADD_QUALITY_ISSUE', payload: qi });
 
-  const handleSave = (qi) => {
-    dispatch({ type: 'ADD_QUALITY_ISSUE', payload: qi });
+  const genWorkOrder = (qi, woClass) => {
+    if (hasWO(qi) || qi.status === '已关闭') return;
+    const t = nowText();
+    const woId = `WO-${Date.now().toString().slice(-6)}`;
+    dispatch({ type: 'ADD_WORK_ORDER', payload: { id: woId, type: 'aftersales', woClass, stage: qi.sourceStage || '在线运营', projectId: qi.projectId, deviceId: qi.deviceId, deviceSN: qi.deviceSN, involvesSwap: woClass === '换件工单', description: qi.issueDesc, severity: qi.severity || '中', status: '待处理', assignedTo: '', sourceQualityIssueId: qi.id, createdAt: t, updatedAt: t, closedAt: null, processLogs: [] } });
+    dispatch({ type: 'UPDATE_QUALITY_ISSUE', payload: { id: qi.id, linkedWorkOrder: true, linkedWorkOrderId: woId, processLogs: [...(qi.processLogs || []), { time: t, operator: state.currentUser, fromStatus: qi.status, toStatus: qi.status, notes: `生成${woClass} ${woId}` }] } });
   };
+  const closeQI = (qi) => {
+    if (qi.status === '已关闭') return;
+    const t = nowText();
+    dispatch({ type: 'UPDATE_QUALITY_ISSUE', payload: { id: qi.id, status: '已关闭', processLogs: [...(qi.processLogs || []), { time: t, operator: state.currentUser, fromStatus: qi.status, toStatus: '已关闭', notes: '关闭问题' }] } });
+  };
+
+  const selInp = 'border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600 focus:outline-none';
+  const opBtn = (label, onClick, { disabled = false, title = '', danger = false } = {}) => (
+    disabled
+      ? <span className={`cursor-not-allowed ${danger ? 'text-red-300' : 'text-gray-300'}`} title={title}>{label}</span>
+      : <button className={`hover:underline ${danger ? 'text-red-400 hover:text-red-600' : 'text-blue-600'}`} title={title} onClick={(e) => { e.stopPropagation(); onClick(); }}>{label}</button>
+  );
 
   return (
     <div>
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">
-        扫码上报和手动录入仅作为质量问题创建入口，提交后进入质量问题台账；需要处理的问题可进一步生成工单。质量问题台账用于质量沉淀、追溯和统计，不替代工单处理。
+        扫码上报和手动录入仅作为质量问题创建入口；提交后进入质量问题台账。需要处理的问题可进一步生成工单。质量问题台账用于质量沉淀、追溯和统计，不替代工单处理。
       </div>
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div className="flex items-center justify-end mb-3 gap-2">
+        <button onClick={() => setShowScanModal(true)} className="px-4 py-2 border border-slate-600 text-slate-700 text-sm rounded hover:bg-slate-50">扫码上报</button>
+        {canDo('add_quality_issue') && (
+          <button onClick={() => setShowManualModal(true)} className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">+ 手动录入</button>
+        )}
+      </div>
+
+      {/* 筛选（两行） */}
+      <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 space-y-2">
         <div className="flex flex-wrap gap-2 items-center">
-          {['全部', '待处理', '处理中', '已关闭'].map(s => (
-            <button key={s} onClick={() => setFilterStatus(s)}
-              className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${filterStatus === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>
-              {s === '全部' ? `全部 ${qualityIssues.length}` : `${s} ${statusCounts[s] ?? 0}`}
-            </button>
-          ))}
-          <select className="border border-gray-300 rounded px-3 py-1 text-xs text-gray-600 focus:outline-none"
-            value={filterProject} onChange={e => setFilterProject(e.target.value)}>
+          <select className={selInp} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            {['全部', '待处理', '处理中', '已关闭'].map(s => <option key={s} value={s}>{s === '全部' ? '全部状态' : s}</option>)}
+          </select>
+          <select className={selInp} value={filterProject} onChange={e => setFilterProject(e.target.value)}>
             <option value="">全部项目</option>
             {projects.filter(p => !p.voided).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
+          <select className={selInp} value={filterDeviceType} onChange={e => setFilterDeviceType(e.target.value)}>
+            <option value="">全部设备类型</option>
+            {deviceTypes.map(dt => <option key={dt.id} value={dt.name}>{dt.name}</option>)}
+          </select>
+          <input value={searchSN} onChange={e => setSearchSN(e.target.value)} placeholder="设备SN" className="border border-gray-300 rounded px-3 py-1.5 text-xs focus:outline-none w-36" />
+          <select className={selInp} value={filterStage} onChange={e => setFilterStage(e.target.value)}>
+            <option value="">全部来源阶段</option>
+            {QI_SOURCE_STAGES.map(s => <option key={s}>{s}</option>)}
+          </select>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowScanModal(true)} className="px-4 py-2 border border-slate-600 text-slate-700 text-sm rounded hover:bg-slate-50">扫码上报</button>
-          {canDo('add_quality_issue') && (
-            <button onClick={() => setShowManualModal(true)} className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">+ 手动录入</button>
-          )}
+        <div className="flex flex-wrap gap-2 items-center">
+          <select className={selInp} value={filterIssueType} onChange={e => setFilterIssueType(e.target.value)}>
+            <option value="">全部问题类型</option>
+            {QI_ISSUE_TYPES.map(s => <option key={s}>{s}</option>)}
+          </select>
+          <select className={selInp} value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
+            <option value="">全部严重程度</option>
+            {['高', '中', '低'].map(s => <option key={s}>{s}</option>)}
+          </select>
+          <select className={selInp} value={filterSource} onChange={e => setFilterSource(e.target.value)}>
+            <option value="">全部上报方式</option>
+            {['扫码上报', '手动录入', '工单转入'].map(s => <option key={s}>{s}</option>)}
+          </select>
+          <select className={selInp} value={filterHasWO} onChange={e => setFilterHasWO(e.target.value)}>
+            <option value="">是否已生成工单</option>
+            <option value="是">已生成</option>
+            <option value="否">未生成</option>
+          </select>
+          <select className={selInp} value={filterOwner} onChange={e => setFilterOwner(e.target.value)}>
+            <option value="">全部负责人</option>
+            {owners.map(o => <option key={o}>{o}</option>)}
+          </select>
+          <label className="text-xs text-gray-500">时间</label>
+          <input type="date" className={selInp} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+          <span className="text-xs text-gray-400">~</span>
+          <input type="date" className={selInp} value={dateTo} onChange={e => setDateTo(e.target.value)} />
+          <span className="text-xs text-gray-400">共 {filtered.length} 条</span>
         </div>
       </div>
 
-      <div className="bg-white rounded shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              {['问题编号', '设备SN', '设备名称', '所属点位', '所属项目', '来源阶段', '问题描述', '严重程度', '上报方式', '是否已生成工单', '上报人', '上报时间', '状态'].map(h => (
-                <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(qi => {
-              const isExpanded = expandedId === qi.id;
-              return (
-                <React.Fragment key={qi.id}>
-                  <tr onClick={() => setExpandedId(isExpanded ? null : qi.id)}
-                    className={`cursor-pointer border-t border-gray-100 hover:bg-blue-50 transition-colors ${isExpanded ? 'bg-slate-50' : ''}`}>
-                    <td className="px-3 py-2.5 font-mono text-xs text-gray-600">{qi.id}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-gray-800 font-medium">{qi.deviceSN}</td>
-                    <td className="px-3 py-2.5 text-gray-700 text-xs">{qi.deviceName}</td>
-                    <td className="px-3 py-2.5 text-gray-600 text-xs">{qi.locationId ? getLocationName(qi.locationId) : '—'}</td>
-                    <td className="px-3 py-2.5 text-gray-600 text-xs">{getProjectName(qi.projectId)}</td>
-                    <td className="px-3 py-2.5 text-gray-600 text-xs">{qi.sourceStage || '在线运营'}</td>
-                    <td className="px-3 py-2.5 text-gray-700 max-w-[160px]"><div className="truncate text-xs">{qi.issueDesc}</div></td>
-                    <td className="px-3 py-2.5"><StatusBadge status={qi.severity || '中'} /></td>
-                    <td className="px-3 py-2.5">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${qi.source === '扫码上报' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>{qi.source}</span>
-                    </td>
-                    <td className="px-3 py-2.5 text-xs">{qi.linkedWorkOrder || qi.linkedWorkOrderId ? <span className="text-emerald-600 font-medium">是</span> : <span className="text-gray-400">否</span>}</td>
-                    <td className="px-3 py-2.5 text-gray-600 text-xs">{qi.reporterName}</td>
-                    <td className="px-3 py-2.5 text-gray-400 text-xs">{qi.reportTime}</td>
-                    <td className="px-3 py-2.5"><StatusBadge status={qi.status} /></td>
-                  </tr>
-                  {isExpanded && (
-                    <tr>
-                      <td colSpan={13} className="p-0">
-                        <QualityIssueDetail qi={qi} state={state} dispatch={dispatch} canDo={canDo} />
+      <div className="bg-white rounded shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                {['问题编号', '设备SN', '设备类型', '所属点位', '所属项目', '来源阶段', '问题类型', '问题描述', '严重程度', '上报方式', '是否已生成工单', '关联工单ID', '负责人', '上报时间', '状态', '操作'].map(h => (
+                  <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {paged.pageItems.map(qi => {
+                const isExpanded = expandedId === qi.id;
+                const linked = hasWO(qi);
+                const closed = qi.status === '已关闭';
+                return (
+                  <React.Fragment key={qi.id}>
+                    <tr className={`hover:bg-blue-50 transition-colors ${isExpanded ? 'bg-slate-50' : ''}`}>
+                      <td className="px-3 py-2.5 font-mono text-xs text-gray-600 whitespace-nowrap">{qi.id}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-gray-800 font-medium whitespace-nowrap">{qi.deviceSN}</td>
+                      <td className="px-3 py-2.5 text-gray-700 text-xs whitespace-nowrap">{deviceTypeOf(qi)}</td>
+                      <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{qi.locationId ? getLocationName(qi.locationId) : '—'}</td>
+                      <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{getProjectName(qi.projectId)}</td>
+                      <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{qi.sourceStage || '在线运营'}</td>
+                      <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{qi.issueType || '—'}</td>
+                      <td className="px-3 py-2.5 text-gray-700 max-w-[160px]"><div className="truncate text-xs">{qi.issueDesc}</div></td>
+                      <td className="px-3 py-2.5"><StatusBadge status={qi.severity || '中'} /></td>
+                      <td className="px-3 py-2.5"><span className={`text-xs px-2 py-0.5 rounded-full border ${qi.source === '扫码上报' ? 'bg-blue-50 text-blue-700 border-blue-200' : qi.source === '工单转入' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>{qi.source}</span></td>
+                      <td className="px-3 py-2.5 text-xs">{linked ? <span className="text-emerald-600 font-medium">是</span> : <span className="text-gray-400">否</span>}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{qi.linkedWorkOrderId || '—'}</td>
+                      <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{qi.owner || qi.reporterName || '—'}</td>
+                      <td className="px-3 py-2.5 text-gray-400 text-xs whitespace-nowrap">{qi.reportTime}</td>
+                      <td className="px-3 py-2.5"><StatusBadge status={qi.status} /></td>
+                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+                        <div className="flex items-center gap-x-3">
+                          <button className="text-slate-600 hover:underline" onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : qi.id); }}>查看详情</button>
+                          {opBtn('生成换件工单', () => genWorkOrder(qi, '换件工单'), { disabled: linked || closed, title: linked ? `已生成工单 ${qi.linkedWorkOrderId || ''}` : closed ? '已关闭问题不可生成' : '' })}
+                          {opBtn('生成软件问题工单', () => genWorkOrder(qi, '软件问题工单'), { disabled: linked || closed, title: linked ? `已生成工单 ${qi.linkedWorkOrderId || ''}` : closed ? '已关闭问题不可生成' : '' })}
+                          {opBtn('关闭问题', () => closeQI(qi), { disabled: closed, title: closed ? '问题已关闭' : '', danger: true })}
+                        </div>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-            {filtered.length === 0 && <tr><td colSpan={13} className="px-4 py-8 text-center text-gray-400">暂无质量问题记录</td></tr>}
-          </tbody>
-        </table>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={16} className="p-0">
+                          <QualityIssueDetail qi={qi} state={state} dispatch={dispatch} canDo={canDo} />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+              {filtered.length === 0 && <tr><td colSpan={16} className="px-4 py-8 text-center text-gray-400">暂无质量问题记录</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </div>
 
       <ScanQRModal isOpen={showScanModal} onClose={() => setShowScanModal(false)} />

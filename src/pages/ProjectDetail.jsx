@@ -5,7 +5,11 @@ import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import OperationLog from '../components/OperationLog';
 import StatusBadge from '../components/StatusBadge';
-import { isPass, projectStatus, productionPlanStatus, deliveryPlanStatus } from '../utils/status';
+import { Pagination, usePaged } from '../components/Pagination';
+import { isPass, projectStatus, productionPlanStatus, deliveryPlanStatus, deviceLifecycleStatus, deviceBusinessNode } from '../utils/status';
+
+const PROD_NODE_KEY = { 来料准备: 'materialPrep', 整机装配: 'assembly', 质量测试: 'quality', 整机入库: 'warehouse' };
+const DELIV_NODE_KEY = { 绑定设备: 'binding', 出厂检验: 'factoryInspection', 现场安装调试: 'siteInstall', 客户验收: 'customerAccept' };
 
 const INPUT = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500 bg-white';
 const BTN_PRIMARY = 'px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-800';
@@ -213,11 +217,6 @@ export default function ProjectDetail() {
   const allProductionPlans = workflowProductionPlans;
   const project = projects.find((p) => p.id === id);
 
-  if (!project) {
-    return <div className="p-6 text-gray-400">项目不存在</div>;
-  }
-
-  const status = projectStatus(project, allProductionPlans, deliveryPlans);
   const projProductionPlans = allProductionPlans.filter((p) => p.projectId === id);
   const projDeliveryPlans = deliveryPlans.filter((p) => p.projectId === id);
   const projDevices = devices.filter((d) => d.projectId === id);
@@ -229,6 +228,24 @@ export default function ProjectDetail() {
   });
   const projLogs = operationLogs.filter((log) => log.projectId === id || projDevices.some((d) => d.id === log.deviceId));
 
+  // 关联问题与工单归一：区分质量问题 / 交付工单 / 生产返修记录。
+  const relatedRows = [
+    ...projIssues.map((q) => ({ id: q.id, kind: '质量问题', deviceSN: q.deviceSN, stage: q.sourceStage || '在线运营', desc: q.issueDesc, severity: q.severity || '中', status: q.status, target: 'quality' })),
+    ...projWorkOrders.map((w) => ({ id: w.id, kind: w.type === 'production' ? '生产返修记录' : w.type === 'delivery' ? '交付工单' : '售后工单', deviceSN: w.deviceSN, stage: w.stage || w.sourceNode || w.ngStation || '—', desc: w.description, severity: w.severity || '中', status: w.status, target: w.type === 'production' ? 'none' : 'orders' })),
+  ];
+
+  const prodPaged = usePaged(projProductionPlans, 10);
+  const delivPaged = usePaged(projDeliveryPlans, 10);
+  const devPaged = usePaged(projDevices, 10);
+  const locPaged = usePaged(projLocations, 10);
+  const relatedPaged = usePaged(relatedRows, 10);
+  const logPaged = usePaged(projLogs, 10);
+
+  if (!project) {
+    return <div className="p-6 text-gray-400">项目不存在</div>;
+  }
+
+  const status = projectStatus(project, allProductionPlans, deliveryPlans);
   const producedCount = devices.filter((device) => {
     const plan = projProductionPlans.find((p) => p.id === device.productionPlanId);
     return plan && ['已入库', '待分配项目', '已分配项目', '在线运营', '出厂检验中', '现场安装调试中', '客户验收中'].includes(device.status);
@@ -237,12 +254,6 @@ export default function ProjectDetail() {
   const pendingIssues = projIssues.filter((q) => q.status !== '已关闭').length + projWorkOrders.filter((w) => !['已关闭', '已作废'].includes(w.status)).length;
   const prodActiveCount = projProductionPlans.filter((p) => productionPlanStatus(p) === '生产中').length;
   const prodDoneCount = projProductionPlans.filter((p) => productionPlanStatus(p) === '已完成').length;
-
-  const availableDevices = devices.filter((d) =>
-    ['已入库', '待分配项目'].includes(d.status)
-    && !d.projectId
-    && !d.frozen
-  );
 
   const writeLog = (actionType, notes, fromStatus = '', toStatus = '') => {
     dispatch({
@@ -262,27 +273,14 @@ export default function ProjectDetail() {
 
   const updateProject = (payload) => dispatch({ type: 'UPDATE_PROJECT', payload: { id, ...payload, updatedAt: nowText() } });
 
-  let topActions = [
+  // 项目详情是项目级汇总页，顶部按钮统一为 编辑 / 新建生产计划 / 新建交付计划 / 查看日志。
+  // 具体生产、交付节点执行进入生产计划详情或交付计划详情，此处不出现项目级“绑定设备”主按钮。
+  const topActions = [
     { label: '编辑', modal: 'edit', cls: BTN_GHOST },
     { label: '新建生产计划', modal: 'production', cls: BTN_GHOST },
     { label: '新建交付计划', modal: 'delivery', cls: BTN_PRIMARY },
     { label: '查看日志', modal: 'logs', cls: BTN_GHOST },
   ];
-  if (status === '已作废' || status === '已关闭') {
-    topActions = [{ label: '查看日志', modal: 'logs', cls: BTN_GHOST }];
-  } else if (status === '未开始') {
-    topActions = [
-      { label: '编辑', modal: 'edit', cls: BTN_GHOST },
-      { label: '新建生产计划', modal: 'production', cls: BTN_PRIMARY },
-      { label: '作废', modal: 'void', cls: 'px-3 py-1.5 text-sm text-red-600 border border-red-300 rounded hover:bg-red-50' },
-    ];
-  } else if (status === '已交付') {
-    topActions = [
-      { label: '新建交付计划', modal: 'delivery', cls: BTN_GHOST },
-      { label: '关闭项目', modal: 'close', cls: BTN_PRIMARY },
-      { label: '查看日志', modal: 'logs', cls: BTN_GHOST },
-    ];
-  }
 
   return (
     <div className="p-6 space-y-6">
@@ -309,7 +307,7 @@ export default function ProjectDetail() {
       </div>
 
       <div className="grid grid-cols-4 gap-4">
-        <ProgressCard title="设备进度" done={Math.min(Math.max(producedCount, projDevices.length), project.targetCount)} total={project.targetCount} color="bg-blue-500" />
+        <ProgressCard title="生产进度" done={Math.min(producedCount, project.targetCount)} total={project.targetCount} color="bg-blue-500" />
         <ProgressCard title="交付进度" done={acceptedCount} total={project.targetCount} color="bg-emerald-500" />
         <StatCard title="生产计划数" value={projProductionPlans.length} sub={`生产中 ${prodActiveCount} · 已完成 ${prodDoneCount}`} />
         <StatCard title="待处理问题/工单" value={pendingIssues} sub={pendingIssues > 0 ? '需要跟进' : '暂无待处理'} />
@@ -331,106 +329,178 @@ export default function ProjectDetail() {
 
       <div className="grid grid-cols-2 gap-6">
         <Section title="生产计划列表摘要" action={<Link to="/projects?tab=production" className="text-xs text-blue-600 hover:underline">查看全部</Link>}>
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-gray-500">{['计划ID', '计划名称', '状态', '当前节点', '完成'].map((h) => <th key={h} className="py-2">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {projProductionPlans.slice(0, 5).map((plan) => {
-                const planDevices = devices.filter((d) => d.productionPlanId === plan.id);
-                const done = planDevices.filter((d) => ['已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status)).length;
-                return (
-                  <tr key={plan.id} className="hover:bg-gray-50">
-                    <td className="py-2 font-mono text-xs"><Link to={`/production-plans/${plan.id}`} className="text-blue-600 hover:underline">{plan.id}</Link></td>
-                    <td className="py-2 text-gray-700">{plan.name}</td>
-                    <td className="py-2"><StatusBadge status={productionPlanStatus(plan)} /></td>
-                    <td className="py-2"><StatusBadge status={plan.currentNode || '来料准备'} /></td>
-                    <td className="py-2 text-gray-600">{done}/{plan.targetCount || 0}</td>
-                  </tr>
-                );
-              })}
-              {projProductionPlans.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-gray-400">暂无生产计划</td></tr>}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-xs text-gray-500">{['计划ID', '计划名称', '状态', '当前节点', '完成进度', '操作'].map((h) => <th key={h} className="py-2 px-2 whitespace-nowrap">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {prodPaged.pageItems.map((plan) => {
+                  const planDevices = devices.filter((d) => d.productionPlanId === plan.id);
+                  const done = planDevices.filter((d) => ['已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status)).length;
+                  const nodeKey = PROD_NODE_KEY[plan.currentNode] || 'materialPrep';
+                  return (
+                    <tr key={plan.id} className="hover:bg-gray-50">
+                      <td className="py-2 px-2 font-mono text-xs whitespace-nowrap"><Link to={`/production-plans/${plan.id}`} className="text-blue-600 hover:underline">{plan.id}</Link></td>
+                      <td className="py-2 px-2 text-gray-700 whitespace-nowrap">{plan.name}</td>
+                      <td className="py-2 px-2"><StatusBadge status={productionPlanStatus(plan)} /></td>
+                      <td className="py-2 px-2"><StatusBadge status={plan.currentNode || '来料准备'} /></td>
+                      <td className="py-2 px-2 text-gray-600 whitespace-nowrap">{done}/{plan.targetCount || 0}</td>
+                      <td className="py-2 px-2 text-xs whitespace-nowrap">
+                        <div className="flex items-center gap-x-3">
+                          <Link to={`/production-plans/${plan.id}`} className="text-slate-600 hover:underline">查看详情</Link>
+                          <Link to={`/production-plans/${plan.id}?node=${nodeKey}`} className="text-emerald-600 hover:underline">进入当前节点</Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {projProductionPlans.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-gray-400">暂无生产计划</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={prodPaged.page} total={prodPaged.total} totalPages={prodPaged.totalPages} onChange={prodPaged.setPage} />
         </Section>
 
         <Section title="交付计划列表摘要" action={<Link to="/projects?tab=delivery" className="text-xs text-blue-600 hover:underline">查看全部</Link>}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-xs text-gray-500">{['计划ID', '交付批次', '状态', '当前节点', '验收进度', '计划验收', '操作'].map((h) => <th key={h} className="py-2 px-2 whitespace-nowrap">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {delivPaged.pageItems.map((plan) => {
+                  const accepted = (plan.records?.customerAccept || []).filter(isPass).length;
+                  const nodeKey = DELIV_NODE_KEY[plan.currentNode] || 'binding';
+                  return (
+                    <tr key={plan.id} className="hover:bg-gray-50">
+                      <td className="py-2 px-2 font-mono text-xs whitespace-nowrap"><Link to={`/delivery-plans/${plan.id}`} className="text-blue-600 hover:underline">{plan.id}</Link></td>
+                      <td className="py-2 px-2 text-gray-700 whitespace-nowrap">{plan.batchNo || plan.name}</td>
+                      <td className="py-2 px-2"><StatusBadge status={deliveryPlanStatus(plan)} /></td>
+                      <td className="py-2 px-2"><StatusBadge status={plan.currentNode || '绑定设备'} /></td>
+                      <td className="py-2 px-2 text-gray-600 whitespace-nowrap">{accepted}/{plan.targetCount || 0}</td>
+                      <td className="py-2 px-2 text-xs text-gray-500 whitespace-nowrap">{plan.acceptanceDate || plan.dueDate || '—'}</td>
+                      <td className="py-2 px-2 text-xs whitespace-nowrap">
+                        <div className="flex items-center gap-x-3">
+                          <Link to={`/delivery-plans/${plan.id}`} className="text-slate-600 hover:underline">查看详情</Link>
+                          <Link to={`/delivery-plans/${plan.id}?node=${nodeKey}`} className="text-emerald-600 hover:underline">进入当前节点</Link>
+                          <Link to={`/delivery-plans/${plan.id}?node=binding`} className="text-indigo-600 hover:underline">绑定设备</Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {projDeliveryPlans.length === 0 && <tr><td colSpan={7} className="py-8 text-center text-gray-400">暂无交付计划</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={delivPaged.page} total={delivPaged.total} totalPages={delivPaged.totalPages} onChange={delivPaged.setPage} />
+        </Section>
+      </div>
+
+      <Section title={`项目设备（${projDevices.length}台）`} action={<Link to="/projects?tab=delivery" className="text-xs text-indigo-600 hover:underline">前往交付计划绑定</Link>}>
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-gray-500">{['计划ID', '交付批次', '状态', '当前节点', '验收进度', '计划验收', '操作'].map((h) => <th key={h} className="py-2">{h}</th>)}</tr></thead>
+            <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '生命周期状态', '当前业务节点', '所属点位', '最近更新', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-100">
-              {projDeliveryPlans.slice(0, 5).map((plan) => {
-                const accepted = (plan.records?.customerAccept || []).filter(isPass).length;
-                const nodeKey = { 绑定设备: 'binding', 出厂检验: 'factoryInspection', 现场安装调试: 'siteInstall', 客户验收: 'customerAccept' }[plan.currentNode] || 'binding';
+              {devPaged.pageItems.map((device) => {
+                const typeName = deviceTypes.find((t) => t.id === device.deviceTypeId)?.name || device.deviceTypeId;
+                const location = locations.find((l) => l.id === device.locationId);
+                const dp = deliveryPlans.find((p) => (p.boundDeviceIds || []).includes(device.id) || (p.records?.binding || []).some((b) => b.deviceId === device.id));
                 return (
-                  <tr key={plan.id} className="hover:bg-gray-50">
-                    <td className="py-2 font-mono text-xs"><Link to={`/delivery-plans/${plan.id}`} className="text-blue-600 hover:underline">{plan.id}</Link></td>
-                    <td className="py-2 text-gray-700">{plan.batchNo || plan.name}</td>
-                    <td className="py-2"><StatusBadge status={deliveryPlanStatus(plan)} /></td>
-                    <td className="py-2"><StatusBadge status={plan.currentNode || '绑定设备'} /></td>
-                    <td className="py-2 text-gray-600">{accepted}/{plan.targetCount || 0}</td>
-                    <td className="py-2 text-xs text-gray-500">{plan.acceptanceDate || plan.dueDate || '—'}</td>
-                    <td className="py-2">
-                      <div className="flex gap-2 text-xs">
-                        <Link to={`/delivery-plans/${plan.id}?node=${nodeKey}`} className="text-emerald-600 hover:underline">进入流程</Link>
-                        <Link to={`/delivery-plans/${plan.id}?node=binding`} className="text-indigo-600 hover:underline">绑定设备</Link>
+                  <tr key={device.id} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap"><Link to={`/devices/${device.id}`} className="text-blue-600 hover:underline">{device.sn}</Link></td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{typeName}</td>
+                    <td className="px-3 py-2"><StatusBadge status={deviceLifecycleStatus(device)} /></td>
+                    <td className="px-3 py-2"><StatusBadge status={deviceBusinessNode(device)} /></td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{location?.name || '—'}</td>
+                    <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">{device.updatedAt || '—'}</td>
+                    <td className="px-3 py-2 text-xs whitespace-nowrap">
+                      <div className="flex items-center gap-x-3">
+                        <Link to={`/devices/${device.id}`} className="text-slate-600 hover:underline">查看设备详情</Link>
+                        {dp ? <Link to={`/delivery-plans/${dp.id}`} className="text-blue-600 hover:underline">查看交付记录</Link> : <span className="text-gray-300">查看交付记录</span>}
                       </div>
                     </td>
                   </tr>
                 );
               })}
-              {projDeliveryPlans.length === 0 && <tr><td colSpan={7} className="py-8 text-center text-gray-400">暂无交付计划</td></tr>}
+              {projDevices.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">暂无项目设备</td></tr>}
             </tbody>
           </table>
-        </Section>
-      </div>
-
-      <Section title={`项目设备（${projDevices.length}台）`} action={status !== '已作废' && canDo('add_device_allocation') ? <button onClick={() => setModal('bind')} className={BTN_GHOST}>绑定设备</button> : null}>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50"><tr>{['设备SN', '整机类型', '当前状态', '所属点位', '最近更新'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-gray-100">
-            {projDevices.map((device) => {
-              const typeName = deviceTypes.find((t) => t.id === device.deviceTypeId)?.name || device.deviceTypeId;
-              const location = locations.find((l) => l.id === device.locationId);
-              return (
-                <tr key={device.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 font-mono text-xs"><Link to={`/devices/${device.id}`} className="text-blue-600 hover:underline">{device.sn}</Link></td>
-                  <td className="px-3 py-2 text-gray-600">{typeName}</td>
-                  <td className="px-3 py-2"><StatusBadge status={device.status} /></td>
-                  <td className="px-3 py-2 text-gray-600">{location?.name || '—'}</td>
-                  <td className="px-3 py-2 text-xs text-gray-400">{device.updatedAt || '—'}</td>
-                </tr>
-              );
-            })}
-            {projDevices.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">暂无绑定设备</td></tr>}
-          </tbody>
-        </table>
+        </div>
+        <Pagination page={devPaged.page} total={devPaged.total} totalPages={devPaged.totalPages} onChange={devPaged.setPage} />
       </Section>
 
       <div className="grid grid-cols-2 gap-6">
         <Section title={`项目点位（${projLocations.length}个）`}>
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-gray-500">{['点位名称', '地址', '设备数'].map((h) => <th key={h} className="py-2">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {projLocations.map((loc) => <tr key={loc.id}><td className="py-2 text-gray-800">{loc.name}</td><td className="py-2 text-gray-500">{loc.address || '—'}</td><td className="py-2 text-gray-600">{loc.deviceIds?.length || 0}</td></tr>)}
-              {projLocations.length === 0 && <tr><td colSpan={3} className="py-8 text-center text-gray-400">暂无点位</td></tr>}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-xs text-gray-500">{['点位名称', '地址', '设备数', '操作'].map((h) => <th key={h} className="py-2 px-2 whitespace-nowrap">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {locPaged.pageItems.map((loc) => (
+                  <tr key={loc.id} className="hover:bg-gray-50">
+                    <td className="py-2 px-2 text-gray-800 whitespace-nowrap">{loc.name}</td>
+                    <td className="py-2 px-2 text-gray-500 whitespace-nowrap">{loc.address || '—'}</td>
+                    <td className="py-2 px-2 text-gray-600">{loc.deviceIds?.length || projDevices.filter((d) => d.locationId === loc.id).length || 0}</td>
+                    <td className="py-2 px-2 text-xs whitespace-nowrap"><Link to="/assets?tab=locations" className="text-slate-600 hover:underline">查看点位</Link></td>
+                  </tr>
+                ))}
+                {projLocations.length === 0 && <tr><td colSpan={4} className="py-8 text-center text-gray-400">暂无点位</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={locPaged.page} total={locPaged.total} totalPages={locPaged.totalPages} onChange={locPaged.setPage} />
         </Section>
 
         <Section title="关联问题与工单">
-          <div className="space-y-3">
-            {[...projIssues.slice(0, 3), ...projWorkOrders.slice(0, 3)].slice(0, 6).map((item) => (
-              <div key={item.id} className="flex items-center gap-3 text-sm border-b border-gray-100 pb-2 last:border-0">
-                <span className="font-mono text-xs text-gray-500 w-24">{item.id}</span>
-                <span className="text-gray-700 flex-1 truncate">{item.issueDesc || item.description}</span>
-                <StatusBadge status={item.status} />
-              </div>
-            ))}
-            {projIssues.length + projWorkOrders.length === 0 && <div className="py-8 text-center text-gray-400 text-sm">暂无关联问题或工单</div>}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-xs text-gray-500">{['编号', '类型', '关联设备SN', '来源阶段', '描述', '严重程度', '状态', '操作'].map((h) => <th key={h} className="py-2 px-2 whitespace-nowrap">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {relatedPaged.pageItems.map((item) => (
+                  <tr key={item.id} className="hover:bg-gray-50">
+                    <td className="py-2 px-2 font-mono text-xs whitespace-nowrap">{item.id}</td>
+                    <td className="py-2 px-2 text-gray-600 text-xs whitespace-nowrap">{item.kind}</td>
+                    <td className="py-2 px-2 font-mono text-xs whitespace-nowrap">{item.deviceSN || '—'}</td>
+                    <td className="py-2 px-2 text-gray-600 text-xs whitespace-nowrap">{item.stage}</td>
+                    <td className="py-2 px-2 text-gray-700 text-xs max-w-[160px]"><div className="truncate">{item.desc}</div></td>
+                    <td className="py-2 px-2"><StatusBadge status={item.severity} /></td>
+                    <td className="py-2 px-2"><StatusBadge status={item.status} /></td>
+                    <td className="py-2 px-2 text-xs whitespace-nowrap">
+                      <div className="flex items-center gap-x-3">
+                        {item.target === 'quality'
+                          ? <Link to="/after-sales?tab=quality" className="text-slate-600 hover:underline">查看详情</Link>
+                          : item.target === 'orders'
+                            ? <Link to="/after-sales?tab=orders" className="text-slate-600 hover:underline">查看详情</Link>
+                            : <span className="text-gray-300">查看详情</span>}
+                        <Link to="/after-sales?tab=orders" className="text-blue-600 hover:underline">进入工单中心</Link>
+                        <Link to="/after-sales?tab=quality" className="text-emerald-600 hover:underline">进入质量问题台账</Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {relatedRows.length === 0 && <tr><td colSpan={8} className="py-8 text-center text-gray-400">暂无关联问题或工单</td></tr>}
+              </tbody>
+            </table>
           </div>
+          <Pagination page={relatedPaged.page} total={relatedPaged.total} totalPages={relatedPaged.totalPages} onChange={relatedPaged.setPage} />
         </Section>
       </div>
 
       <Section title="操作日志摘要" action={<button onClick={() => setModal('logs')} className={BTN_GHOST}>查看全部</button>}>
-        <OperationLog logs={projLogs.slice(0, 5)} />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50"><tr>{['操作类型', '操作时间', '操作人', '操作内容'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-gray-100">
+              {logPaged.pageItems.map((log) => (
+                <tr key={log.id} className="hover:bg-gray-50">
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{log.actionType || '—'}</td>
+                  <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">{log.timestamp || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{log.operator || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600 text-xs">{log.notes || '—'}</td>
+                </tr>
+              ))}
+              {projLogs.length === 0 && <tr><td colSpan={4} className="px-3 py-8 text-center text-gray-400">暂无操作日志</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <Pagination page={logPaged.page} total={logPaged.total} totalPages={logPaged.totalPages} onChange={logPaged.setPage} />
       </Section>
 
       <ProjectFormModal
@@ -465,21 +535,6 @@ export default function ProjectDetail() {
           const plan = { id: `DP-${Date.now().toString().slice(-6)}`, projectId: id, name: form.name, targetCount: form.targetCount, owner: form.owner, dueDate: form.date, acceptanceDate: form.date, status: '交付中', currentNode: '绑定设备', records: { binding: [], factoryInspection: [], siteInstall: [], customerAccept: [] } };
           dispatch({ type: 'ADD_DELIVERY_PLAN', payload: plan });
           writeLog('创建交付计划', `创建 ${plan.name}`);
-        }}
-      />
-
-      <BindDevicesModal
-        isOpen={modal === 'bind'}
-        onClose={() => setModal(null)}
-        devices={availableDevices}
-        deviceTypes={deviceTypes}
-        onConfirm={(ids) => {
-          const t = nowText();
-          ids.forEach((deviceId) => {
-            dispatch({ type: 'UPDATE_DEVICE', payload: { id: deviceId, projectId: id, status: '已分配项目', updatedAt: t } });
-            dispatch({ type: 'ADD_DEVICE_ALLOCATION', payload: { id: `ALLOC-${Date.now()}-${deviceId}`, deviceId, projectId: id, allocatedBy: state.currentUser, allocatedAt: t, type: '分配', notes: '项目详情绑定设备' } });
-          });
-          writeLog('绑定设备', `绑定 ${ids.length} 台设备`);
         }}
       />
 
