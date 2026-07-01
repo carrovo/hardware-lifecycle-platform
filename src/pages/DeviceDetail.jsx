@@ -3,18 +3,27 @@ import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
+import { deviceLifecycleStatus, deviceBusinessNode } from '../utils/status';
 
 const FLOW_STAGES = ['整机装配', '质量测试', '整机入库', '出厂检验', '现场安装调试', '客户验收', '在线运营'];
 
 function getStageProgress(status) {
   switch (status) {
-    case '装配中': return { doneUpTo: 0, currentIdx: 0 };
+    case '装配中':
+    case '待确认装配完成':
+    case '已装配':
+      return { doneUpTo: 0, currentIdx: 0 };
     case '半成品检验中':
     case '初测中':
     case '中测中':
     case 'OQT终测中':
     case '生产返修中':
+    case '功能测试中':
+    case '老化测试中':
+    case '终测中':
       return { doneUpTo: 1, currentIdx: 1 };
+    case '待入库':
+      return { doneUpTo: 2, currentIdx: 2 };
     case '已入库':
     case '待分配项目':
       return { doneUpTo: 3, currentIdx: -1 };
@@ -355,8 +364,12 @@ export default function DeviceDetail() {
             <div className="text-sm font-medium text-gray-800">{deviceType?.name || device.deviceTypeId}</div>
           </div>
           <div>
-            <div className="text-xs text-gray-400 mb-1">当前状态</div>
-            <StatusBadge status={device.status} size="sm" />
+            <div className="text-xs text-gray-400 mb-1">生命周期状态</div>
+            <StatusBadge status={deviceLifecycleStatus(device)} size="sm" />
+          </div>
+          <div>
+            <div className="text-xs text-gray-400 mb-1">当前业务节点</div>
+            <StatusBadge status={deviceBusinessNode(device)} size="sm" />
           </div>
           <div>
             <div className="text-xs text-gray-400 mb-1">创建时间</div>
@@ -404,12 +417,12 @@ export default function DeviceDetail() {
 
       {/* Module list by slot */}
       <div className="bg-white rounded shadow-sm p-5">
-        <div className="text-sm font-medium text-gray-600 mb-3">当前模组清单（按槁位）</div>
-        {device.usedMaterials && device.usedMaterials.length > 0 ? (
+        <div className="text-sm font-medium text-gray-600 mb-3">模块绑定清单（按槽位）</div>
+        {(device.usedMaterials && device.usedMaterials.length > 0) ? (
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['槁位', '模组类型', '类别', '物料SN', '状态', '出厂日期', '固件版本', '累计运行'].map((h) => (
+                {['槽位名称', '模块类型', '模块SN', '绑定时间', '状态'].map((h) => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
                 ))}
               </tr>
@@ -420,24 +433,41 @@ export default function DeviceDetail() {
                 return (
                   <tr key={i} className="hover:bg-gray-50">
                     <td className="px-4 py-2.5 text-xs text-gray-500">{getSlotName(um.moduleTypeId)}</td>
-                    <td className="px-4 py-2.5 text-gray-700 font-medium">{getModuleName(um.moduleTypeId)}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{getModuleCategory(um.moduleTypeId)}</span>
-                    </td>
+                    <td className="px-4 py-2.5 text-gray-700 font-medium">{getModuleName(um.moduleTypeId)}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{getModuleCategory(um.moduleTypeId)}</span></td>
                     <td className="px-4 py-2.5 font-mono text-xs text-gray-600">{mat?.sn || um.materialId}</td>
-                    <td className="px-4 py-2.5">
-                      {mat ? <StatusBadge status={mat.status} size="sm" /> : <span className="text-xs text-gray-400">—</span>}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-gray-500">{mat?.manufactureDate || '—'}</td>
-                    <td className="px-4 py-2.5 text-xs text-gray-500 font-mono">{mat?.firmwareVersion ? mat.firmwareVersion : '—'}</td>
-                    <td className="px-4 py-2.5 text-xs text-gray-500">{mat && mat.operatingHours > 0 ? `${mat.operatingHours}h` : '—'}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500">{device.assemblyTime || '—'}</td>
+                    <td className="px-4 py-2.5">{mat ? <StatusBadge status={mat.status} size="sm" /> : <StatusBadge status="已装配" size="sm" />}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        ) : deviceType?.slots?.length > 0 ? (
+          <>
+            <div className="text-xs text-gray-400 mb-2">该设备暂未登记物料实例，以下按整机类型槽位模板展示应绑定模块：</div>
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  {['槽位名称', '模块类型', '模块SN', '绑定时间', '状态'].map((h) => (
+                    <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {deviceType.slots.map((slot) => (
+                  <tr key={slot.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-2.5 text-xs text-gray-500">{slot.slotName}</td>
+                    <td className="px-4 py-2.5 text-gray-700 font-medium">{getModuleName(slot.moduleTypeId)}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{getModuleCategory(slot.moduleTypeId)}</span></td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-gray-400">待绑定</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-400">—</td>
+                    <td className="px-4 py-2.5"><StatusBadge status="待确认" size="sm" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         ) : (
-          <div className="text-sm text-gray-400">暂无模组物料记录</div>
+          <div className="text-sm text-gray-400">暂无模块绑定记录</div>
         )}
       </div>
 
@@ -491,7 +521,7 @@ export default function DeviceDetail() {
                     <table className="w-full text-sm mb-1">
                       <thead className="bg-gray-50">
                         <tr>
-                          {['结果', '测试员', '测试时间', '报告文件', '备注', canDo('void_test_record') ? '操作' : ''].filter(Boolean).map((h) => (
+                          {['结果', '测试员', '测试时间', '报告文件', '备注', '操作'].map((h) => (
                             <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
                           ))}
                         </tr>
@@ -509,18 +539,21 @@ export default function DeviceDetail() {
                             <td className={`px-4 py-2 text-xs whitespace-nowrap ${t.voided ? 'line-through text-gray-400' : 'text-gray-500'}`}>{t.testTime}</td>
                             <td className="px-4 py-2 text-gray-400 text-xs font-mono">{t.reportFile || '—'}</td>
                             <td className="px-4 py-2 text-gray-400 text-xs">{t.notes || '—'}</td>
-                            {canDo('void_test_record') && (
-                              <td className="px-4 py-2">
-                                {t.voided ? (
-                                  <div className="text-xs text-gray-400">
-                                    <div>{t.voidedAt}</div>
-                                    <div className="truncate max-w-[120px]" title={t.voidReason}>{t.voidReason}</div>
-                                  </div>
-                                ) : (
-                                  <VoidTestRecordInline record={t} onVoid={handleVoidTestRecord} />
-                                )}
-                              </td>
-                            )}
+                            <td className="px-4 py-2">
+                              {t.voided ? (
+                                <div className="text-xs text-gray-400">
+                                  <div>已作废 · {t.voidedAt}</div>
+                                  <div className="truncate max-w-[120px]" title={t.voidReason}>{t.voidReason}</div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <button className="text-xs text-slate-600 hover:underline">
+                                    {t.reportFile ? '查看报告' : '查看记录'}
+                                  </button>
+                                  {canDo('void_test_record') && <VoidTestRecordInline record={t} onVoid={handleVoidTestRecord} />}
+                                </div>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

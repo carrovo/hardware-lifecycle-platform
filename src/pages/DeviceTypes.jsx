@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
+import { deviceBusinessNode } from '../utils/status';
 
 const CATEGORIES = ['底盘', '机械臂', '电机', '末端', '全身相机', '预控'];
 
@@ -322,7 +323,7 @@ export default function DeviceTypes() {
                                         <tr>
                                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">SN</th>
                                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">装配时间</th>
-                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">当前状态</th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">当前业务节点</th>
                                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">操作</th>
                                         </tr>
                                       </thead>
@@ -331,7 +332,7 @@ export default function DeviceTypes() {
                                           <tr key={d.id} className="bg-white">
                                             <td className="px-3 py-2 font-mono text-xs text-gray-800 font-medium">{d.sn}</td>
                                             <td className="px-3 py-2 text-gray-500 text-xs">{d.assemblyTime || '—'}</td>
-                                            <td className="px-3 py-2"><StatusBadge status={d.status} /></td>
+                                            <td className="px-3 py-2"><StatusBadge status={deviceBusinessNode(d)} /></td>
                                             <td className="px-3 py-2">
                                               <Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline text-xs">查看详情</Link>
                                             </td>

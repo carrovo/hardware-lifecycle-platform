@@ -3,13 +3,121 @@ import { useSearchParams } from 'react-router-dom';
 import Roles from './Roles';
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
-import SecondaryTabs from '../components/SecondaryTabs';
+import { ROLES_LIST, ROLE_NAV_PERMISSIONS, ROLE_ACTION_PERMISSIONS } from '../data/mockData';
 
 const TABS = [
-  { key: 'roles', label: '角色权限' },
-  { key: 'labels', label: '标签管理' },
+  { key: 'roles', label: '用户与角色' },
+  { key: 'permissions', label: '权限配置' },
+  { key: 'labels', label: '标签配置' },
+  { key: 'stations', label: '工站配置' },
   { key: 'notifications', label: '通知配置' },
+  { key: 'logs', label: '操作日志' },
 ];
+
+const NAV_LABELS = {
+  '/home': '首页', '/dashboard': '看板中心', '/projects': '项目中心',
+  '/assets': '资产管理', '/after-sales': '售后管理', '/system': '系统管理',
+};
+
+/* ─────── 权限配置 ─────── */
+function PermissionsConfig() {
+  return (
+    <div className="p-6 space-y-4">
+      <p className="text-sm text-gray-500">按角色维护可访问模块、可操作动作与数据范围，支撑项目中心、资产管理与售后管理的权限控制。</p>
+      <div className="bg-white rounded shadow-sm overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>{['角色', '可访问模块', '可操作动作', '数据范围', '状态', '操作'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {ROLES_LIST.map(role => (
+              <tr key={role} className="hover:bg-gray-50 align-top">
+                <td className="px-4 py-2.5 font-medium text-gray-800 whitespace-nowrap">{role}</td>
+                <td className="px-4 py-2.5">
+                  <div className="flex flex-wrap gap-1">
+                    {(ROLE_NAV_PERMISSIONS[role] || []).map(p => <span key={p} className="bg-blue-50 text-blue-700 border border-blue-200 text-xs px-2 py-0.5 rounded-full">{NAV_LABELS[p] || p}</span>)}
+                  </div>
+                </td>
+                <td className="px-4 py-2.5 text-xs text-gray-500">{(ROLE_ACTION_PERMISSIONS[role] || []).length} 项动作</td>
+                <td className="px-4 py-2.5 text-xs text-gray-600">{role === '项目负责人' ? '本人负责项目' : role === '管理员' || role === '厂长' ? '全部数据' : '本部门'}</td>
+                <td className="px-4 py-2.5"><span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">启用</span></td>
+                <td className="px-4 py-2.5 text-xs text-slate-500">查看 / 编辑</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ─────── 工站配置 ─────── */
+const STATION_ROWS = [
+  { name: '半成品检验', flow: '质量测试', order: 1 },
+  { name: '初测', flow: '质量测试', order: 2 },
+  { name: '中测', flow: '质量测试', order: 3 },
+  { name: 'OQT终测', flow: '质量测试', order: 4 },
+  { name: '出厂检验', flow: '交付流程', order: 1 },
+  { name: '现场安装调试', flow: '交付流程', order: 2 },
+  { name: '客户验收', flow: '交付流程', order: 3 },
+];
+function StationsConfig() {
+  return (
+    <div className="p-6 space-y-4">
+      <p className="text-sm text-gray-500">维护质量测试与交付流程的工站字典，供生产计划详情、交付计划详情引用。</p>
+      <div className="bg-white rounded shadow-sm overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>{['工站名称', '所属流程', '顺序', '是否启用', '操作'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {STATION_ROWS.map(s => (
+              <tr key={`${s.flow}-${s.name}`} className="hover:bg-gray-50">
+                <td className="px-4 py-2.5 font-medium text-gray-800">{s.name}</td>
+                <td className="px-4 py-2.5 text-gray-600">{s.flow}</td>
+                <td className="px-4 py-2.5 text-gray-600">{s.order}</td>
+                <td className="px-4 py-2.5"><span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">启用</span></td>
+                <td className="px-4 py-2.5 text-xs text-slate-500">编辑 / 停用</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ─────── 操作日志 ─────── */
+function OperationLogsPage() {
+  const { state } = useApp();
+  const logs = [...(state.operationLogs || [])].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || '')).slice(0, 100);
+  const moduleOf = (log) => log.productionPlanId ? '生产计划' : log.deliveryPlanId ? '交付计划' : log.projectId ? '项目中心' : log.deviceId ? '资产管理' : '系统';
+  return (
+    <div className="p-6 space-y-4">
+      <p className="text-sm text-gray-500">平台操作留痕，支撑追溯与审计。</p>
+      <div className="bg-white rounded shadow-sm overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>{['操作时间', '操作人', '模块', '操作类型', '操作对象', '说明'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {logs.map(log => (
+              <tr key={log.id} className="hover:bg-gray-50">
+                <td className="px-4 py-2 text-gray-500 text-xs whitespace-nowrap">{log.timestamp}</td>
+                <td className="px-4 py-2 text-gray-700">{log.operator}</td>
+                <td className="px-4 py-2 text-gray-600 text-xs">{moduleOf(log)}</td>
+                <td className="px-4 py-2 text-gray-700 text-xs">{log.actionType}</td>
+                <td className="px-4 py-2 font-mono text-xs text-gray-500">{log.projectId || log.deliveryPlanId || log.productionPlanId || log.deviceId || '—'}</td>
+                <td className="px-4 py-2 text-gray-500 text-xs max-w-[280px] truncate">{log.notes || '—'}</td>
+              </tr>
+            ))}
+            {logs.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">暂无操作日志</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 const TRIGGER_OPTIONS = [
   '健康告警触发',
@@ -275,24 +383,22 @@ function LabelManagement() {
 }
 
 export default function SystemPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const tab = searchParams.get('tab') || 'roles';
   const activeTab = TABS.some((t) => t.key === tab) ? tab : 'roles';
-
-  const setTab = (key) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('tab', key);
-    setSearchParams(next);
-  };
+  const activeLabel = TABS.find((t) => t.key === activeTab)?.label || '';
 
   return (
     <div>
       <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
-        <SecondaryTabs tabs={TABS} activeTab={activeTab} onChange={setTab} />
+        <div className="text-xs text-gray-400">设备全生命周期质量管理平台 / 系统管理 / {activeLabel}</div>
       </div>
       {activeTab === 'roles' && <Roles />}
+      {activeTab === 'permissions' && <PermissionsConfig />}
       {activeTab === 'labels' && <LabelManagement />}
+      {activeTab === 'stations' && <StationsConfig />}
       {activeTab === 'notifications' && <NotificationConfig />}
+      {activeTab === 'logs' && <OperationLogsPage />}
     </div>
   );
 }

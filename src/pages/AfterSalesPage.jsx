@@ -4,14 +4,18 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
-import SecondaryTabs from '../components/SecondaryTabs';
 import { FEISHU_USERS } from '../data/mockData';
 
 const TABS = [
-  { key: 'production', label: '生产工单' },
-  { key: 'delivery',   label: '交付工单' },
-  { key: 'quality',    label: '质量问题台账' },
+  { key: 'orders',  label: '工单中心' },
+  { key: 'quality', label: '质量问题台账' },
 ];
+
+// 售后管理边界说明（在工单中心 / 质量问题台账内展示）：
+// 生产测试 NG → 生产返修记录（不进入售后工单）；
+// 出厂检验 / 现场安装调试 / 客户验收 NG → 交付工单；
+// 在线运营后的问题 → 售后工单或质量问题记录。
+const WO_TYPE_LABEL = { delivery: '交付工单', aftersales: '售后工单', production: '生产返修记录' };
 
 /* ─────── Shared work order modals ─────── */
 
@@ -254,7 +258,9 @@ function WorkOrderDetail({ wo, state, dispatch, currentUser, canDo, actionType }
 
   const project = projects.find(p => p.id === wo.projectId);
   const now = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
-  const updateType = actionType === 'production' ? 'UPDATE_PRODUCTION_WORK_ORDER' : 'UPDATE_DELIVERY_WORK_ORDER';
+  const updateType = actionType === 'production' ? 'UPDATE_PRODUCTION_WORK_ORDER'
+    : actionType === 'aftersales' ? 'UPDATE_WORK_ORDER'
+    : 'UPDATE_DELIVERY_WORK_ORDER';
 
   const canEdit = ['待处理', '处理中'].includes(wo.status) && canDo('update_work_order');
   const canVoid = ['待处理', '处理中'].includes(wo.status) && canDo('update_work_order');
@@ -507,6 +513,109 @@ function WorkOrderTable({ workOrders, actionType, state, dispatch, currentUser, 
   );
 }
 
+/* ─────── 工单中心：交付工单 + 售后工单 ─────── */
+function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
+  const [filterStatus, setFilterStatus] = useState('全部');
+  const [filterType, setFilterType] = useState('全部');
+  const [expandedId, setExpandedId] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const { projects } = state;
+
+  const deliveryWOs = (state.deliveryWorkOrders || []).map(w => ({ ...w, _kind: 'delivery' }));
+  const aftersalesWOs = (state.workOrders || []).map(w => ({ ...w, _kind: 'aftersales' }));
+  const allOrders = [...deliveryWOs, ...aftersalesWOs];
+
+  const sourceNode = (w) => w.sourceNode || w.ngStation || (w._kind === 'aftersales' ? '在线运营' : '出厂检验');
+  const getProjectName = id => projects.find(p => p.id === id)?.name || '—';
+
+  const filtered = allOrders
+    .filter(w => (filterStatus === '全部' ? w.status !== '已作废' : w.status === filterStatus))
+    .filter(w => filterType === '全部' || w._kind === filterType)
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+  const statusCounts = { '待处理': 0, '处理中': 0, '复检中': 0, '已关闭': 0, '已作废': 0 };
+  allOrders.forEach(w => { if (statusCounts[w.status] !== undefined) statusCounts[w.status]++; });
+
+  const handleAdd = (wo) => dispatch({ type: 'ADD_DELIVERY_WORK_ORDER', payload: wo });
+
+  return (
+    <div>
+      <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">
+        工单中心用于派人处理、状态推进和闭环。生产测试 NG 进入「生产返修记录」不在此；出厂检验 / 现场安装调试 / 客户验收 NG → 交付工单；在线运营后的问题 → 售后工单。
+      </div>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2 items-center">
+          {['全部', '待处理', '处理中', '复检中', '已关闭', '已作废'].map(s => (
+            <button key={s} onClick={() => setFilterStatus(s)}
+              className={`px-3 py-1 text-xs rounded-full border font-medium ${filterStatus === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>
+              {s === '全部' ? `全部 ${allOrders.filter(w => w.status !== '已作废').length}` : `${s} ${statusCounts[s] ?? 0}`}
+            </button>
+          ))}
+          <select className="border border-gray-300 rounded px-3 py-1 text-xs text-gray-600 focus:outline-none" value={filterType} onChange={e => setFilterType(e.target.value)}>
+            <option value="全部">全部类型</option>
+            <option value="delivery">交付工单</option>
+            <option value="aftersales">售后工单</option>
+          </select>
+        </div>
+        {canDo('update_work_order') && (
+          <button onClick={() => setShowAddModal(true)} className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800 flex-shrink-0">+ 新增工单</button>
+        )}
+      </div>
+
+      <div className="bg-white rounded shadow-sm overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              {['工单ID', '工单类型', '关联项目', '关联设备SN', '关联交付计划', '来源节点', '问题描述', '严重程度', '状态', '负责人', '创建时间', ''].map(h => (
+                <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(wo => {
+              const isExpanded = expandedId === wo.id;
+              const isVoided = wo.status === '已作废';
+              return (
+                <React.Fragment key={wo.id}>
+                  <tr onClick={() => setExpandedId(isExpanded ? null : wo.id)}
+                    className={`cursor-pointer border-t border-gray-100 hover:bg-blue-50 ${isExpanded ? 'bg-slate-50' : ''} ${isVoided ? 'opacity-50' : ''}`}>
+                    <td className="px-3 py-2.5 font-mono text-xs text-gray-600 whitespace-nowrap">{wo.id}</td>
+                    <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded-full border ${wo._kind === 'delivery' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>{WO_TYPE_LABEL[wo._kind]}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{getProjectName(wo.projectId)}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-gray-800 font-medium whitespace-nowrap">{wo.deviceSN}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{wo.deliveryPlanId || '—'}</td>
+                    <td className="px-3 py-2.5 text-xs"><StatusBadge status={sourceNode(wo)} /></td>
+                    <td className="px-3 py-2.5 text-gray-700 max-w-[180px]"><div className="truncate">{wo.description}</div></td>
+                    <td className="px-3 py-2.5"><StatusBadge status={wo.severity} /></td>
+                    <td className="px-3 py-2.5"><StatusBadge status={wo.status} /></td>
+                    <td className="px-3 py-2.5 text-gray-600 text-xs">{wo.assignedTo || '—'}</td>
+                    <td className="px-3 py-2.5 text-gray-400 text-xs whitespace-nowrap">{wo.createdAt}</td>
+                    <td className="px-3 py-2.5 text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</td>
+                  </tr>
+                  {isExpanded && !isVoided && (
+                    <tr>
+                      <td colSpan={12} className="p-0">
+                        <WorkOrderDetail wo={wo} state={state} dispatch={dispatch} currentUser={currentUser} canDo={canDo} actionType={wo._kind} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+            {filtered.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无工单</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {showAddModal && (
+        <AddWorkOrderModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onSave={handleAdd} actionType="delivery" state={state} />
+      )}
+    </div>
+  );
+}
+
 /* ─────── Quality Issue: Scan QR Modal ─────── */
 function ScanQRModal({ isOpen, onClose }) {
   return (
@@ -748,6 +857,9 @@ function QualityIssueTable({ state, dispatch, canDo }) {
 
   return (
     <div>
+      <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">
+        扫码上报和手动录入仅作为质量问题创建入口，提交后进入质量问题台账；需要处理的问题可进一步生成工单。质量问题台账用于质量沉淀、追溯和统计，不替代工单处理。
+      </div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex flex-wrap gap-2 items-center">
           {['全部', '待处理', '处理中', '已关闭'].map(s => (
@@ -824,40 +936,19 @@ function QualityIssueTable({ state, dispatch, canDo }) {
 export default function AfterSalesPage() {
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get('tab') || 'production';
-  const activeTab = TABS.some(t => t.key === tab) ? tab : 'production';
-
-  const setTab = (key) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('tab', key);
-    setSearchParams(next);
-  };
-
-  const productionWOs = state.productionWorkOrders || [];
-  const deliveryWOs = state.deliveryWorkOrders || [];
-  const qualityIssues = state.qualityIssues || [];
+  const [searchParams] = useSearchParams();
+  const tab = searchParams.get('tab') || 'orders';
+  const activeTab = TABS.some(t => t.key === tab) ? tab : 'orders';
+  const activeLabel = TABS.find(t => t.key === activeTab)?.label || '';
 
   return (
     <div>
       <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
-        <SecondaryTabs
-          tabs={TABS.map(t => ({
-            ...t,
-            badge: t.key === 'production' ? productionWOs.filter(w => w.status === '待处理').length
-              : t.key === 'quality' ? qualityIssues.filter(q => q.status === '待处理').length
-              : 0,
-          }))}
-          activeTab={activeTab}
-          onChange={setTab}
-        />
+        <div className="text-xs text-gray-400">设备全生命周期质量管理平台 / 售后管理 / {activeLabel}</div>
       </div>
       <div className="p-6">
-        {activeTab === 'production' && (
-          <WorkOrderTable workOrders={productionWOs} actionType="production" state={state} dispatch={dispatch} currentUser={state.currentUser} canDo={canDo} />
-        )}
-        {activeTab === 'delivery' && (
-          <WorkOrderTable workOrders={deliveryWOs} actionType="delivery" state={state} dispatch={dispatch} currentUser={state.currentUser} canDo={canDo} />
+        {activeTab === 'orders' && (
+          <OrderCenterTable state={state} dispatch={dispatch} currentUser={state.currentUser} canDo={canDo} />
         )}
         {activeTab === 'quality' && (
           <QualityIssueTable state={state} dispatch={dispatch} canDo={canDo} />

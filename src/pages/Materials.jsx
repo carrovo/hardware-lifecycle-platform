@@ -11,11 +11,27 @@ const RESULT_BADGE = {
   '特批使用': { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300', icon: '!' },
 };
 
+// 模块实例状态：在库可用 / 已锁定生产计划 / 已装配 / 维修中 / 已报废
 const STATUS_BADGE = {
-  '待装配':  { bg: 'bg-blue-100',   text: 'text-blue-700',   border: 'border-blue-300',   icon: '○' },
-  '已占用':  { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300', icon: '●' },
-  '退货换货': { bg: 'bg-red-100',   text: 'text-red-700',    border: 'border-red-300',    icon: '↩' },
+  '在库可用':      { bg: 'bg-blue-100',   text: 'text-blue-700',   border: 'border-blue-300',   icon: '○' },
+  '已锁定生产计划': { bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-300', icon: '🔒' },
+  '已装配':        { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300', icon: '●' },
+  '维修中':        { bg: 'bg-amber-100',  text: 'text-amber-700',  border: 'border-amber-300',  icon: '🛠' },
+  '已报废':        { bg: 'bg-gray-200',   text: 'text-gray-500',   border: 'border-gray-300',   icon: '✕' },
+  '退货换货':      { bg: 'bg-red-100',    text: 'text-red-700',    border: 'border-red-300',    icon: '↩' },
 };
+
+// 将底层物料状态映射到模块实例状态词表
+function instanceStatus(status) {
+  switch (status) {
+    case '待装配': return '在库可用';
+    case '已占用': return '已装配';
+    case '维修中': return '维修中';
+    case '已报废': return '已报废';
+    case '退货换货': return '退货换货';
+    default: return status || '在库可用';
+  }
+}
 
 function Badge({ map, value }) {
   const s = map[value] || { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-300', icon: '·' };
@@ -141,57 +157,38 @@ function AddBatchModal({ isOpen, onClose, onSave }) {
   );
 }
 
-function ModuleInventoryTab({ materials, moduleTypes }) {
+function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [] }) {
   const inventory = moduleTypes.map((mt) => {
     const mats = materials.filter((m) => m.category === mt.category);
-    const ready = mats.filter((m) => m.status === '待装配').length;
-    const used = mats.filter((m) => m.status === '已占用').length;
-    const returned = mats.filter((m) => m.status === '退货换货').length;
     const total = mats.length;
-    const passCount = mats.filter((m) => m.inspectionResult === '合格' || m.inspectionResult === '特批使用').length;
-    const rate = total > 0 ? Math.round((passCount / total) * 100) : 0;
-    return { ...mt, ready, used, returned, total, rate };
+    const available = mats.filter((m) => m.status === '待装配').length;
+    const assembled = mats.filter((m) => m.status === '已占用').length;
+    const abnormal = mats.filter((m) => ['退货换货', '维修中', '已报废'].includes(m.status)).length;
+    const relatedTypes = deviceTypes.filter((dt) => (dt.slots || []).some((s) => s.moduleTypeId === mt.id)).map((dt) => dt.name);
+    return { ...mt, total, available, assembled, locked: 0, abnormal, relatedTypes };
   });
 
   return (
-    <div className="bg-white rounded shadow-sm overflow-hidden">
+    <div className="bg-white rounded shadow-sm overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-gray-50">
           <tr>
-            {['模块类型', '类别', '在库待装配', '已占用', '退货换货', '合格率', '状态'].map((h) => (
-              <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
+            {['模块类型', '类别', '库存总数', '可用库存', '已锁定', '已装配', '异常/报废', '关联设备类型', '启用状态'].map((h) => (
+              <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
             ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
           {inventory.map((mt) => (
             <tr key={mt.id} className={`hover:bg-gray-50 ${!mt.active ? 'opacity-50' : ''}`}>
-              <td className="px-4 py-3 font-medium text-gray-800">{mt.name}</td>
-              <td className="px-4 py-3">
-                <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{mt.category}</span>
-              </td>
-              <td className="px-4 py-3">
-                <span className={`font-semibold text-sm ${mt.ready > 0 ? 'text-blue-700' : 'text-gray-400'}`}>
-                  {mt.ready}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-gray-600">{mt.used}</td>
-              <td className="px-4 py-3">
-                {mt.returned > 0
-                  ? <span className="text-red-600 font-medium">{mt.returned}</span>
-                  : <span className="text-gray-400">0</span>}
-              </td>
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                    <div
-                      className={`h-1.5 rounded-full ${mt.rate >= 90 ? 'bg-green-500' : mt.rate >= 70 ? 'bg-amber-400' : 'bg-red-500'}`}
-                      style={{ width: `${mt.rate}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-gray-600">{mt.rate}%</span>
-                </div>
-              </td>
+              <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">{mt.name}</td>
+              <td className="px-4 py-3"><span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{mt.category}</span></td>
+              <td className="px-4 py-3 text-gray-700 font-medium">{mt.total}</td>
+              <td className="px-4 py-3"><span className={`font-semibold ${mt.available > 0 ? 'text-blue-700' : 'text-gray-400'}`}>{mt.available}</span></td>
+              <td className="px-4 py-3 text-gray-500">{mt.locked}</td>
+              <td className="px-4 py-3 text-gray-600">{mt.assembled}</td>
+              <td className="px-4 py-3">{mt.abnormal > 0 ? <span className="text-red-600 font-medium">{mt.abnormal}</span> : <span className="text-gray-400">0</span>}</td>
+              <td className="px-4 py-3 text-gray-500 text-xs max-w-[200px]">{mt.relatedTypes.join('、') || '—'}</td>
               <td className="px-4 py-3">
                 {mt.active
                   ? <span className="text-xs bg-green-100 text-green-700 border border-green-300 px-1.5 py-0.5 rounded-full">启用中</span>
@@ -241,7 +238,7 @@ export default function Materials() {
       const matchCat = filterCategory === '全部' || b.category === filterCategory;
       const matchSupplier = filterSupplier === '全部' || b.supplier === filterSupplier;
       const matchResult = filterResult === '全部' || b.items.some((it) => it.result === filterResult);
-      const matchItemStatus = filterItemStatus === '全部' || b.items.some((it) => it.status === filterItemStatus);
+      const matchItemStatus = filterItemStatus === '全部' || b.items.some((it) => instanceStatus(it.status) === filterItemStatus);
       const matchSearch = !search ||
         b.batchNo.toLowerCase().includes(search.toLowerCase()) ||
         b.supplier.toLowerCase().includes(search.toLowerCase()) ||
@@ -286,7 +283,7 @@ export default function Materials() {
       </div>
 
       {activeTab === '模块库存' && (
-        <ModuleInventoryTab materials={state.materials} moduleTypes={state.moduleTypes} />
+        <ModuleInventoryTab materials={state.materials} moduleTypes={state.moduleTypes} deviceTypes={state.deviceTypes} />
       )}
 
       {activeTab === '来料检验' && (
@@ -340,12 +337,14 @@ export default function Materials() {
                 </select>
               </div>
               <div className="flex items-center gap-1.5">
-                <label className="text-xs text-gray-500 whitespace-nowrap">物料状态</label>
+                <label className="text-xs text-gray-500 whitespace-nowrap">模块实例状态</label>
                 <select value={filterItemStatus} onChange={(e) => setFilterItemStatus(e.target.value)}
                   className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none">
                   <option value="全部">全部</option>
-                  <option value="待装配">待装配</option>
-                  <option value="已占用">已占用</option>
+                  <option value="在库可用">在库可用</option>
+                  <option value="已装配">已装配</option>
+                  <option value="维修中">维修中</option>
+                  <option value="已报废">已报废</option>
                   <option value="退货换货">退货换货</option>
                 </select>
               </div>
@@ -423,7 +422,7 @@ export default function Materials() {
                                   <tr className="text-gray-500 border-b border-gray-200">
                                     <th className="text-left py-1.5 pr-4 font-medium">SN</th>
                                     <th className="text-left py-1.5 pr-4 font-medium">检验结果</th>
-                                    <th className="text-left py-1.5 pr-4 font-medium">物料状态</th>
+                                    <th className="text-left py-1.5 pr-4 font-medium">模块实例状态</th>
                                     <th className="text-left py-1.5 pr-4 font-medium">当前所在整机</th>
                                     <th className="text-left py-1.5 pr-4 font-medium">出厂日期</th>
                                     <th className="text-left py-1.5 pr-4 font-medium">固件版本</th>
@@ -441,7 +440,7 @@ export default function Materials() {
                                     <tr key={it.id} className={`border-b border-gray-100 last:border-0 ${it.result === '不合格' ? 'bg-red-50' : ''}`}>
                                       <td className="py-1.5 pr-4 font-mono text-gray-700">{it.sn}</td>
                                       <td className="py-1.5 pr-4"><Badge map={RESULT_BADGE} value={it.result} /></td>
-                                      <td className="py-1.5 pr-4"><Badge map={STATUS_BADGE} value={it.status} /></td>
+                                      <td className="py-1.5 pr-4"><Badge map={STATUS_BADGE} value={instanceStatus(it.status)} /></td>
                                       <td className="py-1.5 pr-4">
                                         {ownerDevice ? (
                                           <Link to={`/devices/${ownerDevice.id}`} className="text-blue-600 hover:underline font-mono text-xs">{ownerDevice.sn}</Link>

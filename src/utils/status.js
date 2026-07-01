@@ -113,3 +113,31 @@ export function acceptStageStatus(record) {
   if (!record) return '待客户验收';
   return isPass(record) ? '在线运营' : '验收异常';
 }
+
+// ---- 设备资产台账：生命周期状态 & 当前业务节点 -----------------------------
+// 生命周期状态只用：生产中 / 待入库 / 待交付 / 交付中 / 在线运营 / 维修中 / 已作废
+export function deviceLifecycleStatus(device) {
+  const s = device.status;
+  if (['已作废', '退役', '已报废'].includes(s)) return '已作废';
+  if (['维修中'].includes(s)) return '维修中';
+  if (s === '在线运营') return '在线运营';
+  if (['已分配项目', '出厂检验中', '现场安装调试中', '客户验收中'].includes(s)) return '交付中';
+  if (['已入库', '待分配项目'].includes(s)) return '待交付';
+  if (s === '待入库') return '待入库';
+  // 装配 / 质量测试 / 生产返修等在制环节统一归为生产中
+  return '生产中';
+}
+
+// 当前业务节点：整机装配 / 半成品检验 / 初测 / 中测 / OQT终测 / 整机入库 /
+//               出厂检验 / 现场安装调试 / 客户验收 / 在线运营
+const DEVICE_NODE_MAP = {
+  装配中: '整机装配', 整机装配: '整机装配', 待确认装配完成: '整机装配', 已装配: '整机装配',
+  半成品检验中: '半成品检验', 初测中: '初测', 中测中: '中测', OQT终测中: 'OQT终测',
+  功能测试中: '初测', 老化测试中: '中测', 终测中: 'OQT终测', 生产返修中: 'OQT终测',
+  待入库: '整机入库', 已入库: '整机入库', 待分配项目: '整机入库',
+  已分配项目: '出厂检验', 出厂检验中: '出厂检验',
+  现场安装调试中: '现场安装调试', 客户验收中: '客户验收', 在线运营: '在线运营',
+};
+export function deviceBusinessNode(device) {
+  return DEVICE_NODE_MAP[device.status] || '整机装配';
+}

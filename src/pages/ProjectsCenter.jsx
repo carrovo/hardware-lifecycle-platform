@@ -4,7 +4,6 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
-import SecondaryTabs from '../components/SecondaryTabs';
 import {
   isPass, projectStatus as deriveProjectStatus,
   productionPlanStatus, deliveryPlanStatus,
@@ -677,23 +676,15 @@ function DeliveryPlanTab() {
 }
 
 export default function ProjectsCenter() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const tab = searchParams.get('tab') || 'list';
   const activeTab = TABS.some((t) => t.key === tab) ? tab : 'list';
-
-  const setTab = (key) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('tab', key);
-    setSearchParams(next);
-  };
+  const activeLabel = TABS.find((t) => t.key === activeTab)?.label || '';
 
   return (
     <div>
       <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
-        <div className="flex items-center justify-between">
-          <SecondaryTabs tabs={TABS} activeTab={activeTab} onChange={setTab} />
-          <div className="text-xs text-gray-400">设备全生命周期质量管理平台 / 项目中心</div>
-        </div>
+        <div className="text-xs text-gray-400">设备全生命周期质量管理平台 / 项目中心 / {activeLabel}</div>
       </div>
       <div className="p-6">
         {activeTab === 'list' && <ProjectListTab />}

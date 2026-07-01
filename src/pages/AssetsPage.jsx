@@ -6,24 +6,18 @@ import Materials from './Materials';
 import DeviceTypes from './DeviceTypes';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
-import SecondaryTabs from '../components/SecondaryTabs';
 import TertiaryTabs from '../components/TertiaryTabs';
 import { Link, useNavigate } from 'react-router-dom';
+import { deviceLifecycleStatus, deviceBusinessNode } from '../utils/status';
 
 const TABS = [
-  { key: 'materials', label: '来料管理' },
-  { key: 'devices',   label: '设备列表' },
+  { key: 'devices',   label: '设备台账' },
+  { key: 'materials', label: '模块与来料' },
   { key: 'types',     label: '设备类型' },
+  { key: 'locations', label: '点位管理' },
 ];
 
 /* ─────────── Devices tab sub-components ─────────── */
-
-const STATUS_CHIPS = [
-  { key: '全部' }, { key: '装配中' }, { key: '整机装配' }, { key: '功能测试中' }, { key: '老化测试中' },
-  { key: '终测中' }, { key: '待分配项目' }, { key: '已分配项目' }, { key: '在线运营' }, { key: '退役' }, { key: '返修中' },
-  { key: '半成品检验中' }, { key: '初测中' }, { key: '中测中' }, { key: 'OQT终测中' }, { key: '生产返修中' },
-  { key: '待入库' }, { key: '已入库' }, { key: '出厂检验中' }, { key: '现场安装调试中' }, { key: '客户验收中' },
-];
 
 const NOW_DATE = new Date('2026-06-26');
 function daysSince(dateStr) {
@@ -354,25 +348,31 @@ function AlertsSubTab({ state, dispatch, currentRole }) {
   );
 }
 
+const LIFECYCLE_STATUSES = ['生产中', '待入库', '待交付', '交付中', '在线运营', '维修中', '已作废'];
+
 function AllDevicesSubTab({ state }) {
   const [filterStatus, setFilterStatus] = useState('全部');
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
 
-  const { devices, deviceTypes, projects, locations = [] } = state;
+  const { devices, deviceTypes, projects, locations = [], workflowProductionPlans = [], deliveryPlans = [] } = state;
   const getTypeName = id => deviceTypes.find(dt => dt.id === id)?.name || id;
   const getLocationName = id => id ? (locations.find(l => l.id === id)?.name || '—') : '—';
+  const getPlanName = id => id ? (workflowProductionPlans.find(p => p.id === id)?.name || id) : '—';
+  const deliveryPlanOf = (deviceId) => deliveryPlans.find(dp => (dp.boundDeviceIds || []).includes(deviceId) || (dp.records?.binding || []).some(b => b.deviceId === deviceId));
 
-  const total = devices.length;
-  const inProgress = devices.filter(d => ['装配中', '整机装配', '半成品检验中', '初测中', '中测中', 'OQT终测中', '功能测试中', '老化测试中', '终测中', '生产返修中'].includes(d.status)).length;
-  const online = devices.filter(d => d.status === '在线运营').length;
-  const readyToAssign = devices.filter(d => d.status === '待分配项目').length;
+  const rows = devices.map(d => ({ ...d, lifecycle: deviceLifecycleStatus(d), node: deviceBusinessNode(d) }));
+
+  const total = rows.length;
+  const producing = rows.filter(d => d.lifecycle === '生产中').length;
+  const online = rows.filter(d => d.lifecycle === '在线运营').length;
+  const readyToDeliver = rows.filter(d => d.lifecycle === '待交付').length;
 
   const statusCounts = {};
-  devices.forEach(d => { statusCounts[d.status] = (statusCounts[d.status] || 0) + 1; });
+  rows.forEach(d => { statusCounts[d.lifecycle] = (statusCounts[d.lifecycle] || 0) + 1; });
 
-  const filtered = devices.filter(d => {
-    const matchStatus = filterStatus === '全部' || d.status === filterStatus;
+  const filtered = rows.filter(d => {
+    const matchStatus = filterStatus === '全部' || d.lifecycle === filterStatus;
     const matchSearch = !search || d.sn.toLowerCase().includes(search.toLowerCase()) || getTypeName(d.deviceTypeId).toLowerCase().includes(search.toLowerCase());
     return matchStatus && matchSearch;
   });
@@ -380,7 +380,7 @@ function AllDevicesSubTab({ state }) {
   return (
     <div>
       <div className="grid grid-cols-4 gap-4 mb-6">
-        {[{ label: '设备总数', value: total, color: 'border-slate-500' }, { label: '在制/进行中', value: inProgress, color: 'border-blue-500' }, { label: '在线运营', value: online, color: 'border-emerald-500' }, { label: '待分配项目', value: readyToAssign, color: 'border-amber-500' }].map(({ label, value, color }) => (
+        {[{ label: '设备总数', value: total, color: 'border-slate-500' }, { label: '生产中', value: producing, color: 'border-blue-500' }, { label: '在线运营', value: online, color: 'border-emerald-500' }, { label: '待交付', value: readyToDeliver, color: 'border-amber-500' }].map(({ label, value, color }) => (
           <div key={label} className={`bg-white rounded-xl border border-gray-100 shadow-sm border-l-4 ${color} p-4`}>
             <div className="text-3xl font-semibold text-gray-900">{value}</div>
             <div className="text-sm text-gray-500 mt-1">{label}</div>
@@ -390,9 +390,9 @@ function AllDevicesSubTab({ state }) {
 
       <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 flex flex-wrap gap-2 items-center">
         <button onClick={() => setFilterStatus('全部')} className={`px-3 py-1 text-xs rounded-full border font-medium ${filterStatus === '全部' ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>全部 {total}</button>
-        {STATUS_CHIPS.slice(1).map(c => (statusCounts[c.key] > 0) && (
-          <button key={c.key} onClick={() => setFilterStatus(c.key)} className={`px-3 py-1 text-xs rounded-full border font-medium ${filterStatus === c.key ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>
-            {c.key} {statusCounts[c.key]}
+        {LIFECYCLE_STATUSES.map(key => (statusCounts[key] > 0) && (
+          <button key={key} onClick={() => setFilterStatus(key)} className={`px-3 py-1 text-xs rounded-full border font-medium ${filterStatus === key ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>
+            {key} {statusCounts[key]}
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2">
@@ -401,42 +401,104 @@ function AllDevicesSubTab({ state }) {
         </div>
       </div>
 
-      <div className="bg-white rounded shadow-sm overflow-hidden">
+      <div className="bg-white rounded shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {['设备SN', '整机类型', '所属项目', '所属点位', '当前状态', '装配人', '最近更新', '在此状态天数', '操作'].map(h => (
-                <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
+              {['设备SN', '设备类型', '所属项目', '生命周期状态', '当前业务节点', '生产计划', '交付计划', '当前点位', '最近更新', '在此状态天数', '操作'].map(h => (
+                <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filtered.map(d => {
               const days = daysSince(d.updatedAt || d.assemblyTime);
-              const isStuck = days > 2 && ['功能测试中', '老化测试中', '终测中', '装配中'].includes(d.status);
+              const isStuck = days > 3 && d.lifecycle === '生产中';
               const project = d.projectId ? projects.find(p => p.id === d.projectId) : null;
+              const dp = deliveryPlanOf(d.id);
               return (
                 <tr key={d.id} className={`hover:bg-blue-50 cursor-pointer transition-colors ${isStuck ? 'bg-amber-50' : ''}`}
                   onClick={() => navigate(`/devices/${d.id}`)}>
-                  <td className="px-4 py-2 font-medium text-gray-800 font-mono text-xs">{d.sn}</td>
-                  <td className="px-4 py-2 text-gray-600">{getTypeName(d.deviceTypeId)}</td>
-                  <td className="px-4 py-2 text-gray-600 text-xs">
+                  <td className="px-3 py-2 font-medium text-gray-800 font-mono text-xs whitespace-nowrap">{d.sn}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{getTypeName(d.deviceTypeId)}</td>
+                  <td className="px-3 py-2 text-gray-600 text-xs">
                     {project ? <Link to={`/projects/${project.id}`} className="text-slate-700 hover:underline" onClick={e => e.stopPropagation()}>{project.name}</Link> : <span className="text-gray-400">—</span>}
                   </td>
-                  <td className="px-4 py-2 text-gray-600 text-xs">{d.locationId ? getLocationName(d.locationId) : <span className="text-gray-400">—</span>}</td>
-                  <td className="px-4 py-2"><StatusBadge status={d.status} /></td>
-                  <td className="px-4 py-2 text-gray-600">{d.assembler}</td>
-                  <td className="px-4 py-2 text-gray-500 text-xs">{d.updatedAt}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-3 py-2"><StatusBadge status={d.lifecycle} /></td>
+                  <td className="px-3 py-2"><StatusBadge status={d.node} /></td>
+                  <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{d.productionPlanId ? <Link to={`/production-plans/${d.productionPlanId}`} className="text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{getPlanName(d.productionPlanId)}</Link> : '—'}</td>
+                  <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{dp ? <Link to={`/delivery-plans/${dp.id}`} className="text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{dp.batchNo || dp.name}</Link> : '—'}</td>
+                  <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{d.locationId ? getLocationName(d.locationId) : <span className="text-gray-400">—</span>}</td>
+                  <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{d.updatedAt}</td>
+                  <td className="px-3 py-2">
                     {days > 0 ? <span className={`text-xs font-medium ${isStuck ? 'text-amber-600' : 'text-gray-500'}`}>{isStuck && '⚠ '}{days}天</span> : <span className="text-xs text-gray-400">今天</span>}
                   </td>
-                  <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
-                    <Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline text-xs">查看详情</Link>
+                  <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                    <Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline text-xs whitespace-nowrap">查看详情</Link>
                   </td>
                 </tr>
               );
             })}
-            {filtered.length === 0 && <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">暂无数据</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">暂无数据</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────── Locations tab ─────────── */
+function LocationsTab({ state }) {
+  const { locations = [], projects, devices, deliveryPlans = [] } = state;
+  const getProjectName = id => projects.find(p => p.id === id)?.name || '—';
+  const deliveryPlanNames = (projectId) => deliveryPlans.filter(dp => dp.projectId === projectId).map(dp => dp.batchNo || dp.name);
+
+  return (
+    <div>
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        {[
+          { label: '点位总数', value: locations.length, color: 'border-slate-500' },
+          { label: '覆盖项目', value: new Set(locations.map(l => l.projectId)).size, color: 'border-indigo-500' },
+          { label: '已部署设备', value: devices.filter(d => d.locationId).length, color: 'border-emerald-500' },
+          { label: '在线设备', value: devices.filter(d => d.locationId && d.status === '在线运营').length, color: 'border-teal-500' },
+        ].map(({ label, value, color }) => (
+          <div key={label} className={`bg-white rounded-xl border border-gray-100 shadow-sm border-l-4 ${color} p-4`}>
+            <div className="text-3xl font-semibold text-gray-900">{value}</div>
+            <div className="text-sm text-gray-500 mt-1">{label}</div>
+          </div>
+        ))}
+      </div>
+      <div className="bg-white rounded shadow-sm overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              {['所属项目', '点位名称', '地址/描述', '计划设备数', '已绑定设备数', '在线设备数', '关联交付计划', '操作'].map(h => (
+                <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {locations.map(loc => {
+              const boundDevices = devices.filter(d => d.locationId === loc.id || (loc.deviceIds || []).includes(d.id));
+              const onlineCount = boundDevices.filter(d => d.status === '在线运营').length;
+              return (
+                <tr key={loc.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2.5 text-gray-600 text-xs">
+                    <Link to={`/projects/${loc.projectId}`} className="text-slate-700 hover:underline">{getProjectName(loc.projectId)}</Link>
+                  </td>
+                  <td className="px-4 py-2.5 text-gray-800 font-medium">{loc.name}</td>
+                  <td className="px-4 py-2.5 text-gray-500 text-xs">{loc.address || '—'}</td>
+                  <td className="px-4 py-2.5 text-gray-600">{loc.plannedCount || (loc.deviceIds || []).length || '—'}</td>
+                  <td className="px-4 py-2.5 text-gray-600">{boundDevices.length}</td>
+                  <td className="px-4 py-2.5 text-gray-600">{onlineCount}</td>
+                  <td className="px-4 py-2.5 text-gray-500 text-xs">{deliveryPlanNames(loc.projectId).join('、') || '—'}</td>
+                  <td className="px-4 py-2.5 text-xs">
+                    <Link to={`/projects/${loc.projectId}`} className="text-slate-600 hover:underline">查看项目</Link>
+                  </td>
+                </tr>
+              );
+            })}
+            {locations.length === 0 && <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">暂无点位</td></tr>}
           </tbody>
         </table>
       </div>
@@ -475,26 +537,22 @@ function DevicesTab() {
 
 /* ─────────── Main ─────────── */
 export default function AssetsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get('tab') || 'materials';
-  const activeTab = TABS.some(t => t.key === tab) ? tab : 'materials';
-
-  const setTab = (key) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('tab', key);
-    next.delete('subtab');
-    setSearchParams(next);
-  };
+  const { state } = useApp();
+  const [searchParams] = useSearchParams();
+  const tab = searchParams.get('tab') || 'devices';
+  const activeTab = TABS.some(t => t.key === tab) ? tab : 'devices';
+  const activeLabel = TABS.find(t => t.key === activeTab)?.label || '';
 
   return (
     <div>
       <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
-        <SecondaryTabs tabs={TABS} activeTab={activeTab} onChange={setTab} />
+        <div className="text-xs text-gray-400">设备全生命周期质量管理平台 / 资产管理 / {activeLabel}</div>
       </div>
       <div className="p-6">
-        {activeTab === 'materials' && <Materials />}
         {activeTab === 'devices' && <DevicesTab />}
+        {activeTab === 'materials' && <Materials />}
         {activeTab === 'types' && <DeviceTypes />}
+        {activeTab === 'locations' && <LocationsTab state={state} />}
       </div>
     </div>
   );
