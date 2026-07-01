@@ -1,791 +1,330 @@
 import { useState } from 'react';
-import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
 
 const NODES = [
-  { key: 'factoryInspection', label: '出厂检验',    step: 1 },
-  { key: 'siteInstall',       label: '现场安装调试', step: 2 },
-  { key: 'customerAccept',    label: '客户验收',    step: 3 },
+  { key: 'binding', label: '绑定设备' },
+  { key: 'factoryInspection', label: '出厂检验' },
+  { key: 'siteInstall', label: '现场安装调试' },
+  { key: 'customerAccept', label: '客户验收' },
 ];
 
-/* ─────── CSV utility ─────── */
-function downloadCSV(rows, headers, filename) {
-  const bom = '﻿';
-  const header = headers.map(h => h.label).join(',');
-  const body = rows.map(r =>
-    headers.map(h => `"${(r[h.key] ?? '').toString().replace(/"/g, '""')}"`).join(',')
-  );
-  const csv = bom + [header, ...body].join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+const INPUT = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500 bg-white';
+const BTN_PRIMARY = 'px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-800';
+const BTN_GHOST = 'px-3 py-1.5 text-sm border border-gray-300 text-gray-600 rounded hover:bg-gray-50';
+
+function nowText() {
+  return new Date().toISOString().slice(0, 16).replace('T', ' ');
 }
 
-/* ─────── CSV Import Modal (UI only) ─────── */
-function CSVImportModal({ isOpen, onClose, nodeLabel, templateHeaders }) {
+function Section({ title, action, children }) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`导入${nodeLabel}记录（CSV）`}>
-      <div className="space-y-4">
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
-          导入功能正在开发中，请按下方模板格式准备CSV文件后联系管理员导入。
-        </div>
-        <div>
-          <h4 className="text-sm font-medium text-gray-700 mb-2">CSV模板格式（第一行为列标题）</h4>
-          <div className="bg-gray-50 border border-gray-200 rounded p-3 font-mono text-xs text-gray-600 overflow-x-auto whitespace-nowrap">
-            {templateHeaders.join(',')}
-          </div>
-        </div>
-        <div className="text-xs text-gray-500 space-y-1 bg-blue-50 border border-blue-100 rounded-lg p-3">
-          <p className="font-medium text-blue-700 mb-1">填写说明</p>
-          <p>• 文件编码：UTF-8（带BOM）</p>
-          <p>• 时间格式：YYYY-MM-DD HH:mm</p>
-          <p>• 检验/安装/验收结果填写：通过 或 未通过</p>
-          <p>• 设备SN 须与系统中的整机SN完全一致</p>
-        </div>
-        <div>
-          <button disabled className="w-full py-2.5 text-sm bg-gray-100 text-gray-400 rounded border border-dashed border-gray-300 cursor-not-allowed">
-            选择文件上传（开发中）
-          </button>
-        </div>
-        <div className="flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">关闭</button>
-        </div>
+    <section className="bg-white rounded shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-700">{title}</h2>
+        {action}
       </div>
-    </Modal>
+      <div className="p-4">{children}</div>
+    </section>
   );
 }
 
-/* ─────── Device Batch Selector ─────── */
-function DeviceBatchSelector({ devices, selectedIds, onToggle, onToggleAll, label }) {
-  if (devices.length === 0) return null;
-  const allSelected = selectedIds.size === devices.length;
+function MetricCards({ items }) {
   return (
-    <div className="mb-4 bg-blue-50 border border-blue-100 rounded-xl p-3">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-blue-700">{label}（{devices.length} 台可选）</span>
-        <button onClick={onToggleAll} className="text-xs text-blue-600 hover:underline">
-          {allSelected ? '取消全选' : '全选'}
-        </button>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {devices.map(d => (
-          <label key={d.id} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border cursor-pointer transition-all text-xs select-none ${
-            selectedIds.has(d.id) ? 'bg-blue-100 border-blue-400 text-blue-800 font-medium' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
-          }`}>
-            <input type="checkbox" className="w-3 h-3 accent-blue-600" checked={selectedIds.has(d.id)} onChange={() => onToggle(d.id)} />
-            {d.sn}
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ─────── Progress Bar ─────── */
-function ProgressBar({ plan, activeNode, setActiveNode }) {
-  const fi = (plan.records?.factoryInspection || []).length;
-  const si = (plan.records?.siteInstall || []).length;
-  const ca = (plan.records?.customerAccept || []).length;
-  const counts = { factoryInspection: fi, siteInstall: si, customerAccept: ca };
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
-      <div className="flex items-center">
-        {NODES.map((node, i) => (
-          <div key={node.key} className="flex items-center flex-1">
-            <button onClick={() => setActiveNode(node.key)} className="flex flex-col items-center gap-1.5 flex-1">
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm transition-all ${activeNode === node.key ? 'bg-slate-700 text-white ring-2 ring-slate-400' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
-                {node.step}
-              </div>
-              <span className={`text-xs font-medium whitespace-nowrap ${activeNode === node.key ? 'text-slate-700' : 'text-gray-500'}`}>{node.label}</span>
-              <span className="text-xs text-gray-400">{counts[node.key]} 台</span>
-            </button>
-            {i < NODES.length - 1 && <div className="w-10 h-0.5 bg-gray-200 mx-2 flex-shrink-0" />}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ─────── Metrics Panel ─────── */
-function MetricsPanel({ plan }) {
-  const fi = plan.records?.factoryInspection || [];
-  const si = plan.records?.siteInstall || [];
-  const ca = plan.records?.customerAccept || [];
-  const target = plan.targetCount || 0;
-
-  return (
-    <div className="grid grid-cols-4 gap-4 mb-6">
-      {[
-        { label: '目标交付量', value: target, unit: '台', color: 'border-slate-500' },
-        { label: '出厂检验完成', value: fi.filter(r => r.result === '通过').length, unit: `/${fi.length} 台`, color: 'border-blue-500' },
-        { label: '现场安装完成', value: si.filter(r => r.result === '通过').length, unit: `/${si.length} 台`, color: 'border-indigo-500' },
-        { label: '客户验收通过', value: ca.filter(r => r.result === '通过').length, unit: `/${ca.length} 台`, color: 'border-green-500' },
-      ].map(({ label, value, unit, color }) => (
-        <div key={label} className={`bg-white rounded-xl shadow-sm border-l-4 ${color} p-4`}>
-          <div className="text-2xl font-bold text-gray-900 mb-0.5">{value}<span className="text-sm font-normal text-gray-500 ml-1">{unit}</span></div>
-          <div className="text-xs text-gray-500">{label}</div>
+    <div className="grid grid-cols-5 gap-4 mb-5">
+      {items.map((item) => (
+        <div key={item.label} className={`bg-white rounded shadow-sm border-l-4 ${item.color} p-4`}>
+          <div className="text-2xl font-semibold text-gray-900">{item.value}</div>
+          <div className="text-xs text-gray-500 mt-1">{item.label}</div>
         </div>
       ))}
     </div>
   );
 }
 
-/* ─────── Node 1: 出厂检验 ─────── */
-function AddFactoryInspectionModal({ isOpen, onClose, onSave, eligibleDevices }) {
-  const { state } = useApp();
-  const [form, setForm] = useState({ deviceId: '', inspector: state.currentUser, time: new Date().toISOString().slice(0, 16).replace('T', ' '), result: '通过', reportFile: '', reportLink: '' });
-  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const device = eligibleDevices.find(d => d.id === form.deviceId);
-    onSave({ ...form, id: `FI-${Date.now()}`, deviceSN: device?.sn || '' });
-    onClose();
-    setForm({ deviceId: '', inspector: state.currentUser, time: new Date().toISOString().slice(0, 16).replace('T', ' '), result: '通过', reportFile: '', reportLink: '' });
-  };
+function FlowStepper({ activeNode, onChange, counts }) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="新增出厂检验记录">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">选择设备 *</label>
-          <select className={inp} required value={form.deviceId} onChange={e => setForm({ ...form, deviceId: e.target.value })}>
-            <option value="">-- 选择已入库设备 --</option>
-            {eligibleDevices.map(d => <option key={d.id} value={d.id}>{d.sn}</option>)}
-          </select>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">检验员</label>
-            <input type="text" className={inp} value={form.inspector} onChange={e => setForm({ ...form, inspector: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">检验时间</label>
-            <input type="text" className={inp} value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} /></div>
-        </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">检验结果 *</label>
-          <div className="flex gap-4">
-            {['通过', '未通过'].map(r => (
-              <label key={r} className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="fi-result" value={r} checked={form.result === r} onChange={() => setForm({ ...form, result: r })} />
-                <span className={`text-sm font-medium ${r === '通过' ? 'text-green-700' : 'text-red-700'}`}>{r}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">报告文件名</label>
-            <input type="text" className={inp} value={form.reportFile} onChange={e => setForm({ ...form, reportFile: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">报告链接</label>
-            <input type="text" className={inp} value={form.reportLink} onChange={e => setForm({ ...form, reportLink: e.target.value })} /></div>
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-          <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function BatchFIModal({ isOpen, onClose, onSave, selectedIds, eligibleDevices }) {
-  const { state } = useApp();
-  const [form, setForm] = useState({ inspector: state.currentUser, time: new Date().toISOString().slice(0, 16).replace('T', ' '), result: '通过', reportFile: '', reportLink: '' });
-  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
-  const selectedDevices = eligibleDevices.filter(d => selectedIds.has(d.id));
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const ts = Date.now();
-    const records = selectedDevices.map((d, i) => ({ ...form, id: `FI-${ts}-${i}`, deviceId: d.id, deviceSN: d.sn }));
-    onSave(records);
-    onClose();
-  };
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`批量提交出厂检验（${selectedDevices.length} 台）`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="bg-gray-50 rounded-lg p-3 max-h-28 overflow-y-auto">
-          <div className="text-xs text-gray-500 mb-1.5">已选设备</div>
-          <div className="flex flex-wrap gap-1.5">
-            {selectedDevices.map(d => <span key={d.id} className="font-mono text-xs bg-white border border-gray-200 rounded px-2 py-0.5 text-gray-700">{d.sn}</span>)}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">检验员</label>
-            <input type="text" className={inp} value={form.inspector} onChange={e => setForm({ ...form, inspector: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">检验时间</label>
-            <input type="text" className={inp} value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} /></div>
-        </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">检验结果</label>
-          <div className="flex gap-4">
-            {['通过', '未通过'].map(r => (
-              <label key={r} className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="bfi-result" value={r} checked={form.result === r} onChange={() => setForm({ ...form, result: r })} />
-                <span className={`text-sm font-medium ${r === '通过' ? 'text-green-700' : 'text-red-700'}`}>{r}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">报告文件名</label>
-            <input type="text" className={inp} value={form.reportFile} onChange={e => setForm({ ...form, reportFile: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">报告链接</label>
-            <input type="text" className={inp} value={form.reportLink} onChange={e => setForm({ ...form, reportLink: e.target.value })} /></div>
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-          <button type="submit" className="px-4 py-2 text-sm text-white bg-blue-600 rounded hover:bg-blue-700">批量提交 {selectedDevices.length} 台</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function FactoryInspectionNode({ plan }) {
-  const { state, dispatch } = useApp();
-  const { canDo } = useRole();
-  const getDeviceLink = (sn) => {
-    const dev = sn ? state.devices.find(d => d.sn === sn) : null;
-    return dev ? <Link to={`/devices/${dev.id}`} className="text-blue-600 hover:underline">{sn}</Link> : (sn || '—');
-  };
-  const [showModal, setShowModal] = useState(false);
-  const [showBatch, setShowBatch] = useState(false);
-  const [showImport, setShowImport] = useState(false);
-  const [selectedIds, setSelectedIds] = useState(new Set());
-
-  const records = plan.records?.factoryInspection || [];
-  const eligibleDevices = state.devices.filter(d =>
-    ['已入库', '待分配项目'].includes(d.status) && (d.projectId === plan.projectId || !d.projectId)
-  );
-
-  const toggle = (id) => { const s = new Set(selectedIds); s.has(id) ? s.delete(id) : s.add(id); setSelectedIds(s); };
-  const toggleAll = () => setSelectedIds(selectedIds.size === eligibleDevices.length ? new Set() : new Set(eligibleDevices.map(d => d.id)));
-
-  const handleSave = (record) => {
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    dispatch({ type: 'UPDATE_DELIVERY_PLAN', payload: { ...plan, records: { ...plan.records, factoryInspection: [...records, record] } } });
-    if (record.result === '通过') dispatch({ type: 'UPDATE_DEVICE', payload: { id: record.deviceId, status: '出厂检验中', updatedAt: now } });
-  };
-
-  const handleBatchSave = (batchRecords) => {
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    dispatch({ type: 'UPDATE_DELIVERY_PLAN', payload: { ...plan, records: { ...plan.records, factoryInspection: [...records, ...batchRecords] } } });
-    batchRecords.forEach(r => {
-      if (r.result === '通过') dispatch({ type: 'UPDATE_DEVICE', payload: { id: r.deviceId, status: '出厂检验中', updatedAt: now } });
-    });
-    setSelectedIds(new Set());
-  };
-
-  const handleExport = () => downloadCSV(records, [
-    { key: 'deviceSN', label: '设备SN' },
-    { key: 'inspector', label: '检验员' },
-    { key: 'time', label: '检验时间' },
-    { key: 'result', label: '检验结果' },
-    { key: 'reportFile', label: '报告文件' },
-    { key: 'reportLink', label: '报告链接' },
-  ], `出厂检验记录_${plan.id}.csv`);
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">出厂检验记录（{records.length} 条）</h3>
-        <div className="flex items-center gap-2">
-          {canDo('add_delivery') && selectedIds.size > 0 && (
-            <button onClick={() => setShowBatch(true)} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 font-medium">
-              已选 {selectedIds.size} 台｜批量提交
+    <div className="bg-white rounded shadow-sm p-5 mb-6">
+      <div className="flex items-center">
+        {NODES.map((node, index) => (
+          <div key={node.key} className="flex items-center flex-1">
+            <button onClick={() => onChange(node.key)} className="flex-1 flex flex-col items-center gap-1">
+              <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${activeNode === node.key ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-600'}`}>{index + 1}</span>
+              <span className={`text-xs ${activeNode === node.key ? 'text-slate-800 font-medium' : 'text-gray-500'}`}>{node.label}</span>
+              <span className="text-xs text-gray-400">{counts[node.key] || 0}</span>
             </button>
-          )}
-          <button onClick={() => setShowImport(true)} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-600 rounded hover:bg-gray-50">导入CSV</button>
-          <button onClick={handleExport} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-600 rounded hover:bg-gray-50">导出CSV</button>
-          {canDo('add_delivery') && (
-            <button onClick={() => setShowModal(true)} className="px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-800">+ 新增记录</button>
-          )}
-        </div>
+            {index < NODES.length - 1 && <div className="w-10 h-0.5 bg-gray-200 mx-2" />}
+          </div>
+        ))}
       </div>
-
-      {canDo('add_delivery') && (
-        <DeviceBatchSelector
-          devices={eligibleDevices}
-          selectedIds={selectedIds}
-          onToggle={toggle}
-          onToggleAll={toggleAll}
-          label="可出厂检验设备"
-        />
-      )}
-
-      <div className="bg-white rounded shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              {['设备SN', '检验员', '时间', '结果', '报告'].map(h => (
-                <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {records.map(r => (
-              <tr key={r.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-mono text-xs text-gray-800">{getDeviceLink(r.deviceSN)}</td>
-                <td className="px-4 py-2.5 text-gray-600">{r.inspector}</td>
-                <td className="px-4 py-2.5 text-gray-400 text-xs">{r.time}</td>
-                <td className="px-4 py-2.5"><StatusBadge status={r.result} /></td>
-                <td className="px-4 py-2.5 text-gray-500 text-xs">
-                  {r.reportFile && <div>{r.reportFile}</div>}
-                  {r.reportLink && <a href={r.reportLink} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">链接</a>}
-                </td>
-              </tr>
-            ))}
-            {records.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">暂无出厂检验记录</td></tr>}
-          </tbody>
-        </table>
-      </div>
-
-      <AddFactoryInspectionModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleSave} eligibleDevices={eligibleDevices} />
-      <BatchFIModal isOpen={showBatch} onClose={() => setShowBatch(false)} onSave={handleBatchSave} selectedIds={selectedIds} eligibleDevices={eligibleDevices} />
-      <CSVImportModal isOpen={showImport} onClose={() => setShowImport(false)} nodeLabel="出厂检验" templateHeaders={['设备SN', '检验员', '检验时间', '检验结果(通过/未通过)', '报告文件名', '报告链接']} />
     </div>
   );
 }
 
-/* ─────── Node 2: 现场安装调试 ─────── */
-function AddSiteInstallModal({ isOpen, onClose, onSave }) {
-  const { state } = useApp();
-  const [form, setForm] = useState({ deviceId: '', deviceSN: '', technician: state.currentUser, address: '', time: new Date().toISOString().slice(0, 16).replace('T', ' '), result: '通过', notes: '' });
-  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
-  const inspectedDevices = state.devices.filter(d => d.status === '出厂检验中');
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const device = inspectedDevices.find(d => d.id === form.deviceId);
-    onSave({ ...form, id: `SI-${Date.now()}`, deviceSN: device?.sn || form.deviceSN });
-    onClose();
-    setForm({ deviceId: '', deviceSN: '', technician: state.currentUser, address: '', time: new Date().toISOString().slice(0, 16).replace('T', ' '), result: '通过', notes: '' });
-  };
+function ActionPlaceholderModal({ isOpen, onClose, title }) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="新增现场安装记录">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">选择设备 *</label>
-          <select className={inp} required value={form.deviceId} onChange={e => { const d = inspectedDevices.find(d => d.id === e.target.value); setForm({ ...form, deviceId: e.target.value, deviceSN: d?.sn || '' }); }}>
-            <option value="">-- 选择出厂检验中的设备 --</option>
-            {inspectedDevices.map(d => <option key={d.id} value={d.id}>{d.sn}</option>)}
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600">已保留「{title}」动作入口，后续可接入真实审批、工单和状态流转。</p>
+        <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">本阶段重点是可演示的原型结构与规则表达。</div>
+        <div className="flex justify-end"><button onClick={onClose} className={BTN_PRIMARY}>知道了</button></div>
+      </div>
+    </Modal>
+  );
+}
+
+function DeviceSelectModal({ isOpen, onClose, eligibleDevices, locations, deviceTypes, onConfirm }) {
+  const [selected, setSelected] = useState(new Set());
+  const [locationId, setLocationId] = useState('');
+  const getTypeName = (id) => deviceTypes.find((item) => item.id === id)?.name || id;
+  const toggle = (id) => {
+    const next = new Set(selected);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSelected(next);
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="选择可交付设备" size="lg">
+      <div className="space-y-4">
+        <div className="bg-gray-50 border border-gray-200 rounded p-3 text-xs text-gray-600">
+          可选规则：属于当前项目、已入库或待分配、待交付/可交付、未被其他未完成交付计划绑定、未作废冻结。
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">预分配点位</label>
+          <select className={INPUT} value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+            <option value="">暂不预分配</option>
+            {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
           </select>
         </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">安装地址</label>
-          <input type="text" className={inp} value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">技术人员</label>
-            <input type="text" className={inp} value={form.technician} onChange={e => setForm({ ...form, technician: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">安装时间</label>
-            <input type="text" className={inp} value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} /></div>
+        <div className="border border-gray-200 rounded overflow-hidden max-h-80 overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 sticky top-0"><tr><th className="px-3 py-2 w-10" />{['设备SN', '整机类型', '状态', '当前点位'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-gray-100">
+              {eligibleDevices.map((device) => (
+                <tr key={device.id} onClick={() => toggle(device.id)} className="hover:bg-gray-50 cursor-pointer">
+                  <td className="px-3 py-2"><input type="checkbox" checked={selected.has(device.id)} onChange={() => toggle(device.id)} onClick={(e) => e.stopPropagation()} /></td>
+                  <td className="px-3 py-2 font-mono text-xs font-medium">{device.sn}</td>
+                  <td className="px-3 py-2">{getTypeName(device.deviceTypeId)}</td>
+                  <td className="px-3 py-2"><StatusBadge status={device.status} /></td>
+                  <td className="px-3 py-2 text-gray-500">{locations.find((location) => location.id === device.locationId)?.name || '—'}</td>
+                </tr>
+              ))}
+              {eligibleDevices.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">暂无可交付设备</td></tr>}
+            </tbody>
+          </table>
         </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">安装结果</label>
-          <div className="flex gap-4">
-            {['通过', '未通过'].map(r => (
-              <label key={r} className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="si-result" value={r} checked={form.result === r} onChange={() => setForm({ ...form, result: r })} />
-                <span className={`text-sm font-medium ${r === '通过' ? 'text-green-700' : 'text-red-700'}`}>{r}</span>
-              </label>
-            ))}
-          </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className={BTN_GHOST}>取消</button>
+          <button disabled={selected.size === 0} className={`${BTN_PRIMARY} disabled:opacity-40`} onClick={() => { onConfirm([...selected], locationId); setSelected(new Set()); onClose(); }}>确认绑定（{selected.size}）</button>
         </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
-          <textarea rows={2} className={inp} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-          <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存</button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 }
 
-function BatchSIModal({ isOpen, onClose, onSave, selectedIds, eligibleDevices }) {
-  const { state } = useApp();
-  const [form, setForm] = useState({ technician: state.currentUser, address: '', time: new Date().toISOString().slice(0, 16).replace('T', ' '), result: '通过', notes: '' });
-  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
-  const selectedDevices = eligibleDevices.filter(d => selectedIds.has(d.id));
+function ResultModal({ isOpen, onClose, title, devices, defaultResult = 'Pass', requireLocation = false, locations, onSave }) {
+  const [form, setForm] = useState({ deviceId: '', result: defaultResult, operator: '', locationId: '', changeReason: '', notes: '' });
+  const selectedDevice = devices.find((device) => device.id === form.deviceId);
+  const preLocation = selectedDevice?.preAssignedLocationId || selectedDevice?.locationId || '';
+  const locationChanged = requireLocation && form.locationId && preLocation && form.locationId !== preLocation;
 
-  const handleSubmit = (e) => {
+  const submit = (e) => {
     e.preventDefault();
-    const ts = Date.now();
-    const records = selectedDevices.map((d, i) => ({ ...form, id: `SI-${ts}-${i}`, deviceId: d.id, deviceSN: d.sn }));
-    onSave(records);
+    onSave({ ...form, deviceSN: selectedDevice?.sn || '', preLocationId: preLocation });
     onClose();
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`批量提交现场安装（${selectedDevices.length} 台）`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="bg-gray-50 rounded-lg p-3 max-h-28 overflow-y-auto">
-          <div className="text-xs text-gray-500 mb-1.5">已选设备</div>
-          <div className="flex flex-wrap gap-1.5">
-            {selectedDevices.map(d => <span key={d.id} className="font-mono text-xs bg-white border border-gray-200 rounded px-2 py-0.5 text-gray-700">{d.sn}</span>)}
-          </div>
-        </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">安装地址</label>
-          <input type="text" className={inp} value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
+      <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">技术人员</label>
-            <input type="text" className={inp} value={form.technician} onChange={e => setForm({ ...form, technician: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">安装时间</label>
-            <input type="text" className={inp} value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">设备</label><select className={INPUT} required value={form.deviceId} onChange={(e) => setForm({ ...form, deviceId: e.target.value })}><option value="">-- 选择设备 --</option>{devices.map((device) => <option key={device.id} value={device.id}>{device.sn}</option>)}</select></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">结果</label><select className={INPUT} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}><option>Pass</option><option>NG</option><option>待测试</option></select></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">操作人</label><input className={INPUT} value={form.operator} onChange={(e) => setForm({ ...form, operator: e.target.value })} /></div>
+          {requireLocation && <div><label className="block text-sm font-medium text-gray-700 mb-1">现场确认点位 *</label><select className={INPUT} required value={form.locationId} onChange={(e) => setForm({ ...form, locationId: e.target.value })}><option value="">-- 选择点位 --</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></div>}
+          {locationChanged && <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">点位变更原因 *</label><textarea className={INPUT} required rows={2} value={form.changeReason} onChange={(e) => setForm({ ...form, changeReason: e.target.value })} /></div>}
+          <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">备注 / NG原因</label><textarea className={INPUT} rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
         </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">安装结果</label>
-          <div className="flex gap-4">
-            {['通过', '未通过'].map(r => (
-              <label key={r} className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="bsi-result" value={r} checked={form.result === r} onChange={() => setForm({ ...form, result: r })} />
-                <span className={`text-sm font-medium ${r === '通过' ? 'text-green-700' : 'text-red-700'}`}>{r}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
-          <textarea rows={2} className={inp} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-          <button type="submit" className="px-4 py-2 text-sm text-white bg-blue-600 rounded hover:bg-blue-700">批量提交 {selectedDevices.length} 台</button>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className={BTN_GHOST}>取消</button>
+          <button type="submit" className={BTN_PRIMARY}>保存结果</button>
         </div>
       </form>
     </Modal>
   );
 }
 
-function SiteInstallNode({ plan }) {
-  const { state, dispatch } = useApp();
-  const { canDo } = useRole();
-  const getDeviceLink = (sn) => {
-    const dev = sn ? state.devices.find(d => d.sn === sn) : null;
-    return dev ? <Link to={`/devices/${dev.id}`} className="text-blue-600 hover:underline">{sn}</Link> : (sn || '—');
-  };
-  const [showModal, setShowModal] = useState(false);
-  const [showBatch, setShowBatch] = useState(false);
-  const [showImport, setShowImport] = useState(false);
-  const [selectedIds, setSelectedIds] = useState(new Set());
+function getBoundDeviceIds(plan) {
+  const explicit = plan.boundDeviceIds || [];
+  const bindingRecords = (plan.records?.binding || []).map((record) => record.deviceId);
+  const stageRecords = ['factoryInspection', 'siteInstall', 'customerAccept'].flatMap((key) => (plan.records?.[key] || []).map((record) => record.deviceId));
+  return [...new Set([...explicit, ...bindingRecords, ...stageRecords].filter(Boolean))];
+}
 
-  const records = plan.records?.siteInstall || [];
-  const eligibleDevices = state.devices.filter(d => d.status === '出厂检验中');
-
-  const toggle = (id) => { const s = new Set(selectedIds); s.has(id) ? s.delete(id) : s.add(id); setSelectedIds(s); };
-  const toggleAll = () => setSelectedIds(selectedIds.size === eligibleDevices.length ? new Set() : new Set(eligibleDevices.map(d => d.id)));
-
-  const handleSave = (record) => {
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    dispatch({ type: 'UPDATE_DELIVERY_PLAN', payload: { ...plan, records: { ...plan.records, siteInstall: [...records, record] } } });
-    if (record.result === '通过') dispatch({ type: 'UPDATE_DEVICE', payload: { id: record.deviceId, status: '现场安装调试中', updatedAt: now } });
-  };
-
-  const handleBatchSave = (batchRecords) => {
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    dispatch({ type: 'UPDATE_DELIVERY_PLAN', payload: { ...plan, records: { ...plan.records, siteInstall: [...records, ...batchRecords] } } });
-    batchRecords.forEach(r => {
-      if (r.result === '通过') dispatch({ type: 'UPDATE_DEVICE', payload: { id: r.deviceId, status: '现场安装调试中', updatedAt: now } });
-    });
-    setSelectedIds(new Set());
-  };
-
-  const handleExport = () => downloadCSV(records, [
-    { key: 'deviceSN', label: '设备SN' },
-    { key: 'technician', label: '技术人员' },
-    { key: 'address', label: '安装地址' },
-    { key: 'time', label: '安装时间' },
-    { key: 'result', label: '安装结果' },
-    { key: 'notes', label: '备注' },
-  ], `现场安装记录_${plan.id}.csv`);
-
+function BindingNode({ plan, boundDevices, eligibleDevices, locations, deviceTypes, openSelector, confirmBinding }) {
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">现场安装调试记录（{records.length} 条）</h3>
-        <div className="flex items-center gap-2">
-          {canDo('add_delivery') && selectedIds.size > 0 && (
-            <button onClick={() => setShowBatch(true)} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 font-medium">
-              已选 {selectedIds.size} 台｜批量提交
-            </button>
-          )}
-          <button onClick={() => setShowImport(true)} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-600 rounded hover:bg-gray-50">导入CSV</button>
-          <button onClick={handleExport} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-600 rounded hover:bg-gray-50">导出CSV</button>
-          {canDo('add_delivery') && (
-            <button onClick={() => setShowModal(true)} className="px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-800">+ 新增记录</button>
-          )}
-        </div>
-      </div>
-
-      {canDo('add_delivery') && (
-        <DeviceBatchSelector
-          devices={eligibleDevices}
-          selectedIds={selectedIds}
-          onToggle={toggle}
-          onToggleAll={toggleAll}
-          label="可现场安装设备"
-        />
-      )}
-
-      <div className="bg-white rounded shadow-sm overflow-hidden">
+    <div className="space-y-5">
+      <MetricCards items={[
+        { label: '计划交付', value: plan.targetCount || 0, color: 'border-slate-500' },
+        { label: '已绑定', value: boundDevices.length, color: 'border-blue-500' },
+        { label: '未绑定', value: Math.max((plan.targetCount || 0) - boundDevices.length, 0), color: 'border-amber-500' },
+        { label: '可选设备', value: eligibleDevices.length, color: 'border-emerald-500' },
+        { label: '点位数', value: locations.length, color: 'border-indigo-500' },
+      ]} />
+      <Section title="绑定概览" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={openSelector}>选择可交付设备</button><button className={BTN_PRIMARY} onClick={confirmBinding}>确认绑定完成</button></div>}>
+        <div className="text-sm text-gray-600">只有属于当前项目、已入库/待分配项目、未被其他未完成交付计划绑定、未作废冻结的设备可选。绑定后可预分配点位，作为现场安装调试的校验依据。</div>
+      </Section>
+      <Section title="已绑定设备列表">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              {['设备SN', '技术人员', '安装地址', '时间', '结果', '备注'].map(h => (
-                <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">{h}</th>
-              ))}
-            </tr>
-          </thead>
+          <thead className="bg-gray-50"><tr>{['设备SN', '整机类型', '当前状态', '预分配点位', '绑定状态'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-100">
-            {records.map(r => (
-              <tr key={r.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-mono text-xs text-gray-800">{getDeviceLink(r.deviceSN)}</td>
-                <td className="px-4 py-2.5 text-gray-600">{r.technician}</td>
-                <td className="px-4 py-2.5 text-gray-600 text-xs max-w-[160px] truncate">{r.address || '—'}</td>
-                <td className="px-4 py-2.5 text-gray-400 text-xs">{r.time}</td>
-                <td className="px-4 py-2.5"><StatusBadge status={r.result} /></td>
-                <td className="px-4 py-2.5 text-gray-500 text-xs max-w-[120px] truncate">{r.notes || '—'}</td>
-              </tr>
-            ))}
-            {records.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">暂无现场安装记录</td></tr>}
+            {boundDevices.map((device) => {
+              const type = deviceTypes.find((item) => item.id === device.deviceTypeId);
+              const location = locations.find((item) => item.id === device.preAssignedLocationId || item.id === device.locationId);
+              return <tr key={device.id}><td className="px-3 py-2 font-mono text-xs"><Link to={`/devices/${device.id}`} className="text-blue-600 hover:underline">{device.sn}</Link></td><td className="px-3 py-2">{type?.name || device.deviceTypeId}</td><td className="px-3 py-2"><StatusBadge status={device.status} /></td><td className="px-3 py-2">{location?.name || '—'}</td><td className="px-3 py-2"><StatusBadge status="绑定设备" /></td></tr>;
+            })}
+            {boundDevices.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">暂无已绑定设备</td></tr>}
           </tbody>
         </table>
-      </div>
-
-      <AddSiteInstallModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleSave} />
-      <BatchSIModal isOpen={showBatch} onClose={() => setShowBatch(false)} onSave={handleBatchSave} selectedIds={selectedIds} eligibleDevices={eligibleDevices} />
-      <CSVImportModal isOpen={showImport} onClose={() => setShowImport(false)} nodeLabel="现场安装" templateHeaders={['设备SN', '技术人员', '安装地址', '安装时间', '安装结果(通过/未通过)', '备注']} />
+      </Section>
     </div>
   );
 }
 
-/* ─────── Node 3: 客户验收 ─────── */
-function AddCustomerAcceptModal({ isOpen, onClose, onSave }) {
-  const { state } = useApp();
-  const [form, setForm] = useState({ deviceId: '', deviceSN: '', acceptor: state.currentUser, time: new Date().toISOString().slice(0, 16).replace('T', ' '), result: '通过', erpOutboundNo: '', voucherDesc: '' });
-  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
-  const siteDevices = state.devices.filter(d => d.status === '现场安装调试中');
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const device = siteDevices.find(d => d.id === form.deviceId);
-    onSave({ ...form, id: `CA-${Date.now()}`, deviceSN: device?.sn || form.deviceSN });
-    onClose();
-    setForm({ deviceId: '', deviceSN: '', acceptor: state.currentUser, time: new Date().toISOString().slice(0, 16).replace('T', ' '), result: '通过', erpOutboundNo: '', voucherDesc: '' });
-  };
+function StageNode({ title, summary, devices, records, locations, actionLabel, onAction, onAdvance, requireLocation = false, canAdvanceText }) {
+  const passIds = new Set(records.filter((record) => ['通过', 'Pass'].includes(record.result)).map((record) => record.deviceId));
+  const ngCount = records.filter((record) => ['未通过', 'NG'].includes(record.result)).length;
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="新增客户验收记录">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">选择设备 *</label>
-          <select className={inp} required value={form.deviceId} onChange={e => { const d = siteDevices.find(d => d.id === e.target.value); setForm({ ...form, deviceId: e.target.value, deviceSN: d?.sn || '' }); }}>
-            <option value="">-- 选择现场安装调试中的设备 --</option>
-            {siteDevices.map(d => <option key={d.id} value={d.id}>{d.sn}</option>)}
-          </select>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">验收人</label>
-            <input type="text" className={inp} value={form.acceptor} onChange={e => setForm({ ...form, acceptor: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">验收时间</label>
-            <input type="text" className={inp} value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} /></div>
-        </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">验收结果</label>
-          <div className="flex gap-4">
-            {['通过', '未通过'].map(r => (
-              <label key={r} className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="ca-result" value={r} checked={form.result === r} onChange={() => setForm({ ...form, result: r })} />
-                <span className={`text-sm font-medium ${r === '通过' ? 'text-green-700' : 'text-red-700'}`}>{r}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">ERP销售出库单号</label>
-          <input type="text" className={inp} value={form.erpOutboundNo} onChange={e => setForm({ ...form, erpOutboundNo: e.target.value })} placeholder="如 SO-2026-XXX" /></div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">验收凭证（照片文件名）</label>
-          <input type="text" className={inp} value={form.voucherDesc} onChange={e => setForm({ ...form, voucherDesc: e.target.value })} placeholder="如 acceptance-photo.jpg" /></div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-          <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function BatchCAModal({ isOpen, onClose, onSave, selectedIds, eligibleDevices }) {
-  const { state } = useApp();
-  const [form, setForm] = useState({ acceptor: state.currentUser, time: new Date().toISOString().slice(0, 16).replace('T', ' '), result: '通过', erpOutboundNo: '', voucherDesc: '' });
-  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
-  const selectedDevices = eligibleDevices.filter(d => selectedIds.has(d.id));
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const ts = Date.now();
-    const records = selectedDevices.map((d, i) => ({ ...form, id: `CA-${ts}-${i}`, deviceId: d.id, deviceSN: d.sn }));
-    onSave(records);
-    onClose();
-  };
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`批量提交客户验收（${selectedDevices.length} 台）`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="bg-gray-50 rounded-lg p-3 max-h-28 overflow-y-auto">
-          <div className="text-xs text-gray-500 mb-1.5">已选设备</div>
-          <div className="flex flex-wrap gap-1.5">
-            {selectedDevices.map(d => <span key={d.id} className="font-mono text-xs bg-white border border-gray-200 rounded px-2 py-0.5 text-gray-700">{d.sn}</span>)}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">验收人</label>
-            <input type="text" className={inp} value={form.acceptor} onChange={e => setForm({ ...form, acceptor: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">验收时间</label>
-            <input type="text" className={inp} value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} /></div>
-        </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">验收结果</label>
-          <div className="flex gap-4">
-            {['通过', '未通过'].map(r => (
-              <label key={r} className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="bca-result" value={r} checked={form.result === r} onChange={() => setForm({ ...form, result: r })} />
-                <span className={`text-sm font-medium ${r === '通过' ? 'text-green-700' : 'text-red-700'}`}>{r}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">ERP销售出库单号</label>
-          <input type="text" className={inp} value={form.erpOutboundNo} onChange={e => setForm({ ...form, erpOutboundNo: e.target.value })} placeholder="如 SO-2026-XXX" /></div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">验收凭证（照片文件名）</label>
-          <input type="text" className={inp} value={form.voucherDesc} onChange={e => setForm({ ...form, voucherDesc: e.target.value })} placeholder="如 acceptance-photo.jpg" /></div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-          <button type="submit" className="px-4 py-2 text-sm text-white bg-blue-600 rounded hover:bg-blue-700">批量提交 {selectedDevices.length} 台</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function CustomerAcceptNode({ plan }) {
-  const { state, dispatch } = useApp();
-  const { canDo } = useRole();
-  const getDeviceLink = (sn) => {
-    const dev = sn ? state.devices.find(d => d.sn === sn) : null;
-    return dev ? <Link to={`/devices/${dev.id}`} className="text-blue-600 hover:underline">{sn}</Link> : (sn || '—');
-  };
-  const [showModal, setShowModal] = useState(false);
-  const [showBatch, setShowBatch] = useState(false);
-  const [showImport, setShowImport] = useState(false);
-  const [selectedIds, setSelectedIds] = useState(new Set());
-
-  const records = plan.records?.customerAccept || [];
-  const eligibleDevices = state.devices.filter(d => d.status === '现场安装调试中');
-
-  const toggle = (id) => { const s = new Set(selectedIds); s.has(id) ? s.delete(id) : s.add(id); setSelectedIds(s); };
-  const toggleAll = () => setSelectedIds(selectedIds.size === eligibleDevices.length ? new Set() : new Set(eligibleDevices.map(d => d.id)));
-
-  const handleSave = (record) => {
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    dispatch({ type: 'UPDATE_DELIVERY_PLAN', payload: { ...plan, records: { ...plan.records, customerAccept: [...records, record] } } });
-    if (record.result === '通过') dispatch({ type: 'UPDATE_DEVICE', payload: { id: record.deviceId, status: '在线运营', updatedAt: now } });
-  };
-
-  const handleBatchSave = (batchRecords) => {
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    dispatch({ type: 'UPDATE_DELIVERY_PLAN', payload: { ...plan, records: { ...plan.records, customerAccept: [...records, ...batchRecords] } } });
-    batchRecords.forEach(r => {
-      if (r.result === '通过') dispatch({ type: 'UPDATE_DEVICE', payload: { id: r.deviceId, status: '在线运营', updatedAt: now } });
-    });
-    setSelectedIds(new Set());
-  };
-
-  const handleExport = () => downloadCSV(records, [
-    { key: 'deviceSN', label: '设备SN' },
-    { key: 'acceptor', label: '验收人' },
-    { key: 'time', label: '验收时间' },
-    { key: 'result', label: '验收结果' },
-    { key: 'erpOutboundNo', label: 'ERP出库单号' },
-    { key: 'voucherDesc', label: '验收凭证' },
-  ], `客户验收记录_${plan.id}.csv`);
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">客户验收记录（{records.length} 条）</h3>
-        <div className="flex items-center gap-2">
-          {canDo('add_delivery') && selectedIds.size > 0 && (
-            <button onClick={() => setShowBatch(true)} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 font-medium">
-              已选 {selectedIds.size} 台｜批量提交
-            </button>
-          )}
-          <button onClick={() => setShowImport(true)} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-600 rounded hover:bg-gray-50">导入CSV</button>
-          <button onClick={handleExport} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-600 rounded hover:bg-gray-50">导出CSV</button>
-          {canDo('add_delivery') && (
-            <button onClick={() => setShowModal(true)} className="px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-800">+ 新增记录</button>
-          )}
-        </div>
-      </div>
-
-      {canDo('add_delivery') && (
-        <DeviceBatchSelector
-          devices={eligibleDevices}
-          selectedIds={selectedIds}
-          onToggle={toggle}
-          onToggleAll={toggleAll}
-          label="可验收设备"
-        />
-      )}
-
-      <div className="bg-white rounded shadow-sm overflow-hidden">
+    <div className="space-y-5">
+      <MetricCards items={[
+        { label: summary[0], value: devices.length, color: 'border-slate-500' },
+        { label: 'Pass', value: passIds.size, color: 'border-green-500' },
+        { label: 'NG', value: ngCount, color: 'border-red-500' },
+        { label: '待处理', value: Math.max(devices.length - passIds.size, 0), color: 'border-amber-500' },
+        { label: '进度', value: `${passIds.size}/${devices.length}`, color: 'border-blue-500' },
+      ]} />
+      <Section title={`${title}概览`} action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={onAction}>{actionLabel}</button><button className={BTN_PRIMARY} onClick={onAdvance}>{canAdvanceText}</button></div>}>
+        <div className="text-sm text-gray-600">{summary[1]}</div>
+      </Section>
+      <Section title={`${title}设备列表`}>
         <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              {['设备SN', '验收人', '时间', '结果', 'ERP出库单号', '凭证'].map(h => (
-                <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">{h}</th>
-              ))}
-            </tr>
-          </thead>
+          <thead className="bg-gray-50"><tr>{['设备SN', '当前状态', requireLocation ? '现场确认点位' : '点位', '最新结果', '备注'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-100">
-            {records.map(r => (
-              <tr key={r.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-mono text-xs text-gray-800">{getDeviceLink(r.deviceSN)}</td>
-                <td className="px-4 py-2.5 text-gray-600">{r.acceptor}</td>
-                <td className="px-4 py-2.5 text-gray-400 text-xs">{r.time}</td>
-                <td className="px-4 py-2.5"><StatusBadge status={r.result} /></td>
-                <td className="px-4 py-2.5 text-gray-600 font-mono text-xs">{r.erpOutboundNo || '—'}</td>
-                <td className="px-4 py-2.5 text-gray-500 text-xs">{r.voucherDesc || '—'}</td>
-              </tr>
-            ))}
-            {records.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">暂无客户验收记录</td></tr>}
+            {devices.map((device) => {
+              const record = records.filter((item) => item.deviceId === device.id).at(-1);
+              const location = locations.find((item) => item.id === record?.locationId || item.id === device.locationId || item.id === device.preAssignedLocationId);
+              return <tr key={device.id}><td className="px-3 py-2 font-mono text-xs">{device.sn}</td><td className="px-3 py-2"><StatusBadge status={device.status} /></td><td className="px-3 py-2">{location?.name || '—'}</td><td className="px-3 py-2"><StatusBadge status={record?.result || '待测试'} /></td><td className="px-3 py-2 text-xs text-gray-500 max-w-[240px] truncate">{record?.notes || record?.changeReason || '—'}</td></tr>;
+            })}
+            {devices.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">暂无设备</td></tr>}
           </tbody>
         </table>
-      </div>
-
-      <AddCustomerAcceptModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleSave} />
-      <BatchCAModal isOpen={showBatch} onClose={() => setShowBatch(false)} onSave={handleBatchSave} selectedIds={selectedIds} eligibleDevices={eligibleDevices} />
-      <CSVImportModal isOpen={showImport} onClose={() => setShowImport(false)} nodeLabel="客户验收" templateHeaders={['设备SN', '验收人', '验收时间', '验收结果(通过/未通过)', 'ERP出库单号', '验收凭证文件名']} />
+      </Section>
     </div>
   );
 }
 
-/* ─────── Main Page ─────── */
 export default function DeliveryPlanDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
-  const NODE_KEYS = ['factoryInspection', 'siteInstall', 'customerAccept'];
+  const [modal, setModal] = useState(null);
   const nodeParam = searchParams.get('node');
-  const activeNode = NODE_KEYS.includes(nodeParam) ? nodeParam : 'factoryInspection';
+  const activeNode = NODES.some((node) => node.key === nodeParam) ? nodeParam : 'binding';
   const setActiveNode = (key) => setSearchParams({ node: key }, { replace: true });
-
-  const plan = state.deliveryPlans?.find(p => p.id === id);
+  const plan = state.deliveryPlans?.find((item) => item.id === id);
 
   if (!plan) {
-    return (
-      <div className="p-8 text-center">
-        <div className="text-gray-400 mb-4">未找到交付计划 {id}</div>
-        <button onClick={() => navigate('/projects?tab=delivery')} className="text-slate-700 hover:underline text-sm">← 返回交付计划</button>
-      </div>
-    );
+    return <div className="p-8 text-center text-gray-400">未找到交付计划 {id}</div>;
   }
 
-  const project = state.projects?.find(p => p.id === plan.projectId);
+  const project = state.projects.find((item) => item.id === plan.projectId);
+  const projectLocations = state.locations.filter((location) => location.projectId === plan.projectId);
+  const otherActiveBound = new Set((state.deliveryPlans || [])
+    .filter((item) => item.id !== plan.id && !['已验收', '已作废'].includes(item.status))
+    .flatMap(getBoundDeviceIds));
+  const boundIds = getBoundDeviceIds(plan);
+  const boundDevices = boundIds.map((deviceId) => state.devices.find((device) => device.id === deviceId)).filter(Boolean);
+  const eligibleDevices = state.devices.filter((device) =>
+    device.projectId === plan.projectId
+    && ['已入库', '待分配项目', '已分配项目'].includes(device.status)
+    && !otherActiveBound.has(device.id)
+    && !device.frozen
+  );
+  const records = {
+    binding: plan.records?.binding || [],
+    factoryInspection: plan.records?.factoryInspection || [],
+    siteInstall: plan.records?.siteInstall || [],
+    customerAccept: plan.records?.customerAccept || [],
+  };
+  const factoryPassDevices = boundDevices.filter((device) => records.factoryInspection.some((record) => record.deviceId === device.id && ['Pass', '通过'].includes(record.result)));
+  const sitePassDevices = boundDevices.filter((device) => records.siteInstall.some((record) => record.deviceId === device.id && ['Pass', '通过'].includes(record.result)));
+  const counts = { binding: boundDevices.length, factoryInspection: records.factoryInspection.length, siteInstall: records.siteInstall.length, customerAccept: records.customerAccept.length };
+
+  const updatePlanRecords = (key, nextRecords, extra = {}) => {
+    dispatch({ type: 'UPDATE_DELIVERY_PLAN', payload: { ...plan, ...extra, records: { ...plan.records, [key]: nextRecords } } });
+  };
+
+  const bindDevices = (ids, locationId) => {
+    const newRecords = ids.map((deviceId) => ({ id: `BIND-${Date.now()}-${deviceId}`, deviceId, preAssignedLocationId: locationId, operator: state.currentUser, time: nowText() }));
+    ids.forEach((deviceId) => dispatch({ type: 'UPDATE_DEVICE', payload: { id: deviceId, deliveryPlanId: plan.id, preAssignedLocationId: locationId || null, updatedAt: nowText() } }));
+    updatePlanRecords('binding', [...records.binding, ...newRecords], { boundDeviceIds: [...new Set([...boundIds, ...ids])], currentNode: '绑定设备', status: '交付中' });
+    dispatch({ type: 'ADD_OPERATION_LOG', payload: { id: `LOG-${Date.now()}-${plan.id}`, deliveryPlanId: plan.id, projectId: plan.projectId, operator: state.currentUser, timestamp: nowText(), actionType: '绑定设备', fromStatus: plan.status, toStatus: '交付中', notes: `绑定 ${ids.length} 台设备` } });
+  };
+
+  const saveStageResult = (key, resultForm) => {
+    const nextIndex = records[key].length + 1;
+    const record = { id: `${key}-${resultForm.deviceId}-${nextIndex}`, deviceId: resultForm.deviceId, deviceSN: resultForm.deviceSN, result: resultForm.result, operator: resultForm.operator || state.currentUser, time: nowText(), notes: resultForm.notes, locationId: resultForm.locationId || null, changeReason: resultForm.changeReason || '' };
+    updatePlanRecords(key, [...records[key], record]);
+    if (key === 'customerAccept' && resultForm.result === 'Pass') {
+      dispatch({ type: 'UPDATE_DEVICE', payload: { id: resultForm.deviceId, status: '在线运营', locationId: resultForm.locationId || undefined, updatedAt: nowText() } });
+    }
+    if (key === 'factoryInspection' && resultForm.result === 'Pass') {
+      dispatch({ type: 'UPDATE_DEVICE', payload: { id: resultForm.deviceId, status: '出厂检验通过', updatedAt: nowText() } });
+    }
+    if (key === 'siteInstall' && resultForm.locationId) {
+      dispatch({
+        type: 'UPDATE_DEVICE',
+        payload: {
+          id: resultForm.deviceId,
+          ...(resultForm.result === 'Pass' ? { status: '现场安装调试通过' } : {}),
+          locationId: resultForm.locationId,
+          updatedAt: nowText(),
+        },
+      });
+    }
+    if (resultForm.result === 'NG') {
+      dispatch({ type: 'ADD_DELIVERY_WORK_ORDER', payload: { id: `DWO-${plan.id}-${resultForm.deviceId}-${nextIndex}`, type: 'delivery', deliveryPlanId: plan.id, deviceId: resultForm.deviceId, deviceSN: resultForm.deviceSN, description: resultForm.notes || `${key}节点NG`, severity: '中', status: '待处理', assignedTo: '', createdAt: nowText(), updatedAt: nowText(), processLogs: [] } });
+    }
+    dispatch({ type: 'ADD_OPERATION_LOG', payload: { id: `LOG-${Date.now()}-${plan.id}-${key}`, deliveryPlanId: plan.id, projectId: plan.projectId, deviceId: resultForm.deviceId, operator: state.currentUser, timestamp: nowText(), actionType: `录入${key}结果`, fromStatus: plan.status, toStatus: plan.status, notes: `${resultForm.deviceSN} ${resultForm.result}` } });
+  };
+
+  const advance = (nodeLabel, status) => {
+    const allPassed = (devices, stageRecords) => devices.length > 0 && devices.every((device) => stageRecords.some((record) => record.deviceId === device.id && ['Pass', '通过'].includes(record.result)));
+    if (nodeLabel === '出厂检验' && boundDevices.length === 0) {
+      window.alert('请先绑定至少一台设备');
+      return;
+    }
+    if (nodeLabel === '现场安装调试' && !allPassed(boundDevices, records.factoryInspection)) {
+      window.alert('所有已绑定设备出厂检验 Pass 后，才能推进到现场安装调试');
+      return;
+    }
+    if (nodeLabel === '客户验收' && status !== '已验收' && !allPassed(factoryPassDevices.length ? factoryPassDevices : boundDevices, records.siteInstall)) {
+      window.alert('所有设备安装调试 Pass 后，才能推进到客户验收');
+      return;
+    }
+    if (status === '已验收' && !allPassed(sitePassDevices.length ? sitePassDevices : boundDevices, records.customerAccept)) {
+      window.alert('所有设备客户验收 Pass 后，才能完成交付计划');
+      return;
+    }
+    dispatch({ type: 'UPDATE_DELIVERY_PLAN', payload: { id: plan.id, currentNode: nodeLabel, status: status || plan.status, updatedAt: nowText() } });
+    dispatch({ type: 'ADD_OPERATION_LOG', payload: { id: `LOG-${Date.now()}-${plan.id}`, deliveryPlanId: plan.id, projectId: plan.projectId, operator: state.currentUser, timestamp: nowText(), actionType: '推进交付节点', fromStatus: plan.status, toStatus: status || plan.status, notes: `推进到${nodeLabel}` } });
+  };
+
+  const acceptedCount = records.customerAccept.filter((record) => ['Pass', '通过'].includes(record.result)).length;
+  const planStatus = acceptedCount >= (plan.targetCount || 0) && plan.targetCount > 0 ? '已验收' : (plan.status === '进行中' ? '交付中' : plan.status);
 
   return (
     <div className="p-6">
@@ -793,23 +332,108 @@ export default function DeliveryPlanDetail() {
         <button onClick={() => navigate('/projects?tab=delivery')} className="text-gray-400 hover:text-gray-600 mt-1 text-sm">← 返回</button>
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-1">
-            <span className="text-base font-semibold text-gray-800">{plan.name}</span>
-            <StatusBadge status={plan.status} />
+            <h1 className="text-xl font-bold text-gray-900">{plan.name}</h1>
+            <StatusBadge status={planStatus || '交付中'} />
+            <StatusBadge status={plan.currentNode || NODES.find((node) => node.key === activeNode)?.label} />
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-gray-500">
-            {project && <span>关联项目：<Link to={`/projects/${project.id}`} className="text-blue-600 hover:underline">{project.name}</Link></span>}
-            <span>目标交付：{plan.targetCount} 台</span>
-            {plan.dueDate && <span>截止日期：{plan.dueDate}</span>}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
+            {project && <span>所属项目：<Link to={`/projects/${project.id}`} className="text-blue-600 hover:underline">{project.name}</Link></span>}
+            <span>计划交付：{plan.targetCount || 0} 台</span>
+            <span>已绑定：{boundDevices.length} 台</span>
+            <span>计划出厂：{plan.factoryDate || plan.dueDate || '—'}</span>
+            <span>计划验收：{plan.acceptanceDate || plan.dueDate || '—'}</span>
           </div>
         </div>
       </div>
 
-      <MetricsPanel plan={plan} />
-      <ProgressBar plan={plan} activeNode={activeNode} setActiveNode={setActiveNode} />
+      <FlowStepper activeNode={activeNode} onChange={setActiveNode} counts={counts} />
 
-      {activeNode === 'factoryInspection' && <FactoryInspectionNode plan={plan} />}
-      {activeNode === 'siteInstall' && <SiteInstallNode plan={plan} />}
-      {activeNode === 'customerAccept' && <CustomerAcceptNode plan={plan} />}
+      {activeNode === 'binding' && (
+        <BindingNode
+          plan={plan}
+          boundDevices={boundDevices}
+          eligibleDevices={eligibleDevices}
+          locations={projectLocations}
+          deviceTypes={state.deviceTypes}
+          openSelector={() => setModal('selectDevices')}
+          confirmBinding={() => advance('出厂检验', '交付中')}
+        />
+      )}
+      {activeNode === 'factoryInspection' && (
+        <StageNode
+          title="出厂检验"
+          summary={['待检设备', 'Pass 后才允许确认出厂；NG 时生成交付工单。所有设备出厂检验 Pass 且确认出厂后，才允许推进到现场安装调试。']}
+          devices={boundDevices}
+          records={records.factoryInspection}
+          locations={projectLocations}
+          actionLabel="录入出厂检验结果"
+          onAction={() => setModal('factoryResult')}
+          onAdvance={() => advance('现场安装调试', '交付中')}
+          canAdvanceText="推进到现场安装调试"
+        />
+      )}
+      {activeNode === 'siteInstall' && (
+        <StageNode
+          title="现场安装调试"
+          summary={['待安装调试设备', '现场确认点位必填；若与预分配点位不一致，需要填写点位变更原因；NG 时生成交付工单。']}
+          devices={factoryPassDevices.length ? factoryPassDevices : boundDevices}
+          records={records.siteInstall}
+          locations={projectLocations}
+          actionLabel="录入安装调试结果"
+          onAction={() => setModal('siteResult')}
+          onAdvance={() => advance('客户验收', '交付中')}
+          canAdvanceText="推进到客户验收"
+          requireLocation
+        />
+      )}
+      {activeNode === 'customerAccept' && (
+        <StageNode
+          title="客户验收"
+          summary={['待验收设备', 'Pass 后设备状态变为在线运营；NG 时生成交付工单或质量问题记录；全部 Pass 后交付计划变为已验收。']}
+          devices={sitePassDevices.length ? sitePassDevices : boundDevices}
+          records={records.customerAccept}
+          locations={projectLocations}
+          actionLabel="录入客户验收结果"
+          onAction={() => setModal('acceptResult')}
+          onAdvance={() => advance('客户验收', '已验收')}
+          canAdvanceText="完成交付计划"
+        />
+      )}
+
+      <DeviceSelectModal
+        isOpen={modal === 'selectDevices'}
+        onClose={() => setModal(null)}
+        eligibleDevices={eligibleDevices}
+        locations={projectLocations}
+        deviceTypes={state.deviceTypes}
+        onConfirm={bindDevices}
+      />
+      <ResultModal
+        isOpen={modal === 'factoryResult'}
+        onClose={() => setModal(null)}
+        title="录入出厂检验结果"
+        devices={boundDevices}
+        locations={projectLocations}
+        onSave={(form) => saveStageResult('factoryInspection', form)}
+      />
+      <ResultModal
+        isOpen={modal === 'siteResult'}
+        onClose={() => setModal(null)}
+        title="录入安装调试结果"
+        devices={factoryPassDevices.length ? factoryPassDevices : boundDevices}
+        locations={projectLocations}
+        requireLocation
+        onSave={(form) => saveStageResult('siteInstall', form)}
+      />
+      <ResultModal
+        isOpen={modal === 'acceptResult'}
+        onClose={() => setModal(null)}
+        title="录入客户验收结果"
+        devices={sitePassDevices.length ? sitePassDevices : boundDevices}
+        locations={projectLocations}
+        onSave={(form) => saveStageResult('customerAccept', form)}
+      />
+      <ActionPlaceholderModal isOpen={modal === 'placeholder'} onClose={() => setModal(null)} title="交付动作" />
     </div>
   );
 }

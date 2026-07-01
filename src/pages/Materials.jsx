@@ -221,6 +221,7 @@ export default function Materials() {
 
   useEffect(() => {
     const r = searchParams.get('result');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (r) setFilterResult(r);
   }, [searchParams]);
 

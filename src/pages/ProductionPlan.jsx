@@ -147,7 +147,6 @@ export default function ProductionPlan() {
   const [activeTab, setActiveTab] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
-  const [editValues, setEditValues] = useState({});
   const [expandedProjects, setExpandedProjects] = useState(new Set());
 
   const plans = [...state.productionPlans].sort((a, b) =>
@@ -170,11 +169,6 @@ export default function ProductionPlan() {
       target: Number(form.target), actual: Number(form.actual),
       project: form.project, notes: form.notes,
     }});
-  };
-
-  const handleEditSave = (plan) => {
-    dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: plan.id, ...editValues } });
-    setEditId(null);
   };
 
   const handleDelete = (id) => {
@@ -413,7 +407,7 @@ export default function ProductionPlan() {
                                         <td className="py-1.5 pr-4 text-gray-400">{plan.notes || '—'}</td>
                                         <td className="py-1.5">
                                           <div className="flex gap-2">
-                                            <button onClick={(e) => { e.stopPropagation(); setEditId(plan.id); setEditValues({ target: plan.target, actual: plan.actual, project: plan.project, bottleneck: plan.bottleneck || '', notes: plan.notes || '' }); }}
+                                            <button onClick={(e) => { e.stopPropagation(); setEditId(plan.id); }}
                                               className="text-slate-600 hover:underline">编辑</button>
                                             <button onClick={(e) => { e.stopPropagation(); handleDelete(plan.id); }}
                                               className="text-red-400 hover:underline">删除</button>

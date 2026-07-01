@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
@@ -39,7 +39,6 @@ const DEVICE_SUB_TABS = [
 
 /* Alert detail panel with 4 fixed sections */
 function AlertDetail({ alert, state, dispatch, currentRole, currentUser }) {
-  const navigate = useNavigate();
   const { devices, projects, workOrders } = state;
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [notes, setNotes] = useState('');

@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 
-function RetireModal({ isOpen, onClose, onSave, devices, currentUser }) {
+function RetireModal({ isOpen, onClose, onSave, devices }) {
   const [deviceId, setDeviceId] = useState('');
   const [reason, setReason] = useState('');
   const [confirmed, setConfirmed] = useState(false);
@@ -169,7 +168,6 @@ export default function Retirement() {
           onClose={() => setShowModal(false)}
           onSave={handleRetire}
           devices={onlineDevices}
-          currentUser={state.currentUser}
         />
       )}
     </div>

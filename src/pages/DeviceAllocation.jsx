@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 
 function AllocateModal({ isOpen, onClose, device, projects, onSave }) {

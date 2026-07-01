@@ -43,6 +43,7 @@ function AllDevicesTab({ devices, getTypeName, projects }) {
 
   useEffect(() => {
     const s = searchParams.get('status');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (s) setFilterStatus(s);
   }, [searchParams]);
 

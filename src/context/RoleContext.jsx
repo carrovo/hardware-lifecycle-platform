@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState } from 'react';
 import { ROLE_NAV_PERMISSIONS, ROLE_ACTION_PERMISSIONS } from '../data/mockData';
 

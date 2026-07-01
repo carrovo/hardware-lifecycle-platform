@@ -310,7 +310,7 @@ export default function Alerts() {
   const [showModal, setShowModal] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
 
-  const { alerts, devices, projects } = state;
+  const { alerts, devices } = state;
   const currentUser = state.currentUser;
 
   const onlineDevices = devices.filter((d) => d.status === '在线运营');

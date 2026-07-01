@@ -151,7 +151,7 @@ function BulkSubmitModal({ isOpen, onClose, onSave, stage, selectedRecords, getD
   );
 }
 
-function ImportModal({ isOpen, onClose, stage, devices, projects, passResult, resultOptions, onImport }) {
+function ImportModal({ isOpen, onClose, stage, devices, passResult, resultOptions, onImport }) {
   const [step, setStep] = useState(1);
   const [rows, setRows] = useState(null);
   const [fileName, setFileName] = useState('');

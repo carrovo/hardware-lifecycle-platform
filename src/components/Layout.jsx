@@ -5,7 +5,7 @@ import { FEISHU_USERS, ROLES_LIST } from '../data/mockData';
 
 const NAV_ITEMS = [
   { label: '首页', path: '/home' },
-  { label: '运营看板', path: '/dashboard' },
+  { label: '看板中心', path: '/dashboard' },
   { label: '项目中心', path: '/projects' },
   { label: '资产管理', path: '/assets' },
   { label: '售后管理', path: '/after-sales' },
@@ -38,8 +38,8 @@ export default function Layout({ children }) {
       <aside className="w-52 bg-slate-800 flex flex-col fixed top-0 left-0 h-full z-40">
         {/* Logo */}
         <div className="px-4 py-4 border-b border-slate-700">
-          <div className="text-white font-bold text-sm leading-tight">硬件全生命周期</div>
-          <div className="text-slate-400 text-xs mt-0.5">管理平台</div>
+          <div className="text-white font-bold text-sm leading-tight">设备全生命周期</div>
+          <div className="text-slate-400 text-xs mt-0.5">质量管理平台</div>
         </div>
 
         {/* Nav */}

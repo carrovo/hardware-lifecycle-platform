@@ -419,8 +419,6 @@ function WorkOrderTable({ workOrders, actionType, state, dispatch, currentUser, 
   const [showAddModal, setShowAddModal] = useState(false);
 
   const activeWOs = workOrders.filter(w => w.status !== '已作废');
-  const voidedWOs = workOrders.filter(w => w.status === '已作废');
-
   const filtered = [...workOrders]
     .filter(w => {
       if (filterStatus === '全部') return w.status !== '已作废';

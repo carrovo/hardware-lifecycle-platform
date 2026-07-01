@@ -318,7 +318,7 @@ export default function DeviceDetail() {
     dispatch({
       type: 'ADD_OPERATION_LOG',
       payload: {
-        id: `LOG-${Date.now()}`,
+        id: `LOG-${record.id}-void`,
         deviceId: id,
         operator: state.currentUser,
         timestamp: now,

@@ -152,6 +152,7 @@ export default function Tests() {
     const result = searchParams.get('result');
     if (tab) {
       const idx = TEST_TYPES.indexOf(tab);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (idx >= 0) setActiveTab(idx);
     }
     if (result) setFilterResult(result);

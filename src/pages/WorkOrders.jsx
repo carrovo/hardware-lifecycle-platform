@@ -59,7 +59,6 @@ function EditWorkOrderModal({ isOpen, onClose, wo, onSave }) {
   const [form, setForm] = useState({ description: wo?.description || '', severity: wo?.severity || '高', notes: wo?.notes || '' });
   if (!wo) return null;
   const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
-  const rate = wo.target > 0 ? Math.round((wo.actual / wo.target) * 100) : 0;
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`编辑工单 ${wo.id}`}>
       <div className="space-y-4">
@@ -294,7 +293,6 @@ function WorkOrderDetail({ wo, state, dispatch, currentUser, canDo }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [recheckResult, setRecheckResult] = useState('');
-  const [recheckNotes, setRecheckNotes] = useState('');
 
   const device = devices.find((d) => d.id === wo.deviceId);
   const deviceType = deviceTypes.find((dt) => dt.id === device?.deviceTypeId);
@@ -317,7 +315,6 @@ function WorkOrderDetail({ wo, state, dispatch, currentUser, canDo }) {
   const handleRevertToProcessing = () => {
     dispatch({ type: 'UPDATE_WORK_ORDER', payload: { id: wo.id, status: '处理中', recheckResult: null, updatedAt: now() } });
     setRecheckResult('');
-    setRecheckNotes('');
   };
 
   const handleCloseOrder = () => {
@@ -626,6 +623,7 @@ export default function WorkOrders() {
 
   useEffect(() => {
     const s = searchParams.get('status');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (s) setFilterStatus(s);
     const highlight = searchParams.get('highlight');
     if (highlight) setExpandedId(highlight);

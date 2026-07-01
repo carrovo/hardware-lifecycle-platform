@@ -1,152 +1,118 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
-import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
+import OperationLog from '../components/OperationLog';
+import StatusBadge from '../components/StatusBadge';
 
-function EditProjectModal({ isOpen, onClose, project, onSave }) {
+const INPUT = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500 bg-white';
+const BTN_PRIMARY = 'px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-800';
+const BTN_GHOST = 'px-3 py-1.5 text-sm border border-gray-300 text-gray-600 rounded hover:bg-gray-50';
+
+function nowText() {
+  return new Date().toISOString().slice(0, 16).replace('T', ' ');
+}
+
+function projectStatus(project, productionPlans, deliveryPlans) {
+  if (project.voided || project.status === '已作废') return '已作废';
+  if (project.status) return project.status;
+  const accepted = deliveryPlans
+    .filter((p) => p.projectId === project.id)
+    .reduce((sum, plan) => sum + (plan.records?.customerAccept || []).filter((r) => r.result === '通过').length, 0);
+  if (project.closedAt) return '已关闭';
+  if (accepted >= (project.targetCount || 0) && project.targetCount > 0) return '已交付';
+  if (productionPlans.some((plan) => plan.projectId === project.id)) return '进行中';
+  return '未开始';
+}
+
+function Section({ title, action, children }) {
+  return (
+    <section className="bg-white rounded shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-700">{title}</h2>
+        {action}
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
+  );
+}
+
+function ProgressCard({ title, done, total, color }) {
+  const pct = total > 0 ? Math.min(Math.round((done / total) * 100), 100) : 0;
+  return (
+    <div className="bg-white rounded shadow-sm p-4 border border-gray-100">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm text-gray-500">{title}</span>
+        <span className="text-sm font-semibold text-gray-800">{done}/{total || 0}</span>
+      </div>
+      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-2 rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="text-xs text-gray-400 mt-2">{pct}%</div>
+    </div>
+  );
+}
+
+function ProjectFormModal({ isOpen, onClose, project, onSave }) {
   const [form, setForm] = useState({
     name: project?.name || '',
     client: project?.client || '',
+    manager: project?.manager || '',
     contactPerson: project?.contactPerson || '',
     contactPhone: project?.contactPhone || '',
+    targetCount: project?.targetCount || 1,
+    erpPurchaseOrderNo: project?.erpPurchaseOrderNo || '',
     background: project?.background || '',
     notes: project?.notes || '',
-    targetCount: project?.targetCount || 1,
-    manager: project?.manager || '',
-    erpPurchaseOrderNo: project?.erpPurchaseOrderNo || '',
   });
-
-  const f = (key) => ({ value: form[key], onChange: (e) => setForm({ ...form, [key]: e.target.value }) });
-  const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave({ ...form, targetCount: Number(form.targetCount) });
-    onClose();
-  };
 
   if (!project) return null;
 
+  const update = (key, value) => setForm({ ...form, [key]: value });
+  const submit = (e) => {
+    e.preventDefault();
+    onSave({ ...form, targetCount: Number(form.targetCount || 1) });
+    onClose();
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="编辑项目信息" size="lg">
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <Modal isOpen={isOpen} onClose={onClose} title="编辑项目" size="lg">
+      <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">项目名称 *</label>
-            <input type="text" className={inputClass} required {...f('name')} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">目标需求量 *</label>
-            <input type="number" min="1" className={inputClass} required {...f('targetCount')} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">客户名称</label>
-            <input type="text" className={inputClass} {...f('client')} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">项目负责人</label>
-            <input type="text" className={inputClass} {...f('manager')} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">联系人</label>
-            <input type="text" className={inputClass} {...f('contactPerson')} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">联系电话</label>
-            <input type="text" className={inputClass} {...f('contactPhone')} />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              ERP采购订单号 <span className="font-normal text-gray-400">（选填）</span>
-            </label>
-            <input type="text" className={inputClass} {...f('erpPurchaseOrderNo')} placeholder="关联ERP采购订单，便于后续核对，暂不自动同步" />
-          </div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">项目名称 *</label><input className={INPUT} required value={form.name} onChange={(e) => update('name', e.target.value)} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">目标设备数 *</label><input className={INPUT} type="number" min="1" required value={form.targetCount} onChange={(e) => update('targetCount', e.target.value)} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">客户</label><input className={INPUT} value={form.client} onChange={(e) => update('client', e.target.value)} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">负责人</label><input className={INPUT} value={form.manager} onChange={(e) => update('manager', e.target.value)} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">联系人</label><input className={INPUT} value={form.contactPerson} onChange={(e) => update('contactPerson', e.target.value)} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">联系电话</label><input className={INPUT} value={form.contactPhone} onChange={(e) => update('contactPhone', e.target.value)} /></div>
+          <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">ERP项目/订单号</label><input className={INPUT} value={form.erpPurchaseOrderNo} onChange={(e) => update('erpPurchaseOrderNo', e.target.value)} /></div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">项目背景</label>
-          <textarea rows={3} className={inputClass} {...f('background')} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
-          <textarea rows={2} className={inputClass} {...f('notes')} />
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-          <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存</button>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">项目背景</label><textarea className={INPUT} rows={3} value={form.background} onChange={(e) => update('background', e.target.value)} /></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">备注</label><textarea className={INPUT} rows={2} value={form.notes} onChange={(e) => update('notes', e.target.value)} /></div>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className={BTN_GHOST}>取消</button>
+          <button type="submit" className={BTN_PRIMARY}>保存</button>
         </div>
       </form>
     </Modal>
   );
 }
 
-function AllocateDevicesModal({ isOpen, onClose, pendingDevices, getTypeName, onConfirm }) {
-  const [selected, setSelected] = useState(new Set());
-  const [erpSalesOutboundNo, setErpSalesOutboundNo] = useState('');
-
-  const toggle = (devId) => setSelected((prev) => {
-    const next = new Set(prev);
-    next.has(devId) ? next.delete(devId) : next.add(devId);
-    return next;
-  });
-  const allSelected = pendingDevices.length > 0 && selected.size === pendingDevices.length;
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(pendingDevices.map((d) => d.id)));
-
-  const handleConfirm = () => {
-    onConfirm([...selected], erpSalesOutboundNo);
-    setSelected(new Set());
-    setErpSalesOutboundNo('');
-    onClose();
-  };
-
+function ConfirmModal({ isOpen, onClose, title, text, onConfirm, danger = false }) {
+  const [reason, setReason] = useState('');
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="分配设备" size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
       <div className="space-y-4">
-        <p className="text-sm text-gray-500">从「待分配项目」设备中选择，确认后分配到当前项目。</p>
-        <div className="border border-gray-200 rounded overflow-hidden max-h-80 overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 sticky top-0">
-              <tr>
-                <th className="px-3 py-2 w-8">
-                  <input type="checkbox" checked={allSelected} onChange={toggleAll} disabled={pendingDevices.length === 0} />
-                </th>
-                {['设备SN', '整机类型', '装配人', '完成时间'].map((h) => (
-                  <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {pendingDevices.map((d) => (
-                <tr key={d.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => toggle(d.id)}>
-                  <td className="px-3 py-2"><input type="checkbox" checked={selected.has(d.id)} onChange={() => toggle(d.id)} onClick={(e) => e.stopPropagation()} /></td>
-                  <td className="px-3 py-2 font-mono text-xs text-gray-800 font-medium">{d.sn}</td>
-                  <td className="px-3 py-2 text-gray-600">{getTypeName(d.deviceTypeId)}</td>
-                  <td className="px-3 py-2 text-gray-600">{d.assembler}</td>
-                  <td className="px-3 py-2 text-gray-400 text-xs">{d.updatedAt}</td>
-                </tr>
-              ))}
-              {pendingDevices.length === 0 && (
-                <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-400">暂无待分配设备</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">ERP销售出库单号</label>
-          <input
-            type="text"
-            value={erpSalesOutboundNo}
-            onChange={(e) => setErpSalesOutboundNo(e.target.value)}
-            placeholder="ERP 销售出库单号（选填）"
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500"
-          />
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-          <button onClick={handleConfirm} disabled={selected.size === 0}
-            className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800 disabled:opacity-40">
-            确认分配（{selected.size}）
+        <p className="text-sm text-gray-700">{text}</p>
+        <textarea className={INPUT} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="填写原因或备注" />
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className={BTN_GHOST}>取消</button>
+          <button
+            onClick={() => { onConfirm(reason); setReason(''); onClose(); }}
+            className={`px-3 py-1.5 text-sm text-white rounded ${danger ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-700 hover:bg-slate-800'}`}
+          >
+            确认
           </button>
         </div>
       </div>
@@ -154,42 +120,80 @@ function AllocateDevicesModal({ isOpen, onClose, pendingDevices, getTypeName, on
   );
 }
 
-function TransferModal({ isOpen, onClose, device, projects, currentProjectId, onConfirm }) {
-  const [targetProjectId, setTargetProjectId] = useState('');
-  const [reason, setReason] = useState('');
-
-  const handleConfirm = (e) => {
+function CreatePlanModal({ isOpen, onClose, type, project, onSave }) {
+  const [form, setForm] = useState({
+    name: project ? `${project.name}${type === 'production' ? '生产计划' : '交付计划'}` : '',
+    targetCount: project?.targetCount || 1,
+    owner: project?.manager || '',
+    date: '',
+    erpNo: '',
+  });
+  if (!project) return null;
+  const label = type === 'production' ? '生产计划' : '交付计划';
+  const submit = (e) => {
     e.preventDefault();
-    if (!targetProjectId) return;
-    onConfirm({ device, targetProjectId, reason });
-    setTargetProjectId('');
-    setReason('');
+    onSave({ ...form, targetCount: Number(form.targetCount || 1) });
     onClose();
   };
-
-  const targets = projects.filter((p) => p.id !== currentProjectId && !p.voided);
-
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`转移设备：${device?.sn || ''}`}>
-      <form onSubmit={handleConfirm} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">目标项目 *</label>
-          <select value={targetProjectId} onChange={(e) => setTargetProjectId(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" required>
-            <option value="">-- 选择项目 --</option>
-            {targets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+    <Modal isOpen={isOpen} onClose={onClose} title={`创建${label}`} size="lg">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">{label}名称 *</label><input className={INPUT} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">计划数量 *</label><input className={INPUT} type="number" min="1" required value={form.targetCount} onChange={(e) => setForm({ ...form, targetCount: e.target.value })} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">负责人</label><input className={INPUT} value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">{type === 'production' ? '计划完成日期' : '计划客户验收时间'}</label><input className={INPUT} type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></div>
+          <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">ERP单号</label><input className={INPUT} value={form.erpNo} onChange={(e) => setForm({ ...form, erpNo: e.target.value })} /></div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">转移原因</label>
-          <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500" />
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-          <button type="submit" className="px-4 py-2 text-sm text-white bg-amber-600 rounded hover:bg-amber-700">确认转移</button>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className={BTN_GHOST}>取消</button>
+          <button type="submit" className={BTN_PRIMARY}>保存</button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+function BindDevicesModal({ isOpen, onClose, devices, deviceTypes, onConfirm }) {
+  const [selected, setSelected] = useState(new Set());
+  const getTypeName = (id) => deviceTypes.find((d) => d.id === id)?.name || id;
+  const toggle = (id) => {
+    const next = new Set(selected);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSelected(next);
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="绑定设备" size="lg">
+      <div className="space-y-4">
+        <div className="text-sm text-gray-500">当前仅展示已入库、待分配项目且未冻结的可绑定设备。</div>
+        <div className="border border-gray-200 rounded overflow-hidden max-h-80 overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 sticky top-0">
+              <tr>
+                <th className="px-3 py-2 w-10" />
+                {['设备SN', '整机类型', '当前状态', '装配时间'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {devices.map((device) => (
+                <tr key={device.id} onClick={() => toggle(device.id)} className="hover:bg-gray-50 cursor-pointer">
+                  <td className="px-3 py-2"><input type="checkbox" checked={selected.has(device.id)} onChange={() => toggle(device.id)} onClick={(e) => e.stopPropagation()} /></td>
+                  <td className="px-3 py-2 font-mono text-xs font-medium">{device.sn}</td>
+                  <td className="px-3 py-2 text-gray-600">{getTypeName(device.deviceTypeId)}</td>
+                  <td className="px-3 py-2"><StatusBadge status={device.status} /></td>
+                  <td className="px-3 py-2 text-xs text-gray-400">{device.assemblyTime || device.updatedAt}</td>
+                </tr>
+              ))}
+              {devices.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">暂无可绑定设备</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className={BTN_GHOST}>取消</button>
+          <button onClick={() => { onConfirm([...selected]); setSelected(new Set()); onClose(); }} disabled={selected.size === 0} className={`${BTN_PRIMARY} disabled:opacity-40`}>确认绑定（{selected.size}）</button>
+        </div>
+      </div>
     </Modal>
   );
 }
@@ -198,549 +202,304 @@ export default function ProjectDetail() {
   const { id } = useParams();
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showAllocateModal, setShowAllocateModal] = useState(false);
-  const [transferTarget, setTransferTarget] = useState(null);
-  const [expandedDeviceId, setExpandedDeviceId] = useState(null);
-  const [showAddLocationModal, setShowAddLocationModal] = useState(false);
-  const [editingLocation, setEditingLocation] = useState(null);
-  const [deletingLocation, setDeletingLocation] = useState(null);
-  const [setLocationTarget, setSetLocationTarget] = useState(null);
+  const [modal, setModal] = useState(null);
 
-  const { projects, deviceAllocations, devices, deliveryRecords, deviceTypes, workflowProductionPlans = [], deliveryPlans = [], locations = [] } = state;
+  const {
+    projects, workflowProductionPlans = [], productionPlans = [], deliveryPlans = [],
+    devices = [], deviceTypes = [], locations = [], qualityIssues = [],
+    productionWorkOrders = [], deliveryWorkOrders = [], operationLogs = [],
+  } = state;
 
+  const allProductionPlans = [...workflowProductionPlans, ...productionPlans];
   const project = projects.find((p) => p.id === id);
+
   if (!project) {
-    return (
-      <div className="p-6">
-        <div className="text-gray-400">项目不存在</div>
-      </div>
-    );
+    return <div className="p-6 text-gray-400">项目不存在</div>;
   }
 
-  const projProductionPlans = workflowProductionPlans.filter(pp => pp.projectId === id);
-  const projDeliveryPlans = deliveryPlans.filter(dp => dp.projectId === id);
-  const allocations = deviceAllocations.filter((a) => a.projectId === id);
-  const allocatedDeviceIds = [...new Set(allocations.map((a) => a.deviceId))];
-  const allocatedDevices = allocatedDeviceIds
-    .map((devId) => devices.find((d) => d.id === devId))
-    .filter(Boolean);
-
-  const allocated = allocatedDevices.length;
-  const pct = Math.min(Math.round((allocated / project.targetCount) * 100), 100);
-
-  const getTypeName = (typeId) => deviceTypes.find((dt) => dt.id === typeId)?.name || typeId;
-
-  const getDeviceDeliveryStages = (deviceId) => {
-    const records = deliveryRecords
-      .filter((r) => r.deviceId === deviceId && r.projectId === id)
-      .sort((a, b) => b.recordTime.localeCompare(a.recordTime));
-    const stages = ['出厂检验', '现场安装调试', '客户验收'];
-    return stages.map((stage) => {
-      const latest = records.find((r) => r.stage === stage);
-      return { stage, result: latest?.result, time: latest?.recordTime };
-    });
-  };
-
-  const handleSave = (form) => {
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    dispatch({
-      type: 'UPDATE_PROJECT',
-      payload: { id, ...form, updatedAt: now },
-    });
-  };
-
-  const pendingDevices = devices.filter((d) => d.status === '待分配项目');
-  const getProjectName = (pid) => projects.find((p) => p.id === pid)?.name || pid;
-  const canAllocate = canDo('add_device_allocation') || canDo('add_project');
-  const canManageLocations = canDo('manage_locations') || canDo('add_project');
-
+  const status = projectStatus(project, allProductionPlans, deliveryPlans);
+  const projProductionPlans = allProductionPlans.filter((p) => p.projectId === id);
+  const projDeliveryPlans = deliveryPlans.filter((p) => p.projectId === id);
+  const projDevices = devices.filter((d) => d.projectId === id);
   const projLocations = locations.filter((l) => l.projectId === id);
-  const getLocationName = (locId) => locations.find((l) => l.id === locId)?.name || null;
+  const projIssues = qualityIssues.filter((q) => q.projectId === id);
+  const projWorkOrders = [...productionWorkOrders, ...deliveryWorkOrders].filter((w) => {
+    if (w.projectId === id) return true;
+    return projDevices.some((d) => d.id === w.deviceId);
+  });
+  const projLogs = operationLogs.filter((log) => log.projectId === id || projDevices.some((d) => d.id === log.deviceId));
 
-  const handleAddLocation = (form) => {
-    const newLoc = { id: `LOC-${Date.now()}`, projectId: id, name: form.name, address: form.address, deviceIds: [] };
-    dispatch({ type: 'ADD_LOCATION', payload: newLoc });
-  };
+  const producedCount = devices.filter((device) => {
+    const plan = projProductionPlans.find((p) => p.id === device.productionPlanId);
+    return plan && ['已入库', '待分配项目', '已分配项目', '在线运营', '出厂检验中', '现场安装调试中', '客户验收中'].includes(device.status);
+  }).length;
+  const acceptedCount = projDeliveryPlans.reduce((sum, plan) => sum + (plan.records?.customerAccept || []).filter((r) => r.result === '通过').length, 0);
+  const pendingIssues = projIssues.filter((q) => q.status !== '已关闭').length + projWorkOrders.filter((w) => !['已关闭', '已作废'].includes(w.status)).length;
 
-  const handleEditLocation = (locId, form) => {
-    dispatch({ type: 'UPDATE_LOCATION', payload: { id: locId, name: form.name, address: form.address } });
-  };
+  const availableDevices = devices.filter((d) =>
+    ['已入库', '待分配项目'].includes(d.status)
+    && !d.projectId
+    && !d.frozen
+  );
 
-  const handleDeleteLocation = (loc) => {
-    if (loc.deviceIds && loc.deviceIds.length > 0) {
-      alert('请先解除该点位下所有设备的关联后再删除。');
-      return;
-    }
-    dispatch({ type: 'DELETE_LOCATION', payload: loc.id });
-    setDeletingLocation(null);
-  };
-
-  const handleSetLocation = (deviceId, locationId) => {
-    dispatch({ type: 'UPDATE_DEVICE', payload: { id: deviceId, locationId: locationId || null, updatedAt: now() } });
-    const device = devices.find((d) => d.id === deviceId);
-    locations.forEach((loc) => {
-      const hadDevice = loc.deviceIds.includes(deviceId);
-      const shouldHave = loc.id === locationId;
-      if (hadDevice !== shouldHave) {
-        const newIds = shouldHave
-          ? [...loc.deviceIds, deviceId]
-          : loc.deviceIds.filter((did) => did !== deviceId);
-        dispatch({ type: 'UPDATE_LOCATION', payload: { id: loc.id, deviceIds: newIds } });
-      }
-    });
-    setSetLocationTarget(null);
-  };
-
-  const now = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
-
-  const handleAllocate = (deviceIds, erpSalesOutboundNo) => {
-    const t = now();
-    deviceIds.forEach((devId) => {
-      const device = devices.find((d) => d.id === devId);
-      if (!device) return;
-      dispatch({
-        type: 'ADD_DEVICE_ALLOCATION',
-        payload: {
-          id: `ALLOC-${Date.now()}-${devId}`,
-          deviceId: devId,
-          projectId: id,
-          allocatedBy: state.currentUser,
-          allocatedAt: t,
-          notes: '',
-          type: '分配',
-          fromProjectId: null,
-          erpSalesOutboundNo: erpSalesOutboundNo || '',
-        },
-      });
-      dispatch({ type: 'UPDATE_DEVICE', payload: { id: devId, status: '已分配项目', projectId: id, updatedAt: t } });
-      dispatch({
-        type: 'ADD_OPERATION_LOG',
-        payload: {
-          id: `LOG-${Date.now()}-${devId}`,
-          deviceId: devId,
-          operator: state.currentUser,
-          timestamp: t,
-          actionType: '分配至项目',
-          fromStatus: '待分配项目',
-          toStatus: '已分配项目',
-          notes: `分配至 ${project.name}`,
-        },
-      });
-    });
-  };
-
-  const handleTransfer = ({ device, targetProjectId, reason }) => {
-    const t = now();
-    dispatch({
-      type: 'ADD_DEVICE_ALLOCATION',
-      payload: {
-        id: `ALLOC-${Date.now()}-${device.id}`,
-        deviceId: device.id,
-        projectId: targetProjectId,
-        allocatedBy: state.currentUser,
-        allocatedAt: t,
-        notes: reason,
-        type: '转移',
-        fromProjectId: id,
-      },
-    });
-    dispatch({ type: 'UPDATE_DEVICE', payload: { id: device.id, projectId: targetProjectId, updatedAt: t } });
+  const writeLog = (actionType, notes, fromStatus = '', toStatus = '') => {
     dispatch({
       type: 'ADD_OPERATION_LOG',
       payload: {
-        id: `LOG-${Date.now()}-${device.id}`,
-        deviceId: device.id,
+        id: `LOG-${Date.now()}-${id}`,
+        projectId: id,
         operator: state.currentUser,
-        timestamp: t,
-        actionType: '项目转移',
-        fromStatus: project.name,
-        toStatus: getProjectName(targetProjectId),
-        notes: reason || `从 ${project.name} 转移至 ${getProjectName(targetProjectId)}`,
+        timestamp: nowText(),
+        actionType,
+        fromStatus,
+        toStatus,
+        notes,
       },
     });
   };
 
-  const getDeviceAllocHistory = (deviceId) =>
-    deviceAllocations
-      .filter((a) => a.deviceId === deviceId)
-      .sort((a, b) => (b.allocatedAt || '').localeCompare(a.allocatedAt || ''));
+  const updateProject = (payload) => dispatch({ type: 'UPDATE_PROJECT', payload: { id, ...payload, updatedAt: nowText() } });
+
+  let topActions = [
+    { label: '编辑', modal: 'edit', cls: BTN_GHOST },
+    { label: '创建生产计划', modal: 'production', cls: BTN_GHOST },
+    { label: '创建交付计划', modal: 'delivery', cls: BTN_GHOST },
+    { label: '绑定设备', modal: 'bind', cls: BTN_PRIMARY },
+    { label: '查看日志', modal: 'logs', cls: BTN_GHOST },
+  ];
+  if (status === '已作废' || status === '已关闭') {
+    topActions = [{ label: '查看日志', modal: 'logs', cls: BTN_GHOST }];
+  } else if (status === '未开始') {
+    topActions = [
+      { label: '编辑', modal: 'edit', cls: BTN_GHOST },
+      { label: '创建生产计划', modal: 'production', cls: BTN_PRIMARY },
+      { label: '作废', modal: 'void', cls: 'px-3 py-1.5 text-sm text-red-600 border border-red-300 rounded hover:bg-red-50' },
+    ];
+  } else if (status === '已交付') {
+    topActions = [
+      { label: '创建交付计划', modal: 'delivery', cls: BTN_GHOST },
+      { label: '关闭项目', modal: 'close', cls: BTN_PRIMARY },
+      { label: '查看日志', modal: 'logs', cls: BTN_GHOST },
+    ];
+  }
 
   return (
     <div className="p-6 space-y-6">
-      {/* Breadcrumb */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Link to="/projects" className="hover:text-slate-700 hover:underline">项目列表</Link>
-          <span>›</span>
-          <span className="text-gray-800 font-medium">{project.name}</span>
+        <div>
+          <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+            <Link to="/projects" className="hover:text-slate-700 hover:underline">项目中心</Link>
+            <span>›</span>
+            <span className="text-gray-800 font-medium">{project.name}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-gray-900">{project.name}</h1>
+            <StatusBadge status={status} />
+            <span className={`text-xs px-2 py-0.5 rounded border ${project.erpPurchaseOrderNo ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+              {project.erpPurchaseOrderNo ? '已关联ERP' : '未关联ERP'}
+            </span>
+          </div>
         </div>
-        {canDo('add_project') && !project.voided && (
-          <button
-            onClick={() => setShowEditModal(true)}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 text-gray-700"
-          >
-            编辑信息
-          </button>
-        )}
+        <div className="flex gap-2">
+          {topActions.map((action) => (
+            <button key={action.label} onClick={() => setModal(action.modal)} className={action.cls}>{action.label}</button>
+          ))}
+        </div>
       </div>
 
-      {/* Basic Info */}
-      <div className="bg-white rounded shadow-sm p-5">
-        <div className="text-sm font-medium text-gray-600 mb-3">项目基本信息</div>
+      <div className="grid grid-cols-4 gap-4">
+        <ProgressCard title="设备进度" done={Math.max(producedCount, projDevices.length)} total={project.targetCount} color="bg-blue-500" />
+        <ProgressCard title="交付进度" done={acceptedCount} total={project.targetCount} color="bg-emerald-500" />
+        <ProgressCard title="生产计划" done={projProductionPlans.length} total={Math.max(projProductionPlans.length, 1)} color="bg-indigo-500" />
+        <ProgressCard title="待处理问题/工单" done={pendingIssues} total={Math.max(pendingIssues, 1)} color={pendingIssues > 0 ? 'bg-red-500' : 'bg-green-500'} />
+      </div>
+
+      <Section title="项目基础信息">
         <div className="grid grid-cols-3 gap-4 text-sm">
-          <div><span className="text-gray-500">项目名称：</span><span className="font-medium text-gray-800">{project.name}</span></div>
-          <div><span className="text-gray-500">客户：</span><span className="text-gray-700">{project.client || '—'}</span></div>
-          <div><span className="text-gray-500">项目负责人：</span><span className="text-gray-700">{project.manager || '—'}</span></div>
-          <div><span className="text-gray-500">联系人：</span><span className="text-gray-700">{project.contactPerson || '—'}</span></div>
-          <div><span className="text-gray-500">联系电话：</span><span className="text-gray-700">{project.contactPhone || '—'}</span></div>
-          <div><span className="text-gray-500">创建时间：</span><span className="text-gray-500 text-xs">{project.createdAt}</span></div>
-          {project.erpPurchaseOrderNo && (
-            <div><span className="text-gray-500">ERP采购订单号：</span><span className="text-gray-700 font-mono">{project.erpPurchaseOrderNo}</span></div>
-          )}
-          {project.background && (
-            <div className="col-span-3"><span className="text-gray-500">项目背景：</span><span className="text-gray-700">{project.background}</span></div>
-          )}
-          {project.notes && (
-            <div className="col-span-3"><span className="text-gray-500">备注：</span><span className="text-gray-700">{project.notes}</span></div>
-          )}
+          <div><span className="text-gray-500">项目ID：</span><span className="font-mono text-gray-700">{project.id}</span></div>
+          <div><span className="text-gray-500">客户：</span><span className="text-gray-800">{project.client || '—'}</span></div>
+          <div><span className="text-gray-500">负责人：</span><span className="text-gray-800">{project.manager || '—'}</span></div>
+          <div><span className="text-gray-500">联系人：</span><span className="text-gray-800">{project.contactPerson || '—'}</span></div>
+          <div><span className="text-gray-500">联系电话：</span><span className="text-gray-800">{project.contactPhone || '—'}</span></div>
+          <div><span className="text-gray-500">创建时间：</span><span className="text-gray-500">{project.createdAt || '—'}</span></div>
+          <div className="col-span-3"><span className="text-gray-500">ERP项目/订单号：</span><span className="font-mono text-gray-700">{project.erpPurchaseOrderNo || '—'}</span></div>
+          <div className="col-span-3"><span className="text-gray-500">项目背景：</span><span className="text-gray-700">{project.background || '—'}</span></div>
+          <div className="col-span-3"><span className="text-gray-500">备注：</span><span className="text-gray-700">{project.notes || '—'}</span></div>
         </div>
-      </div>
+      </Section>
 
-      {/* Plan quick links */}
-      {(projProductionPlans.length > 0 || projDeliveryPlans.length > 0) && (
-        <div className="flex gap-4">
-          {projProductionPlans.length > 0 && (
-            <Link
-              to={`/projects?tab=production`}
-              className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
-            >
-              查看生产计划（{projProductionPlans.length}个）→
-            </Link>
-          )}
-          {projDeliveryPlans.length > 0 && (
-            <Link
-              to={`/projects?tab=delivery`}
-              className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
-            >
-              查看交付计划（{projDeliveryPlans.length}个）→
-            </Link>
-          )}
-        </div>
-      )}
-
-      {/* Progress */}
-      <div className="bg-white rounded shadow-sm p-5">
-        <div className="text-sm font-medium text-gray-600 mb-3">分配进度</div>
-        <div className="flex items-center gap-4">
-          <div className="flex-1 bg-gray-200 rounded-full h-4">
-            <div
-              className={`h-4 rounded-full transition-all text-xs text-white flex items-center justify-center font-medium ${pct >= 100 ? 'bg-green-500' : pct > 50 ? 'bg-blue-500' : 'bg-amber-400'}`}
-              style={{ width: `${Math.max(pct, 8)}%` }}
-            >
-              {pct > 20 ? `${pct}%` : ''}
-            </div>
-          </div>
-          <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
-            {allocated} / {project.targetCount} 台
-          </span>
-        </div>
-        <p className="text-xs text-gray-400 mt-2">目标需求 {project.targetCount} 台，已分配 {allocated} 台，剩余 {Math.max(project.targetCount - allocated, 0)} 台</p>
-      </div>
-
-      {/* 设备管理 */}
-      <div className="bg-white rounded shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-          <div className="text-sm font-medium text-gray-600">设备管理（{allocatedDevices.length}台）</div>
-          {canAllocate && !project.voided && (
-            <button onClick={() => setShowAllocateModal(true)}
-              className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
-              + 分配设备
-            </button>
-          )}
-        </div>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-2.5 w-8" />
-              {['设备SN', '整机类型', '所属点位', '当前状态', '分配时间', '操作'].map((h) => (
-                <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {allocatedDevices.map((d) => {
-              const alloc = allocations.find((a) => a.deviceId === d.id);
-              const isExpanded = expandedDeviceId === d.id;
-              const history = getDeviceAllocHistory(d.id);
-              return (
-                <>
-                  <tr key={d.id} className={isExpanded ? 'bg-slate-50' : 'hover:bg-gray-50'}>
-                    <td className="px-4 py-2.5 text-gray-400 text-sm cursor-pointer w-8"
-                      onClick={() => setExpandedDeviceId(isExpanded ? null : d.id)}>
-                      {isExpanded ? '▼' : '▶'}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-800 font-medium">
-                      <Link to={`/devices/${d.id}`} className="hover:text-blue-600 hover:underline">{d.sn}</Link>
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-600">{getTypeName(d.deviceTypeId)}</td>
-                    <td className="px-4 py-2.5 text-gray-600 text-xs">{getLocationName(d.locationId) || <span className="text-gray-400">—</span>}</td>
-                    <td className="px-4 py-2.5"><StatusBadge status={d.status} /></td>
-                    <td className="px-4 py-2.5 text-gray-400 text-xs">{alloc?.allocatedAt || '—'}</td>
-                    <td className="px-4 py-2.5">
-                      <Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline text-xs mr-3">查看详情</Link>
-                      {canManageLocations && !project.voided && (
-                        <button onClick={() => setSetLocationTarget(d)} className="text-blue-600 hover:underline text-xs mr-3">设置点位</button>
-                      )}
-                      {canAllocate && !project.voided && (
-                        <button onClick={() => setTransferTarget(d)} className="text-amber-600 hover:underline text-xs">转移</button>
-                      )}
-                    </td>
-                  </tr>
-                  {isExpanded && (
-                    <tr key={`${d.id}-history`}>
-                      <td colSpan={7} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
-                        <div className="px-12 py-4">
-                          <div className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">分配/转移记录</div>
-                          {history.length > 0 ? (
-                            <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
-                              <thead className="bg-gray-100">
-                                <tr>
-                                  {['时间', '类型', '目标项目', '操作人', '备注'].map((h) => (
-                                    <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100">
-                                {history.map((h) => (
-                                  <tr key={h.id} className="bg-white">
-                                    <td className="px-3 py-2 text-gray-400 text-xs">{h.allocatedAt}</td>
-                                    <td className="px-3 py-2">
-                                      <span className={`text-xs px-2 py-0.5 rounded-full border ${h.type === '转移' ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-blue-100 text-blue-700 border-blue-300'}`}>{h.type}</span>
-                                    </td>
-                                    <td className="px-3 py-2 text-gray-700">{getProjectName(h.projectId)}</td>
-                                    <td className="px-3 py-2 text-gray-600">{h.allocatedBy}</td>
-                                    <td className="px-3 py-2 text-gray-500 text-xs">{h.notes || '—'}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          ) : (
-                            <div className="text-sm text-gray-400">暂无分配记录</div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              );
-            })}
-            {allocatedDevices.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">暂无已分配设备</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Delivery Status */}
-      {allocatedDevices.length > 0 && (
-        <div className="bg-white rounded shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <div className="text-sm font-medium text-gray-600">交付状态概览</div>
-          </div>
+      <div className="grid grid-cols-2 gap-6">
+        <Section title="生产计划列表摘要" action={<Link to="/projects?tab=production" className="text-xs text-blue-600 hover:underline">查看全部</Link>}>
           <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">设备SN</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">出厂检验</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">现场安装调试</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">客户验收</th>
-              </tr>
-            </thead>
+            <thead><tr className="text-left text-xs text-gray-500">{['计划ID', '计划名称', '状态', '当前节点', '完成'].map((h) => <th key={h} className="py-2">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-100">
-              {allocatedDevices.map((d) => {
-                const stages = getDeviceDeliveryStages(d.id);
+              {projProductionPlans.slice(0, 5).map((plan) => {
+                const planDevices = devices.filter((d) => d.productionPlanId === plan.id);
+                const done = planDevices.filter((d) => ['已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status)).length;
                 return (
-                  <tr key={d.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-800 font-medium">{d.sn}</td>
-                    {stages.map(({ stage, result, time }) => (
-                      <td key={stage} className="px-4 py-2.5">
-                        {result ? (
-                          <div>
-                            <StatusBadge status={result} />
-                            <div className="text-xs text-gray-400 mt-0.5">{time?.slice(0, 10)}</div>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-300">—</span>
-                        )}
-                      </td>
-                    ))}
+                  <tr key={plan.id} className="hover:bg-gray-50">
+                    <td className="py-2 font-mono text-xs"><Link to={`/production-plans/${plan.id}`} className="text-blue-600 hover:underline">{plan.id}</Link></td>
+                    <td className="py-2 text-gray-700">{plan.name}</td>
+                    <td className="py-2"><StatusBadge status={plan.status || '进行中'} /></td>
+                    <td className="py-2"><StatusBadge status={plan.currentNode || '来料准备'} /></td>
+                    <td className="py-2 text-gray-600">{done}/{plan.targetCount || 0}</td>
                   </tr>
                 );
               })}
+              {projProductionPlans.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-gray-400">暂无生产计划</td></tr>}
             </tbody>
           </table>
-        </div>
-      )}
+        </Section>
 
-      {/* 点位管理 */}
-      <div className="bg-white rounded shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-          <div className="text-sm font-medium text-gray-600">点位管理（{projLocations.length}个）</div>
-          {canManageLocations && !project.voided && (
-            <button onClick={() => setShowAddLocationModal(true)} className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">+ 新增点位</button>
-          )}
-        </div>
+        <Section title="交付计划列表摘要" action={<Link to="/projects?tab=delivery" className="text-xs text-blue-600 hover:underline">查看全部</Link>}>
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-xs text-gray-500">{['计划ID', '计划名称', '状态', '当前节点', '验收'].map((h) => <th key={h} className="py-2">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-gray-100">
+              {projDeliveryPlans.slice(0, 5).map((plan) => {
+                const accepted = (plan.records?.customerAccept || []).filter((r) => r.result === '通过').length;
+                return (
+                  <tr key={plan.id} className="hover:bg-gray-50">
+                    <td className="py-2 font-mono text-xs"><Link to={`/delivery-plans/${plan.id}`} className="text-blue-600 hover:underline">{plan.id}</Link></td>
+                    <td className="py-2 text-gray-700">{plan.name}</td>
+                    <td className="py-2"><StatusBadge status={plan.status === '进行中' ? '交付中' : plan.status} /></td>
+                    <td className="py-2"><StatusBadge status={plan.currentNode || '绑定设备'} /></td>
+                    <td className="py-2 text-gray-600">{accepted}/{plan.targetCount || 0}</td>
+                  </tr>
+                );
+              })}
+              {projDeliveryPlans.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-gray-400">暂无交付计划</td></tr>}
+            </tbody>
+          </table>
+        </Section>
+      </div>
+
+      <Section title={`项目设备（${projDevices.length}台）`} action={status !== '已作废' && canDo('add_device_allocation') ? <button onClick={() => setModal('bind')} className={BTN_GHOST}>绑定设备</button> : null}>
         <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              {['点位名称', '地址', '已部署设备', '操作'].map((h) => (
-                <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
-              ))}
-            </tr>
-          </thead>
+          <thead className="bg-gray-50"><tr>{['设备SN', '整机类型', '当前状态', '所属点位', '最近更新'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-100">
-            {projLocations.map((loc) => (
-              <tr key={loc.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-medium text-gray-800">{loc.name}</td>
-                <td className="px-4 py-2.5 text-gray-600 text-xs">{loc.address || '—'}</td>
-                <td className="px-4 py-2.5 text-gray-700">{loc.deviceIds?.length || 0} 台</td>
-                <td className="px-4 py-2.5">
-                  {canManageLocations && !project.voided && (
-                    <>
-                      <button onClick={() => setEditingLocation(loc)} className="text-slate-600 hover:underline text-xs mr-3">编辑</button>
-                      <button onClick={() => setDeletingLocation(loc)} className="text-red-500 hover:underline text-xs">删除</button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {projLocations.length === 0 && (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">暂无点位，点击「新增点位」添加</td></tr>
-            )}
+            {projDevices.map((device) => {
+              const typeName = deviceTypes.find((t) => t.id === device.deviceTypeId)?.name || device.deviceTypeId;
+              const location = locations.find((l) => l.id === device.locationId);
+              return (
+                <tr key={device.id} className="hover:bg-gray-50">
+                  <td className="px-3 py-2 font-mono text-xs"><Link to={`/devices/${device.id}`} className="text-blue-600 hover:underline">{device.sn}</Link></td>
+                  <td className="px-3 py-2 text-gray-600">{typeName}</td>
+                  <td className="px-3 py-2"><StatusBadge status={device.status} /></td>
+                  <td className="px-3 py-2 text-gray-600">{location?.name || '—'}</td>
+                  <td className="px-3 py-2 text-xs text-gray-400">{device.updatedAt || '—'}</td>
+                </tr>
+              );
+            })}
+            {projDevices.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">暂无绑定设备</td></tr>}
           </tbody>
         </table>
-      </div>
+      </Section>
 
-      <EditProjectModal
-        isOpen={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        project={project}
-        onSave={handleSave}
-      />
+      <div className="grid grid-cols-2 gap-6">
+        <Section title={`项目点位（${projLocations.length}个）`}>
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-xs text-gray-500">{['点位名称', '地址', '设备数'].map((h) => <th key={h} className="py-2">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-gray-100">
+              {projLocations.map((loc) => <tr key={loc.id}><td className="py-2 text-gray-800">{loc.name}</td><td className="py-2 text-gray-500">{loc.address || '—'}</td><td className="py-2 text-gray-600">{loc.deviceIds?.length || 0}</td></tr>)}
+              {projLocations.length === 0 && <tr><td colSpan={3} className="py-8 text-center text-gray-400">暂无点位</td></tr>}
+            </tbody>
+          </table>
+        </Section>
 
-      <AllocateDevicesModal
-        isOpen={showAllocateModal}
-        onClose={() => setShowAllocateModal(false)}
-        pendingDevices={pendingDevices}
-        getTypeName={getTypeName}
-        onConfirm={handleAllocate}
-      />
-
-      {transferTarget && (
-        <TransferModal
-          isOpen={!!transferTarget}
-          onClose={() => setTransferTarget(null)}
-          device={transferTarget}
-          projects={projects}
-          currentProjectId={id}
-          onConfirm={handleTransfer}
-        />
-      )}
-
-      {/* Add Location Modal */}
-      {showAddLocationModal && (
-        <LocationFormModal
-          isOpen={showAddLocationModal}
-          onClose={() => setShowAddLocationModal(false)}
-          onSave={(form) => { handleAddLocation(form); setShowAddLocationModal(false); }}
-          title="新增点位"
-        />
-      )}
-
-      {/* Edit Location Modal */}
-      {editingLocation && (
-        <LocationFormModal
-          isOpen={!!editingLocation}
-          onClose={() => setEditingLocation(null)}
-          onSave={(form) => { handleEditLocation(editingLocation.id, form); setEditingLocation(null); }}
-          title="编辑点位"
-          initial={editingLocation}
-        />
-      )}
-
-      {/* Delete Location Confirm */}
-      {deletingLocation && (
-        <Modal isOpen={!!deletingLocation} onClose={() => setDeletingLocation(null)} title="删除点位">
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">确认删除点位「<span className="font-medium">{deletingLocation.name}</span>」？</p>
-            {deletingLocation.deviceIds?.length > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
-                该点位下有 {deletingLocation.deviceIds.length} 台设备，请先解除设备关联后再删除。
+        <Section title="关联问题与工单">
+          <div className="space-y-3">
+            {[...projIssues.slice(0, 3), ...projWorkOrders.slice(0, 3)].slice(0, 6).map((item) => (
+              <div key={item.id} className="flex items-center gap-3 text-sm border-b border-gray-100 pb-2 last:border-0">
+                <span className="font-mono text-xs text-gray-500 w-24">{item.id}</span>
+                <span className="text-gray-700 flex-1 truncate">{item.issueDesc || item.description}</span>
+                <StatusBadge status={item.status} />
               </div>
-            )}
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setDeletingLocation(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-              {(!deletingLocation.deviceIds || deletingLocation.deviceIds.length === 0) && (
-                <button onClick={() => handleDeleteLocation(deletingLocation)} className="px-4 py-2 text-sm text-white bg-red-600 rounded hover:bg-red-700">确认删除</button>
-              )}
-            </div>
+            ))}
+            {projIssues.length + projWorkOrders.length === 0 && <div className="py-8 text-center text-gray-400 text-sm">暂无关联问题或工单</div>}
           </div>
-        </Modal>
-      )}
-
-      {/* Set Location Modal */}
-      {setLocationTarget && (
-        <Modal isOpen={!!setLocationTarget} onClose={() => setSetLocationTarget(null)} title={`设置点位：${setLocationTarget.sn}`}>
-          <SetLocationModal
-            device={setLocationTarget}
-            projLocations={projLocations}
-            onConfirm={handleSetLocation}
-            onClose={() => setSetLocationTarget(null)}
-          />
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-function LocationFormModal({ isOpen, onClose, onSave, title, initial }) {
-  const [form, setForm] = useState({ name: initial?.name || '', address: initial?.address || '' });
-  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
-      <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">点位名称 *</label>
-          <input className={inp} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">地址</label>
-          <input className={inp} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-          <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function SetLocationModal({ device, projLocations, onConfirm, onClose }) {
-  const [locationId, setLocationId] = useState(device.locationId || '');
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-gray-600">为设备 <span className="font-mono font-medium">{device.sn}</span> 选择所属点位：</p>
-      <select className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500"
-        value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-        <option value="">— 不设置点位 —</option>
-        {projLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-      </select>
-      <div className="flex justify-end gap-2 pt-2">
-        <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-        <button onClick={() => onConfirm(device.id, locationId)} className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">确认</button>
+        </Section>
       </div>
+
+      <Section title="操作日志摘要" action={<button onClick={() => setModal('logs')} className={BTN_GHOST}>查看全部</button>}>
+        <OperationLog logs={projLogs.slice(0, 5)} />
+      </Section>
+
+      <ProjectFormModal
+        isOpen={modal === 'edit'}
+        onClose={() => setModal(null)}
+        project={project}
+        onSave={(form) => {
+          updateProject(form);
+          writeLog('编辑项目', '更新项目基础信息');
+        }}
+      />
+
+      <CreatePlanModal
+        isOpen={modal === 'production'}
+        onClose={() => setModal(null)}
+        type="production"
+        project={project}
+        onSave={(form) => {
+          const plan = { id: `PP-${Date.now().toString().slice(-6)}`, projectId: id, name: form.name, targetCount: form.targetCount, owner: form.owner, endDate: form.date, erpProductionOrderNo: form.erpNo, status: '进行中', currentNode: '来料准备', createdAt: nowText() };
+          dispatch({ type: 'ADD_PRODUCTION_PLAN', payload: plan });
+          updateProject({ status: '进行中' });
+          writeLog('创建生产计划', `创建 ${plan.name}`, status, '进行中');
+        }}
+      />
+
+      <CreatePlanModal
+        isOpen={modal === 'delivery'}
+        onClose={() => setModal(null)}
+        type="delivery"
+        project={project}
+        onSave={(form) => {
+          const plan = { id: `DP-${Date.now().toString().slice(-6)}`, projectId: id, name: form.name, targetCount: form.targetCount, owner: form.owner, dueDate: form.date, acceptanceDate: form.date, status: '交付中', currentNode: '绑定设备', records: { binding: [], factoryInspection: [], siteInstall: [], customerAccept: [] } };
+          dispatch({ type: 'ADD_DELIVERY_PLAN', payload: plan });
+          writeLog('创建交付计划', `创建 ${plan.name}`);
+        }}
+      />
+
+      <BindDevicesModal
+        isOpen={modal === 'bind'}
+        onClose={() => setModal(null)}
+        devices={availableDevices}
+        deviceTypes={deviceTypes}
+        onConfirm={(ids) => {
+          const t = nowText();
+          ids.forEach((deviceId) => {
+            dispatch({ type: 'UPDATE_DEVICE', payload: { id: deviceId, projectId: id, status: '已分配项目', updatedAt: t } });
+            dispatch({ type: 'ADD_DEVICE_ALLOCATION', payload: { id: `ALLOC-${Date.now()}-${deviceId}`, deviceId, projectId: id, allocatedBy: state.currentUser, allocatedAt: t, type: '分配', notes: '项目详情绑定设备' } });
+          });
+          writeLog('绑定设备', `绑定 ${ids.length} 台设备`);
+        }}
+      />
+
+      <ConfirmModal
+        isOpen={modal === 'void'}
+        onClose={() => setModal(null)}
+        title="作废项目"
+        danger
+        text={`确认作废项目「${project.name}」？`}
+        onConfirm={(reason) => {
+          updateProject({ status: '已作废', voided: true, voidReason: reason });
+          writeLog('作废项目', reason || '项目作废', status, '已作废');
+        }}
+      />
+
+      <ConfirmModal
+        isOpen={modal === 'close'}
+        onClose={() => setModal(null)}
+        title="关闭项目"
+        text={`确认关闭项目「${project.name}」？`}
+        onConfirm={(reason) => {
+          updateProject({ status: '已关闭', closeReason: reason, closedAt: nowText() });
+          writeLog('关闭项目', reason || '项目关闭', status, '已关闭');
+        }}
+      />
+
+      <Modal isOpen={modal === 'logs'} onClose={() => setModal(null)} title="操作日志" size="lg">
+        <OperationLog logs={projLogs} />
+      </Modal>
     </div>
   );
 }

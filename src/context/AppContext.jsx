@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useReducer } from 'react';
 import {
   materials as initMaterials,
@@ -109,12 +110,18 @@ function appReducer(state, action) {
       return { ...state, operationLogs: [...state.operationLogs, action.payload] };
 
     case 'ADD_PRODUCTION_PLAN':
+      if (action.payload.currentNode || action.payload.targetCount) {
+        return { ...state, workflowProductionPlans: [...state.workflowProductionPlans, action.payload] };
+      }
       return { ...state, productionPlans: [...state.productionPlans, action.payload] };
 
     case 'UPDATE_PRODUCTION_PLAN':
       return {
         ...state,
         productionPlans: state.productionPlans.map((p) =>
+          p.id === action.payload.id ? { ...p, ...action.payload } : p
+        ),
+        workflowProductionPlans: state.workflowProductionPlans.map((p) =>
           p.id === action.payload.id ? { ...p, ...action.payload } : p
         ),
       };
@@ -219,7 +226,17 @@ function appReducer(state, action) {
       };
 
     case 'ADD_DELIVERY_PLAN':
-      return { ...state, deliveryPlans: [...state.deliveryPlans, action.payload] };
+      return {
+        ...state,
+        deliveryPlans: [
+          ...state.deliveryPlans,
+          {
+            records: { binding: [], factoryInspection: [], siteInstall: [], customerAccept: [] },
+            boundDeviceIds: [],
+            ...action.payload,
+          },
+        ],
+      };
 
     case 'UPDATE_DELIVERY_PLAN':
       return {
