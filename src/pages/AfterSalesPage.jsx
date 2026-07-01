@@ -513,6 +513,113 @@ function WorkOrderTable({ workOrders, actionType, state, dispatch, currentUser, 
   );
 }
 
+/* ─────── 工单中心：新增工单弹窗（工单类型动态） ─────── */
+const SOURCE_NODES = {
+  delivery: ['出厂检验', '现场安装调试', '客户验收'],
+  aftersales: ['在线运营', '客户反馈', '手动录入'],
+};
+function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
+  const { projects, devices, deliveryPlans = [] } = state;
+  const [form, setForm] = useState({ woType: 'delivery', projectId: '', deviceId: '', deliveryPlanId: '', sourceNode: '', description: '', severity: '高', assignedTo: '', notes: '' });
+  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+  const projDevices = form.projectId ? devices.filter(d => d.projectId === form.projectId) : devices;
+  const projDeliveryPlans = form.projectId ? deliveryPlans.filter(p => p.projectId === form.projectId) : deliveryPlans;
+
+  const submit = (e) => {
+    e.preventDefault();
+    const device = devices.find(d => d.id === form.deviceId);
+    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    const prefix = form.woType === 'delivery' ? 'DWO' : 'WO';
+    onSave(form.woType, {
+      id: `${prefix}-${Date.now().toString().slice(-6)}`, type: form.woType,
+      projectId: form.projectId, deviceId: form.deviceId, deviceSN: device?.sn || '',
+      deliveryPlanId: form.woType === 'delivery' ? form.deliveryPlanId : undefined,
+      sourceNode: form.sourceNode, description: form.description, severity: form.severity,
+      status: '待处理', assignedTo: form.assignedTo, notes: form.notes,
+      createdAt: now, updatedAt: now, closedAt: null, processLogs: [],
+    });
+    onClose();
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="新增工单" size="lg">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">工单类型 *</label>
+            <select className={inp} value={form.woType} onChange={e => setForm({ ...form, woType: e.target.value, sourceNode: '' })}>
+              <option value="delivery">交付工单</option>
+              <option value="aftersales">售后工单</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">来源节点 *</label>
+            <select className={inp} required value={form.sourceNode} onChange={e => setForm({ ...form, sourceNode: e.target.value })}>
+              <option value="">-- 选择来源节点 --</option>
+              {SOURCE_NODES[form.woType].map(n => <option key={n}>{n}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">关联项目</label>
+            <select className={inp} value={form.projectId} onChange={e => setForm({ ...form, projectId: e.target.value, deviceId: '', deliveryPlanId: '' })}>
+              <option value="">-- 选择项目 --</option>
+              {projects.filter(p => !p.voided).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">关联设备SN *</label>
+            <select className={inp} required value={form.deviceId} onChange={e => setForm({ ...form, deviceId: e.target.value })}>
+              <option value="">-- 选择设备 --</option>
+              {projDevices.map(d => <option key={d.id} value={d.id}>{d.sn}</option>)}
+            </select>
+          </div>
+          {form.woType === 'delivery' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">关联交付计划</label>
+              <select className={inp} value={form.deliveryPlanId} onChange={e => setForm({ ...form, deliveryPlanId: e.target.value })}>
+                <option value="">-- 选择交付计划 --</option>
+                {projDeliveryPlans.map(p => <option key={p.id} value={p.id}>{p.batchNo || p.name}</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">负责人</label>
+            <select className={inp} value={form.assignedTo} onChange={e => setForm({ ...form, assignedTo: e.target.value })}>
+              <option value="">-- 待指派 --</option>
+              {FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}（{u.dept}）</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">严重程度 *</label>
+            <select className={inp} value={form.severity} onChange={e => setForm({ ...form, severity: e.target.value })}>
+              {['高', '中', '低'].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">问题描述 *</label>
+            <textarea rows={3} className={inp} required value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">附件</label>
+            <input className={`${inp} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）支持上传日志 / 图片" />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+            <textarea rows={2} className={inp} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+          </div>
+        </div>
+        <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
+          {form.woType === 'delivery' ? '交付工单来源于：出厂检验、现场安装调试、客户验收。' : '售后工单来源于：在线运营、客户反馈、手动录入。'}
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">提交</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 /* ─────── 工单中心：交付工单 + 售后工单 ─────── */
 function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
   const [filterStatus, setFilterStatus] = useState('全部');
@@ -536,7 +643,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
   const statusCounts = { '待处理': 0, '处理中': 0, '复检中': 0, '已关闭': 0, '已作废': 0 };
   allOrders.forEach(w => { if (statusCounts[w.status] !== undefined) statusCounts[w.status]++; });
 
-  const handleAdd = (wo) => dispatch({ type: 'ADD_DELIVERY_WORK_ORDER', payload: wo });
+  const handleAdd = (woType, wo) => dispatch({ type: woType === 'delivery' ? 'ADD_DELIVERY_WORK_ORDER' : 'ADD_WORK_ORDER', payload: wo });
 
   return (
     <div>
@@ -610,7 +717,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
       </div>
 
       {showAddModal && (
-        <AddWorkOrderModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onSave={handleAdd} actionType="delivery" state={state} />
+        <OrderCenterAddModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onSave={handleAdd} state={state} />
       )}
     </div>
   );
@@ -673,7 +780,7 @@ function ScanQRModal({ isOpen, onClose }) {
 /* ─────── Quality Issue: Manual Entry Modal ─────── */
 function ManualEntryModal({ isOpen, onClose, onSave, state }) {
   const { projects, devices, locations = [] } = state;
-  const [form, setForm] = useState({ projectId: '', deviceId: '', locationId: '', issueDesc: '' });
+  const [form, setForm] = useState({ projectId: '', deviceId: '', locationId: '', sourceStage: '在线运营', issueType: '功能异常', severity: '中', issueDesc: '', genWorkOrder: false });
   const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
 
   const projDevices = form.projectId ? devices.filter(d => d.projectId === form.projectId) : [];
@@ -691,15 +798,20 @@ function ManualEntryModal({ isOpen, onClose, onSave, state }) {
       deviceName: selectedDevice ? (state.deviceTypes?.find(dt => dt.id === selectedDevice.deviceTypeId)?.name || '') : '',
       locationId: form.locationId || null,
       projectId: form.projectId,
+      sourceStage: form.sourceStage,
+      issueType: form.issueType,
+      severity: form.severity,
       issueDesc: form.issueDesc,
       reporterId: state.currentUserId,
       reporterName: state.currentUser,
+      owner: state.currentUser,
       reportTime: now,
       status: '待处理',
       source: '手动录入',
+      linkedWorkOrder: form.genWorkOrder,
       processLogs: [],
     });
-    setForm({ projectId: '', deviceId: '', locationId: '', issueDesc: '' });
+    setForm({ projectId: '', deviceId: '', locationId: '', sourceStage: '在线运营', issueType: '功能异常', severity: '中', issueDesc: '', genWorkOrder: false });
     onClose();
   };
 
@@ -732,10 +844,42 @@ function ManualEntryModal({ isOpen, onClose, onSave, state }) {
               {projLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">来源阶段</label>
+            <select className={inp} value={form.sourceStage} onChange={e => setForm({ ...form, sourceStage: e.target.value })}>
+              {['生产测试', '出厂检验', '现场安装调试', '客户验收', '在线运营'].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">上报方式</label>
+            <input className={`${inp} bg-gray-50`} readOnly value="手动录入" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">问题类型</label>
+            <select className={inp} value={form.issueType} onChange={e => setForm({ ...form, issueType: e.target.value })}>
+              {['功能异常', '外观缺陷', '性能不达标', '通信异常', '其他'].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">严重程度</label>
+            <select className={inp} value={form.severity} onChange={e => setForm({ ...form, severity: e.target.value })}>
+              {['高', '中', '低'].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">问题描述 *</label>
           <textarea rows={4} className={inp} required value={form.issueDesc} onChange={e => setForm({ ...form, issueDesc: e.target.value })} placeholder="请描述发现的问题..." />
+        </div>
+        <div className="grid grid-cols-2 gap-4 items-center">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">附件</label>
+            <input className={`${inp} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）支持上传图片 / 日志" />
+          </div>
+          <label className="flex items-center gap-2 mt-5 cursor-pointer">
+            <input type="checkbox" checked={form.genWorkOrder} onChange={e => setForm({ ...form, genWorkOrder: e.target.checked })} />
+            <span className="text-sm text-gray-700">提交后同时生成工单</span>
+          </label>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
@@ -886,7 +1030,7 @@ function QualityIssueTable({ state, dispatch, canDo }) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {['问题编号', '设备SN', '设备名称', '所属点位', '所属项目', '问题描述', '来源', '上报人', '上报时间', '状态'].map(h => (
+              {['问题编号', '设备SN', '设备名称', '所属点位', '所属项目', '来源阶段', '问题描述', '严重程度', '上报方式', '上报人', '上报时间', '状态'].map(h => (
                 <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
               ))}
             </tr>
@@ -903,7 +1047,9 @@ function QualityIssueTable({ state, dispatch, canDo }) {
                     <td className="px-3 py-2.5 text-gray-700 text-xs">{qi.deviceName}</td>
                     <td className="px-3 py-2.5 text-gray-600 text-xs">{qi.locationId ? getLocationName(qi.locationId) : '—'}</td>
                     <td className="px-3 py-2.5 text-gray-600 text-xs">{getProjectName(qi.projectId)}</td>
+                    <td className="px-3 py-2.5 text-gray-600 text-xs">{qi.sourceStage || '在线运营'}</td>
                     <td className="px-3 py-2.5 text-gray-700 max-w-[160px]"><div className="truncate text-xs">{qi.issueDesc}</div></td>
+                    <td className="px-3 py-2.5"><StatusBadge status={qi.severity || '中'} /></td>
                     <td className="px-3 py-2.5">
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${qi.source === '扫码上报' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>{qi.source}</span>
                     </td>
@@ -913,7 +1059,7 @@ function QualityIssueTable({ state, dispatch, canDo }) {
                   </tr>
                   {isExpanded && (
                     <tr>
-                      <td colSpan={10} className="p-0">
+                      <td colSpan={12} className="p-0">
                         <QualityIssueDetail qi={qi} state={state} dispatch={dispatch} canDo={canDo} />
                       </td>
                     </tr>
@@ -921,7 +1067,7 @@ function QualityIssueTable({ state, dispatch, canDo }) {
                 </React.Fragment>
               );
             })}
-            {filtered.length === 0 && <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">暂无质量问题记录</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无质量问题记录</td></tr>}
           </tbody>
         </table>
       </div>

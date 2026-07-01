@@ -201,15 +201,17 @@ function ProjectListTab() {
     const commonView = <button className="text-slate-600 hover:underline text-xs" onClick={() => navigate(`/projects/${project.id}`)}>查看</button>;
     const edit = <button className="text-blue-600 hover:underline text-xs" onClick={() => openModal('editProject', project)}>编辑</button>;
     const createProduction = <button className="text-emerald-600 hover:underline text-xs" onClick={() => openModal('createProduction', project)}>创建生产计划</button>;
-    const createPlan = <button className="text-emerald-600 hover:underline text-xs" onClick={() => openModal('createProduction', project)}>新建计划</button>;
+    const newProduction = <button className="text-emerald-600 hover:underline text-xs" onClick={() => openModal('createProduction', project)}>新建生产计划</button>;
+    const newDelivery = <button className="text-emerald-600 hover:underline text-xs" onClick={() => openModal('createDelivery', project)}>新建交付计划</button>;
     const more = <button className="text-gray-500 hover:underline text-xs" onClick={() => openModal('log', project)}>更多</button>;
     const voidBtn = <button className="text-red-500 hover:underline text-xs" onClick={() => openModal('void', project)}>作废</button>;
     const closeBtn = <button className="text-gray-700 hover:underline text-xs" onClick={() => openModal('close', project)}>关闭</button>;
+    const logsBtn = <button className="text-gray-600 hover:underline text-xs" onClick={() => navigate(`/projects/${project.id}`)}>查看日志</button>;
 
     const map = {
       未开始: [commonView, edit, createProduction, voidBtn],
-      进行中: [commonView, edit, createPlan, more],
-      已交付: [commonView, closeBtn, more],
+      进行中: [commonView, edit, newProduction, newDelivery, more],
+      已交付: [commonView, closeBtn, logsBtn],
       已关闭: [commonView],
       已作废: [commonView],
     };
@@ -412,12 +414,13 @@ function ProjectListTab() {
         }}
       />
 
-      <Modal isOpen={modal === 'log'} onClose={() => setModal(null)} title="项目操作" size="lg">
-        <div className="grid grid-cols-2 gap-3">
-          <button className={BTN_GHOST} onClick={() => setModal('createDelivery')}>创建交付计划</button>
-          <button className={BTN_GHOST} onClick={() => navigate(`/projects/${target?.id}`)}>绑定设备</button>
-          <button className={BTN_GHOST} onClick={() => navigate(`/projects/${target?.id}`)}>操作日志</button>
-          <button className={BTN_GHOST} onClick={() => setModal('close')}>关闭项目</button>
+      <Modal isOpen={modal === 'log'} onClose={() => setModal(null)} title="更多操作" size="lg">
+        <div className="space-y-3">
+          <p className="text-xs text-gray-400">高频动作已放在列表操作列，这里仅保留低频动作。</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button className={BTN_GHOST} onClick={() => setModal('void')}>作废项目</button>
+            <button className={BTN_GHOST} onClick={() => navigate(`/projects/${target?.id}`)}>查看操作日志</button>
+          </div>
         </div>
       </Modal>
     </div>

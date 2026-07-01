@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import Roles from './Roles';
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
-import { ROLES_LIST, ROLE_NAV_PERMISSIONS, ROLE_ACTION_PERMISSIONS } from '../data/mockData';
+import { ROLES_LIST, ROLE_NAV_PERMISSIONS, ROLE_ACTION_PERMISSIONS, FEISHU_USERS } from '../data/mockData';
 
 const TABS = [
   { key: 'roles', label: '用户与角色' },
@@ -18,6 +17,71 @@ const NAV_LABELS = {
   '/home': '首页', '/dashboard': '看板中心', '/projects': '项目中心',
   '/assets': '资产管理', '/after-sales': '售后管理', '/system': '系统管理',
 };
+
+/* ─────── 用户与角色 ─────── */
+function UsersRolesPage() {
+  const projectScope = (role) => (['管理员', '厂长'].includes(role) ? '全部项目' : role === '项目负责人' ? '本人负责项目' : '本部门项目');
+  return (
+    <div className="p-6 space-y-4">
+      <p className="text-sm text-gray-500">管理用户所属部门、角色与可访问项目范围；具体能看哪些模块、能做哪些动作在「权限配置」维护。</p>
+      <div className="bg-white rounded shadow-sm overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>{['用户', '部门', '角色', '可访问项目', '状态', '操作'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {FEISHU_USERS.map(u => (
+              <tr key={u.id} className="hover:bg-gray-50">
+                <td className="px-4 py-2.5 font-medium text-gray-800">{u.name}</td>
+                <td className="px-4 py-2.5 text-gray-600">{u.dept}</td>
+                <td className="px-4 py-2.5"><span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">{u.role}</span></td>
+                <td className="px-4 py-2.5 text-gray-600 text-xs">{projectScope(u.role)}</td>
+                <td className="px-4 py-2.5"><span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">启用</span></td>
+                <td className="px-4 py-2.5 text-xs text-slate-500">编辑 / 停用</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ─────── 标签配置 ─────── */
+const LABEL_ROWS = [
+  { name: '批次标签', types: 'AlphaBot 1 / AlphaBot 2', node: '整机装配', required: '是', write: '是', sample: '首批' },
+  { name: '客户标签', types: '全部', node: '交付绑定', required: '否', write: '是', sample: '智魔方' },
+  { name: '版本标签', types: 'AlphaBot 2', node: '整机入库', required: '否', write: '是', sample: 'V2' },
+  { name: '点位标签', types: '全部', node: '现场安装调试', required: '否', write: '是', sample: 'T3-A区' },
+];
+function LabelConfig() {
+  return (
+    <div className="p-6 space-y-4">
+      <p className="text-sm text-gray-500">标签配置用于定义设备实例标签模板。装配或交付过程中填写的标签，会写入设备详情并用于筛选和追溯。</p>
+      <div className="bg-white rounded shadow-sm overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>{['标签名称', '适用设备类型', '填写节点', '是否必填', '是否写入设备详情', '示例值', '启用状态', '操作'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {LABEL_ROWS.map(l => (
+              <tr key={l.name} className="hover:bg-gray-50">
+                <td className="px-4 py-2.5 font-medium text-gray-800">{l.name}</td>
+                <td className="px-4 py-2.5 text-gray-600 text-xs">{l.types}</td>
+                <td className="px-4 py-2.5"><span className="text-xs bg-cyan-50 text-cyan-700 border border-cyan-200 px-2 py-0.5 rounded-full">{l.node}</span></td>
+                <td className="px-4 py-2.5 text-xs text-gray-600">{l.required}</td>
+                <td className="px-4 py-2.5 text-xs text-gray-600">{l.write}</td>
+                <td className="px-4 py-2.5 text-xs text-gray-500">{l.sample}</td>
+                <td className="px-4 py-2.5"><span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">启用</span></td>
+                <td className="px-4 py-2.5 text-xs text-slate-500">编辑 / 停用</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 /* ─────── 权限配置 ─────── */
 function PermissionsConfig() {
@@ -68,7 +132,7 @@ function StationsConfig() {
       <div className="bg-white rounded shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
-            <tr>{['工站名称', '所属流程', '顺序', '是否启用', '操作'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr>
+            <tr>{['工站名称', '所属流程', '顺序', '是否必填', '是否启用', '操作'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {STATION_ROWS.map(s => (
@@ -76,6 +140,7 @@ function StationsConfig() {
                 <td className="px-4 py-2.5 font-medium text-gray-800">{s.name}</td>
                 <td className="px-4 py-2.5 text-gray-600">{s.flow}</td>
                 <td className="px-4 py-2.5 text-gray-600">{s.order}</td>
+                <td className="px-4 py-2.5 text-xs text-gray-600">{s.name === '中测' ? '否' : '是'}</td>
                 <td className="px-4 py-2.5"><span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">启用</span></td>
                 <td className="px-4 py-2.5 text-xs text-slate-500">编辑 / 停用</td>
               </tr>
@@ -160,8 +225,41 @@ function NotificationConfig() {
 
   const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
 
+  const scenarios = [
+    { scene: '交付计划延期', cond: '计划验收时间 < 今日且未验收', target: '项目负责人 / 厂长', channel: '飞书' },
+    { scene: '出厂检验NG', cond: '出厂检验结果 = NG', target: '质检员 / 运维工程师', channel: '飞书' },
+    { scene: '安装调试NG', cond: '现场安装调试结果 = NG', target: '运维工程师', channel: '飞书' },
+    { scene: '客户验收NG', cond: '客户验收结果 = NG', target: '项目负责人', channel: '飞书' },
+    { scene: '工单超时', cond: '工单处理超时未闭环', target: '维修工程师 / 厂长', channel: '飞书 / 短信' },
+    { scene: '模块库存不足', cond: '可用库存 < 阈值', target: '厂长', channel: '飞书' },
+  ];
+
   return (
     <div className="p-6 space-y-6">
+      {/* 通知场景 */}
+      <div className="bg-white rounded shadow-sm p-5">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">通知场景</h3>
+        <div className="overflow-x-auto border border-gray-100 rounded">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>{['通知场景', '触发条件', '通知对象', '通知渠道', '启用状态', '操作'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {scenarios.map(s => (
+                <tr key={s.scene} className="hover:bg-gray-50">
+                  <td className="px-4 py-2.5 font-medium text-gray-800 whitespace-nowrap">{s.scene}</td>
+                  <td className="px-4 py-2.5 text-gray-600 text-xs">{s.cond}</td>
+                  <td className="px-4 py-2.5 text-gray-600 text-xs">{s.target}</td>
+                  <td className="px-4 py-2.5 text-gray-600 text-xs">{s.channel}</td>
+                  <td className="px-4 py-2.5"><span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">启用</span></td>
+                  <td className="px-4 py-2.5 text-xs text-slate-500">编辑</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Webhook URL */}
       <div className="bg-white rounded shadow-sm p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Webhook 配置</h3>
@@ -393,9 +491,9 @@ export default function SystemPage() {
       <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
         <div className="text-xs text-gray-400">设备全生命周期质量管理平台 / 系统管理 / {activeLabel}</div>
       </div>
-      {activeTab === 'roles' && <Roles />}
+      {activeTab === 'roles' && <UsersRolesPage />}
       {activeTab === 'permissions' && <PermissionsConfig />}
-      {activeTab === 'labels' && <LabelManagement />}
+      {activeTab === 'labels' && <LabelConfig />}
       {activeTab === 'stations' && <StationsConfig />}
       {activeTab === 'notifications' && <NotificationConfig />}
       {activeTab === 'logs' && <OperationLogsPage />}

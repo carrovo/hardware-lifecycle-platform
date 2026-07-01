@@ -66,11 +66,29 @@ function Section({ title, action, children }) {
   );
 }
 
+const ACTION_FIELDS = {
+  关联来料批次: ['生产计划', '模块类型', '可选批次', '可用数量', '本次锁定数量'],
+  生成返修记录: ['设备SN', '来源工站', 'NG原因', '返修说明', '负责人', '状态'],
+  查看返修: ['返修记录ID', '设备SN', '来源工站', '返修说明', '状态'],
+  作废生产计划: ['作废原因', '详细说明', '二次确认'],
+};
+
 function ActionPlaceholderModal({ isOpen, onClose, title, text }) {
+  const fields = ACTION_FIELDS[title];
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
       <div className="space-y-4">
         <p className="text-sm text-gray-600">{text}</p>
+        {fields && (
+          <div className="grid grid-cols-2 gap-3">
+            {fields.map((f) => (
+              <div key={f} className={f.length > 4 ? 'col-span-2' : ''}>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{f}</label>
+                <input disabled className="w-full border border-gray-200 rounded px-3 py-2 text-sm bg-gray-50 text-gray-400" placeholder={`（原型占位）${f}`} />
+              </div>
+            ))}
+          </div>
+        )}
         <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">当前阶段作为原型动作入口保留，后续会接入真实流转和校验。</div>
         <div className="flex justify-end">
           <button onClick={onClose} className={BTN_PRIMARY}>知道了</button>
@@ -187,7 +205,7 @@ function TestResultModal({ isOpen, onClose, planDevices, state, dispatch }) {
   );
 }
 
-function MaterialPrepNode({ plan, state, openAction }) {
+function MaterialPrepNode({ plan, state, openAction, goMaterials }) {
   const linkedBatches = (state.materialBatches || []).filter((batch) => plan.materialBatchIds?.includes(batch.id) || batch.planId === plan.id);
   const kitStatus = (available, required) => {
     if (available >= required) return '已齐套';
@@ -215,10 +233,24 @@ function MaterialPrepNode({ plan, state, openAction }) {
           <div><span className="text-gray-500">计划完成：</span><span className="text-gray-700">{plan.endDate || '—'}</span></div>
         </div>
       </Section>
-      <Section title="所需模块清单" action={<button className={BTN_GHOST} onClick={() => openAction('跳转来料管理')}>跳转来料管理</button>}>
+      <Section title="所需模块清单" action={<button className={BTN_GHOST} onClick={goMaterials}>跳转模块与来料</button>}>
+        <div className="text-xs text-gray-400 mb-2">「跳转模块与来料」将进入资产管理 &gt; 模块与来料，并已按当前生产计划所需模块筛选可用批次。</div>
         <table className="w-full text-sm">
-          <thead className="bg-gray-50"><tr>{['模块类别', '需求数量', '可用库存', '齐套状态'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-gray-100">{requiredModules.map((item) => <tr key={item.category}><td className="px-3 py-2">{item.category}</td><td className="px-3 py-2">{item.required}</td><td className="px-3 py-2">{item.available}</td><td className="px-3 py-2"><StatusBadge status={kitStatus(item.available, item.required)} /></td></tr>)}</tbody>
+          <thead className="bg-gray-50"><tr>{['模块类别', '需求数量', '已关联批次数', '可用库存', '缺口数量', '齐套状态'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
+          <tbody className="divide-y divide-gray-100">{requiredModules.map((item) => {
+            const linked = linkedBatches.filter((b) => b.category === item.category).length;
+            const gap = Math.max(item.required - item.available, 0);
+            return (
+              <tr key={item.category}>
+                <td className="px-3 py-2">{item.category}</td>
+                <td className="px-3 py-2">{item.required}</td>
+                <td className="px-3 py-2">{linked}</td>
+                <td className="px-3 py-2">{item.available}</td>
+                <td className="px-3 py-2">{gap > 0 ? <span className="text-red-600 font-medium">{gap}</span> : <span className="text-gray-400">0</span>}</td>
+                <td className="px-3 py-2"><StatusBadge status={kitStatus(item.available, item.required)} /></td>
+              </tr>
+            );
+          })}</tbody>
         </table>
       </Section>
       <Section title="关联来料批次" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={() => openAction('关联来料批次')}>关联来料批次</button><button className={BTN_PRIMARY} onClick={() => openAction('确认来料齐套')}>确认来料齐套</button></div>}>
@@ -528,7 +560,7 @@ export default function ProductionPlanDetail() {
 
       <FlowStepper activeNode={activeNode} onChange={setActiveNode} counts={counts} />
 
-      {activeNode === 'materialPrep' && <MaterialPrepNode plan={plan} state={state} openAction={handleAction} />}
+      {activeNode === 'materialPrep' && <MaterialPrepNode plan={plan} state={state} openAction={handleAction} goMaterials={() => navigate('/assets?tab=materials')} />}
       {activeNode === 'assembly' && <AssemblyNode planDevices={planDevices} state={state} openAssembly={() => setShowAssembly(true)} openAction={handleAction} />}
       {activeNode === 'quality' && <QualityNode planDevices={planDevices} testRecords={testRecords} workOrders={workOrders} openTest={() => setShowTest(true)} openAction={handleAction} />}
       {activeNode === 'warehouse' && <WarehouseNode plan={plan} planDevices={planDevices} state={state} dispatch={dispatch} openAction={handleAction} />}

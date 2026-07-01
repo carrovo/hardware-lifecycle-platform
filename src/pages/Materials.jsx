@@ -9,6 +9,8 @@ const RESULT_BADGE = {
   '合格':    { bg: 'bg-green-100',  text: 'text-green-700',  border: 'border-green-300',  icon: '✓' },
   '不合格':  { bg: 'bg-red-100',    text: 'text-red-700',    border: 'border-red-300',    icon: '✗' },
   '特批使用': { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300', icon: '!' },
+  '部分合格': { bg: 'bg-amber-100',  text: 'text-amber-700',  border: 'border-amber-300',  icon: '◐' },
+  '待检验':  { bg: 'bg-gray-100',   text: 'text-gray-500',   border: 'border-gray-300',   icon: '○' },
 };
 
 // 模块实例状态：在库可用 / 已锁定生产计划 / 已装配 / 维修中 / 已报废
@@ -165,15 +167,20 @@ function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [] }) {
     const assembled = mats.filter((m) => m.status === '已占用').length;
     const abnormal = mats.filter((m) => ['退货换货', '维修中', '已报废'].includes(m.status)).length;
     const relatedTypes = deviceTypes.filter((dt) => (dt.slots || []).some((s) => s.moduleTypeId === mt.id)).map((dt) => dt.name);
-    return { ...mt, total, available, assembled, locked: 0, abnormal, relatedTypes };
+    const risk = available === 0 ? '缺料' : available < 2 ? '偏低' : '正常';
+    return { ...mt, total, available, assembled, locked: 0, abnormal, relatedTypes, risk };
   });
+
+  const riskBadge = (risk) => risk === '缺料'
+    ? 'bg-red-100 text-red-700 border-red-300'
+    : risk === '偏低' ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-green-100 text-green-700 border-green-300';
 
   return (
     <div className="bg-white rounded shadow-sm overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-gray-50">
           <tr>
-            {['模块类型', '类别', '库存总数', '可用库存', '已锁定', '已装配', '异常/报废', '关联设备类型', '启用状态'].map((h) => (
+            {['模块类型', '类别', '库存总数', '可用库存', '已锁定', '已装配', '异常/报废', '关联设备类型', '库存风险', '操作'].map((h) => (
               <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
             ))}
           </tr>
@@ -189,15 +196,65 @@ function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [] }) {
               <td className="px-4 py-3 text-gray-600">{mt.assembled}</td>
               <td className="px-4 py-3">{mt.abnormal > 0 ? <span className="text-red-600 font-medium">{mt.abnormal}</span> : <span className="text-gray-400">0</span>}</td>
               <td className="px-4 py-3 text-gray-500 text-xs max-w-[200px]">{mt.relatedTypes.join('、') || '—'}</td>
-              <td className="px-4 py-3">
-                {mt.active
-                  ? <span className="text-xs bg-green-100 text-green-700 border border-green-300 px-1.5 py-0.5 rounded-full">启用中</span>
-                  : <span className="text-xs bg-gray-100 text-gray-500 border border-gray-300 px-1.5 py-0.5 rounded-full">已停用</span>}
-              </td>
+              <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full border ${riskBadge(mt.risk)}`}>{mt.risk}</span></td>
+              <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">查看实例</td>
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/* ─────── 模块实例 ─────── */
+function ModuleInstanceTab({ materials, devices, moduleTypes }) {
+  const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState('全部');
+  const typeName = (category) => moduleTypes.find((m) => m.category === category)?.name || category;
+  const ownerOf = (matId) => devices.find((d) => (d.usedMaterials || []).some((um) => um.materialId === matId));
+
+  const rows = (materials || []).map((m) => ({ ...m, instState: instanceStatus(m.status), owner: ownerOf(m.id) }));
+  const filtered = rows.filter((m) => {
+    const okStatus = statusFilter === '全部' || m.instState === statusFilter;
+    const okQ = !q || m.sn.toLowerCase().includes(q.toLowerCase()) || (m.model || '').toLowerCase().includes(q.toLowerCase());
+    return okStatus && okQ;
+  });
+
+  return (
+    <div>
+      <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 flex flex-wrap gap-2 items-center">
+        <label className="text-xs text-gray-500">实例状态</label>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none">
+          {['全部', '在库可用', '已锁定生产计划', '已装配', '维修中', '已报废', '退货换货'].map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索模块SN / 型号..." className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-52" />
+        <span className="ml-auto text-sm text-gray-400">共 {filtered.length} 个实例</span>
+      </div>
+      <div className="bg-white rounded shadow-sm overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>{['模块SN', '模块类型', '来源批次', '当前状态', '锁定生产计划', '已装配设备SN', '当前所在设备', '最近更新', '操作'].map((h) => (
+              <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {filtered.map((m) => (
+              <tr key={m.id} className="hover:bg-gray-50">
+                <td className="px-4 py-2.5 font-mono text-xs text-gray-800 font-medium whitespace-nowrap">{m.sn}</td>
+                <td className="px-4 py-2.5 text-gray-700">{typeName(m.category)}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{m.category}</span></td>
+                <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{m.batchNo || '—'}</td>
+                <td className="px-4 py-2.5"><Badge map={STATUS_BADGE} value={m.instState} /></td>
+                <td className="px-4 py-2.5 text-gray-400 text-xs">—</td>
+                <td className="px-4 py-2.5 font-mono text-xs">{m.owner ? <Link to={`/devices/${m.owner.id}`} className="text-blue-600 hover:underline">{m.owner.sn}</Link> : <span className="text-gray-300">—</span>}</td>
+                <td className="px-4 py-2.5 text-gray-500 text-xs">{m.owner ? m.owner.sn : '—'}</td>
+                <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{m.inspectionTime || '—'}</td>
+                <td className="px-4 py-2.5 text-xs">{m.owner ? <Link to={`/devices/${m.owner.id}`} className="text-slate-600 hover:underline">查看设备</Link> : <span className="text-gray-300">查看</span>}</td>
+              </tr>
+            ))}
+            {filtered.length === 0 && <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">暂无模块实例</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -207,7 +264,7 @@ export default function Materials() {
   const { canDo } = useRole();
   const workflowProductionPlans = state.workflowProductionPlans || [];
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState('来料检验');
+  const [activeTab, setActiveTab] = useState('模块批次');
   const [showModal, setShowModal] = useState(false);
   const [filterCategory, setFilterCategory] = useState('全部');
   const [filterSupplier, setFilterSupplier] = useState('全部');
@@ -266,7 +323,7 @@ export default function Materials() {
     <div className="p-6">
       {/* Tabs + Button in one row */}
       <div className="flex items-center border-b border-gray-200 mb-4">
-        {['来料检验', '模块库存'].map((tab) => (
+        {['模块批次', '模块实例', '模块库存汇总'].map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab ? 'border-slate-700 text-slate-800' : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -274,7 +331,7 @@ export default function Materials() {
             {tab}
           </button>
         ))}
-        {activeTab === '来料检验' && canDo('add_material_batch') && (
+        {activeTab === '模块批次' && canDo('add_material_batch') && (
           <button onClick={() => setShowModal(true)}
             className="ml-auto mb-1 px-4 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">
             + 新增来料批次
@@ -282,11 +339,15 @@ export default function Materials() {
         )}
       </div>
 
-      {activeTab === '模块库存' && (
+      {activeTab === '模块库存汇总' && (
         <ModuleInventoryTab materials={state.materials} moduleTypes={state.moduleTypes} deviceTypes={state.deviceTypes} />
       )}
 
-      {activeTab === '来料检验' && (
+      {activeTab === '模块实例' && (
+        <ModuleInstanceTab materials={state.materials} devices={state.devices} moduleTypes={state.moduleTypes} />
+      )}
+
+      {activeTab === '模块批次' && (
         <>
           {/* Summary */}
           <div className="grid grid-cols-3 gap-4 mb-4">
@@ -365,7 +426,7 @@ export default function Materials() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['', '批次号', '类别', '型号', '供应商', '采购单号', '数量', '合格/不合格', '检验员', '检验时间', '关联生产计划', '备注'].map((h) => (
+                  {['', '批次号', '模块类型', '型号', '供应商', 'ERP采购单号', '到货数量', '合格/不合格', '检验结果', '可用数量', '关联生产计划', '操作'].map((h) => (
                     <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -399,8 +460,10 @@ export default function Materials() {
                             {failCount > 0 && <span className="text-red-600 font-medium">✗ {failCount}</span>}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-gray-600">{b.inspector}</td>
-                        <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{b.inspectionTime}</td>
+                        <td className="px-3 py-2.5">
+                          <Badge map={RESULT_BADGE} value={failCount > 0 && passCount > 0 ? '部分合格' : failCount > 0 ? '不合格' : passCount > 0 ? '合格' : '待检验'} />
+                        </td>
+                        <td className="px-3 py-2.5 text-gray-700">{b.items.filter((it) => it.status === '待装配').length}</td>
                         <td className="px-3 py-2.5 text-xs">
                           {(() => {
                             const plan = workflowProductionPlans.find(p => p.id === b.planId || (p.materialBatchIds || []).includes(b.id));
@@ -411,7 +474,10 @@ export default function Materials() {
                             ) : <span className="text-gray-300">—</span>;
                           })()}
                         </td>
-                        <td className="px-3 py-2.5 text-gray-400 text-xs max-w-xs truncate">{b.notes || '—'}</td>
+                        <td className="px-3 py-2.5 text-xs whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                          <span className="text-slate-600 hover:underline mr-2 cursor-pointer">录入检验结果</span>
+                          <span className="text-indigo-600 hover:underline cursor-pointer">锁定到生产计划</span>
+                        </td>
                       </tr>
                       {isExpanded && (
                         <tr key={`${b.id}-expand`}>

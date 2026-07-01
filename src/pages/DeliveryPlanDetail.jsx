@@ -67,11 +67,28 @@ function FlowStepper({ activeNode, onChange, counts }) {
   );
 }
 
+const DELIVERY_ACTION_FIELDS = {
+  确认出厂: ['实际出厂时间', '出厂确认人', 'ERP销售出库单号', '物流方式', '物流单号', '备注'],
+  调整点位: ['设备SN', '原预分配点位', '新预分配点位', '调整原因'],
+  解绑设备: ['设备SN', '当前状态', '解绑原因', '二次确认'],
+};
+
 function ActionPlaceholderModal({ isOpen, onClose, title }) {
+  const fields = DELIVERY_ACTION_FIELDS[title];
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <Modal isOpen={isOpen} onClose={onClose} title={title || '交付动作'} size="lg">
       <div className="space-y-4">
-        <p className="text-sm text-gray-600">已保留「{title}」动作入口，后续可接入真实审批、工单和状态流转。</p>
+        <p className="text-sm text-gray-600">已保留「{title || '交付动作'}」动作入口，后续可接入真实审批、工单和状态流转。</p>
+        {fields && (
+          <div className="grid grid-cols-2 gap-3">
+            {fields.map((f) => (
+              <div key={f} className={f.length > 4 ? 'col-span-2' : ''}>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{f}</label>
+                <input disabled className="w-full border border-gray-200 rounded px-3 py-2 text-sm bg-gray-50 text-gray-400" placeholder={`（原型占位）${f}`} />
+              </div>
+            ))}
+          </div>
+        )}
         <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">本阶段重点是可演示的原型结构与规则表达。</div>
         <div className="flex justify-end"><button onClick={onClose} className={BTN_PRIMARY}>知道了</button></div>
       </div>
@@ -232,11 +249,11 @@ const locName = (locations, ...ids) => {
   return found?.name || '—';
 };
 
-function FactoryNode({ devices, records, locations, deviceTypes, onAction, onAdvance }) {
+function FactoryNode({ devices, records, locations, deviceTypes, onAction, onConfirmOut, onAdvance }) {
   return (
     <div className="space-y-5">
       <StageMetrics label0="待检设备" devices={devices} records={records} />
-      <Section title="出厂检验概览" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={onAction}>录入出厂检验结果</button><button className={BTN_PRIMARY} onClick={onAdvance}>推进到现场安装调试</button></div>}>
+      <Section title="出厂检验概览" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={onAction}>录入出厂检验结果</button><button className={BTN_GHOST} onClick={onConfirmOut}>确认出厂</button><button className={BTN_PRIMARY} onClick={onAdvance}>推进到现场安装调试</button></div>}>
         <div className="text-sm text-gray-600">Pass 后才允许确认出厂；NG 时生成交付工单。所有设备出厂检验 Pass 且确认出厂后，才允许推进到现场安装调试。</div>
       </Section>
       <Section title="出厂检验设备列表">
@@ -335,6 +352,7 @@ export default function DeliveryPlanDetail() {
   const { state, dispatch } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const [modal, setModal] = useState(null);
+  const [actionName, setActionName] = useState(null);
   const nodeParam = searchParams.get('node');
   const activeNode = NODES.some((node) => node.key === nodeParam) ? nodeParam : 'binding';
   const setActiveNode = (key) => setSearchParams({ node: key }, { replace: true });
@@ -462,7 +480,7 @@ export default function DeliveryPlanDetail() {
           deviceTypes={state.deviceTypes}
           openSelector={() => setModal('selectDevices')}
           confirmBinding={() => advance('出厂检验', '交付中')}
-          openAction={() => setModal('placeholder')}
+          openAction={(name) => setActionName(name)}
         />
       )}
       {activeNode === 'factoryInspection' && (
@@ -472,6 +490,7 @@ export default function DeliveryPlanDetail() {
           locations={projectLocations}
           deviceTypes={state.deviceTypes}
           onAction={() => setModal('factoryResult')}
+          onConfirmOut={() => setActionName('确认出厂')}
           onAdvance={() => advance('现场安装调试', '交付中')}
         />
       )}
@@ -527,7 +546,7 @@ export default function DeliveryPlanDetail() {
         locations={projectLocations}
         onSave={(form) => saveStageResult('customerAccept', form)}
       />
-      <ActionPlaceholderModal isOpen={modal === 'placeholder'} onClose={() => setModal(null)} title="交付动作" />
+      <ActionPlaceholderModal isOpen={!!actionName} onClose={() => setActionName(null)} title={actionName} />
     </div>
   );
 }
