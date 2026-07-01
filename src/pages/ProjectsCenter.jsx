@@ -340,11 +340,15 @@ function ProjectListTab() {
         title="创建生产计划"
         fields={[
           { key: 'name', label: '生产计划名称 *', defaultValue: target ? `${target.name}生产计划` : '', required: true },
-          { key: 'deviceType', label: '设备类型', defaultValue: 'AlphaBot 1' },
-          { key: 'targetCount', label: '计划数量 *', type: 'number', min: 1, defaultValue: target?.targetCount || 1, required: true },
+          { key: 'deviceType', label: '设备类型', options: ['AlphaBot 1', 'AlphaBot 2', 'AlphaBot 1S'], defaultValue: 'AlphaBot 1' },
+          { key: 'version', label: '配置版本', defaultValue: 'V1' },
+          { key: 'targetCount', label: '计划生产数量 *', type: 'number', min: 1, defaultValue: target?.targetCount || 1, required: true },
+          { key: 'startDate', label: '计划开始时间', type: 'date' },
+          { key: 'endDate', label: '计划结束时间', type: 'date' },
           { key: 'owner', label: '负责人', options: ['张三', '李四', '王五', '赵六'] },
-          { key: 'endDate', label: '计划完成日期', type: 'date' },
-          { key: 'erpProductionOrderNo', label: 'ERP生产订单号' },
+          { key: 'creator', label: '创建人', defaultValue: '张三', options: ['张三', '李四', '王五', '赵六'] },
+          { key: 'erpProductionOrderNo', label: 'ERP生产订单号（可搜索关联）' },
+          { key: 'notes', label: '备注', type: 'textarea', full: true },
         ]}
         onSubmit={(form) => {
           const plan = {

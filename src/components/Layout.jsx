@@ -6,16 +6,16 @@ import { FEISHU_USERS, ROLES_LIST } from '../data/mockData';
 
 // 一级导航 + 可展开的二级菜单。二级菜单通过 ?tab= 深链到既有页面。
 const NAV_ITEMS = [
-  { label: '首页', path: '/home' },
+  { label: '首页', path: '/home', icon: '🏠' },
   {
-    label: '看板中心', base: '/dashboard',
+    label: '看板中心', base: '/dashboard', icon: '📊',
     children: [
       { label: '运营看板', to: '/dashboard?tab=operation', tab: 'operation' },
       { label: '质量看板', to: '/dashboard?tab=quality', tab: 'quality' },
     ],
   },
   {
-    label: '项目中心', base: '/projects', match: ['/projects', '/production-plans', '/delivery-plans'],
+    label: '项目中心', base: '/projects', icon: '📁', match: ['/projects', '/production-plans', '/delivery-plans'],
     children: [
       { label: '项目列表', to: '/projects?tab=list', tab: 'list' },
       { label: '生产计划', to: '/projects?tab=production', tab: 'production' },
@@ -23,7 +23,7 @@ const NAV_ITEMS = [
     ],
   },
   {
-    label: '资产管理', base: '/assets', match: ['/assets', '/devices'],
+    label: '资产管理', base: '/assets', icon: '📦', match: ['/assets', '/devices'],
     children: [
       { label: '设备台账', to: '/assets?tab=devices', tab: 'devices' },
       { label: '模块与来料', to: '/assets?tab=materials', tab: 'materials' },
@@ -32,14 +32,14 @@ const NAV_ITEMS = [
     ],
   },
   {
-    label: '售后管理', base: '/after-sales',
+    label: '售后管理', base: '/after-sales', icon: '🛠',
     children: [
       { label: '工单中心', to: '/after-sales?tab=orders', tab: 'orders' },
       { label: '质量问题台账', to: '/after-sales?tab=quality', tab: 'quality' },
     ],
   },
   {
-    label: '系统管理', base: '/system',
+    label: '系统管理', base: '/system', icon: '⚙️',
     children: [
       { label: '用户与角色', to: '/system?tab=roles', tab: 'roles' },
       { label: '权限配置', to: '/system?tab=permissions', tab: 'permissions' },
@@ -104,11 +104,12 @@ export default function Layout({ children }) {
                   className={({ isActive }) =>
                     `flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
                       isActive
-                        ? 'bg-slate-700 text-white font-medium'
-                        : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                        ? 'bg-slate-700 text-white font-medium border-l-2 border-blue-400'
+                        : 'text-slate-300 hover:bg-slate-700 hover:text-white border-l-2 border-transparent'
                     }`
                   }
                 >
+                  <span className="w-4 text-center">{item.icon}</span>
                   <span>{item.label}</span>
                 </NavLink>
               );
@@ -122,10 +123,10 @@ export default function Layout({ children }) {
                 <button
                   onClick={() => toggleGroup(item.label)}
                   className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
-                    groupActive ? 'text-white font-medium' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    groupActive ? 'text-white font-medium bg-slate-700/40' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
                   }`}
                 >
-                  <span>{item.label}</span>
+                  <span className="flex items-center gap-2"><span className="w-4 text-center">{item.icon}</span>{item.label}</span>
                   <span className={`text-xs text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`}>›</span>
                 </button>
                 {expanded && (

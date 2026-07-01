@@ -165,10 +165,12 @@ function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [] }) {
     const total = mats.length;
     const available = mats.filter((m) => m.status === '待装配').length;
     const assembled = mats.filter((m) => m.status === '已占用').length;
-    const abnormal = mats.filter((m) => ['退货换货', '维修中', '已报废'].includes(m.status)).length;
+    const repairing = mats.filter((m) => m.status === '维修中').length;
+    const scrapped = mats.filter((m) => ['退货换货', '已报废'].includes(m.status)).length;
     const relatedTypes = deviceTypes.filter((dt) => (dt.slots || []).some((s) => s.moduleTypeId === mt.id)).map((dt) => dt.name);
     const risk = available === 0 ? '缺料' : available < 2 ? '偏低' : '正常';
-    return { ...mt, total, available, assembled, locked: 0, abnormal, relatedTypes, risk };
+    const sample = mats[0] || {};
+    return { ...mt, model: sample.model || '—', supplier: sample.supplier || '—', total, available, assembled, locked: 0, repairing, scrapped, relatedTypes, risk };
   });
 
   const riskBadge = (risk) => risk === '缺料'
@@ -180,7 +182,7 @@ function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [] }) {
       <table className="w-full text-sm">
         <thead className="bg-gray-50">
           <tr>
-            {['模块类型', '类别', '库存总数', '可用库存', '已锁定', '已装配', '异常/报废', '关联设备类型', '库存风险', '操作'].map((h) => (
+            {['模块类型', '型号', '供应商', '库存总数', '可用库存', '已锁定', '已装配', '维修中', '已报废', '关联设备类型', '库存风险', '操作'].map((h) => (
               <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
             ))}
           </tr>
@@ -188,13 +190,15 @@ function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [] }) {
         <tbody className="divide-y divide-gray-100">
           {inventory.map((mt) => (
             <tr key={mt.id} className={`hover:bg-gray-50 ${!mt.active ? 'opacity-50' : ''}`}>
-              <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">{mt.name}</td>
-              <td className="px-4 py-3"><span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{mt.category}</span></td>
+              <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">{mt.name}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{mt.category}</span></td>
+              <td className="px-4 py-3 text-gray-600 text-xs">{mt.model}</td>
+              <td className="px-4 py-3 text-gray-600 text-xs">{mt.supplier}</td>
               <td className="px-4 py-3 text-gray-700 font-medium">{mt.total}</td>
               <td className="px-4 py-3"><span className={`font-semibold ${mt.available > 0 ? 'text-blue-700' : 'text-gray-400'}`}>{mt.available}</span></td>
               <td className="px-4 py-3 text-gray-500">{mt.locked}</td>
               <td className="px-4 py-3 text-gray-600">{mt.assembled}</td>
-              <td className="px-4 py-3">{mt.abnormal > 0 ? <span className="text-red-600 font-medium">{mt.abnormal}</span> : <span className="text-gray-400">0</span>}</td>
+              <td className="px-4 py-3 text-amber-600">{mt.repairing || 0}</td>
+              <td className="px-4 py-3">{mt.scrapped > 0 ? <span className="text-red-600 font-medium">{mt.scrapped}</span> : <span className="text-gray-400">0</span>}</td>
               <td className="px-4 py-3 text-gray-500 text-xs max-w-[200px]">{mt.relatedTypes.join('、') || '—'}</td>
               <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full border ${riskBadge(mt.risk)}`}>{mt.risk}</span></td>
               <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">查看实例</td>
@@ -207,11 +211,12 @@ function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [] }) {
 }
 
 /* ─────── 模块实例 ─────── */
-function ModuleInstanceTab({ materials, devices, moduleTypes }) {
+function ModuleInstanceTab({ materials, devices, moduleTypes, batches = [] }) {
   const [q, setQ] = useState('');
   const [statusFilter, setStatusFilter] = useState('全部');
   const typeName = (category) => moduleTypes.find((m) => m.category === category)?.name || category;
   const ownerOf = (matId) => devices.find((d) => (d.usedMaterials || []).some((um) => um.materialId === matId));
+  const erpOf = (batchNo) => batches.find((b) => b.batchNo === batchNo)?.erpPurchaseOrderNo || '—';
 
   const rows = (materials || []).map((m) => ({ ...m, instState: instanceStatus(m.status), owner: ownerOf(m.id) }));
   const filtered = rows.filter((m) => {
@@ -233,7 +238,7 @@ function ModuleInstanceTab({ materials, devices, moduleTypes }) {
       <div className="bg-white rounded shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
-            <tr>{['模块SN', '模块类型', '来源批次', '当前状态', '锁定生产计划', '已装配设备SN', '当前所在设备', '最近更新', '操作'].map((h) => (
+            <tr>{['模块SN', '模块类型', '型号', '供应商', '来源批次', 'ERP采购单号', '当前状态', '锁定生产计划', '已装配设备SN', '当前所在设备', '最近更新', '操作'].map((h) => (
               <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
             ))}</tr>
           </thead>
@@ -242,7 +247,10 @@ function ModuleInstanceTab({ materials, devices, moduleTypes }) {
               <tr key={m.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5 font-mono text-xs text-gray-800 font-medium whitespace-nowrap">{m.sn}</td>
                 <td className="px-4 py-2.5 text-gray-700">{typeName(m.category)}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{m.category}</span></td>
+                <td className="px-4 py-2.5 text-gray-600 text-xs">{m.model || '—'}</td>
+                <td className="px-4 py-2.5 text-gray-600 text-xs">{m.supplier || '—'}</td>
                 <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{m.batchNo || '—'}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{erpOf(m.batchNo)}</td>
                 <td className="px-4 py-2.5"><Badge map={STATUS_BADGE} value={m.instState} /></td>
                 <td className="px-4 py-2.5 text-gray-400 text-xs">—</td>
                 <td className="px-4 py-2.5 font-mono text-xs">{m.owner ? <Link to={`/devices/${m.owner.id}`} className="text-blue-600 hover:underline">{m.owner.sn}</Link> : <span className="text-gray-300">—</span>}</td>
@@ -251,7 +259,7 @@ function ModuleInstanceTab({ materials, devices, moduleTypes }) {
                 <td className="px-4 py-2.5 text-xs">{m.owner ? <Link to={`/devices/${m.owner.id}`} className="text-slate-600 hover:underline">查看设备</Link> : <span className="text-gray-300">查看</span>}</td>
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">暂无模块实例</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无模块实例</td></tr>}
           </tbody>
         </table>
       </div>
@@ -348,8 +356,8 @@ export default function Materials() {
 
       {activeTab === '模块实例追踪' && (
         <>
-          <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">模块实例追踪：追踪每个模块 SN 的使用状态（在库、锁定、已装配、维修中、已报废）。整机装配时需从模块实例中选择具体模块 SN 绑定到设备。</div>
-          <ModuleInstanceTab materials={state.materials} devices={state.devices} moduleTypes={state.moduleTypes} />
+          <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">模块实例追踪：追踪每个模块 SN 的状态（在库可用、已锁定生产计划、已装配、维修中、已报废）。整机装配时需从模块实例中选择具体模块 SN 绑定到设备。</div>
+          <ModuleInstanceTab materials={state.materials} devices={state.devices} moduleTypes={state.moduleTypes} batches={state.materialBatches} />
         </>
       )}
 
@@ -433,7 +441,7 @@ export default function Materials() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['', '批次号', '模块类型', '型号', '供应商', 'ERP采购单号', '到货数量', '合格数量', '不合格数量', '检验结果', '可用数量', '已锁定数量', '关联生产计划', '检验时间', '操作'].map((h) => (
+                  {['', '批次号', '模块类型', '型号', '供应商', 'ERP采购单号', 'ERP到货通知单号', '到货数量', '合格数量', '不合格数量', '检验结果', '可用数量', '已锁定数量', '关联生产计划', '检验时间', '操作'].map((h) => (
                     <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -459,6 +467,9 @@ export default function Materials() {
                         <td className="px-3 py-2.5 text-gray-500">{b.supplier}</td>
                         <td className="px-3 py-2.5 font-mono text-xs text-gray-500">
                           {b.erpPurchaseOrderNo || <span className="text-gray-300">待录入</span>}
+                        </td>
+                        <td className="px-3 py-2.5 font-mono text-xs text-gray-500">
+                          {b.erpArrivalNo || <span className="text-gray-300">—</span>}
                         </td>
                         <td className="px-3 py-2.5 text-gray-700 font-medium">{b.items.length}</td>
                         <td className="px-3 py-2.5 text-green-600 font-medium">{passCount}</td>
@@ -486,7 +497,7 @@ export default function Materials() {
                       </tr>
                       {isExpanded && (
                         <tr key={`${b.id}-expand`}>
-                          <td colSpan={15} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
+                          <td colSpan={16} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
                             <div className="px-10 py-3">
                               <table className="w-full text-xs">
                                 <thead>
@@ -534,7 +545,7 @@ export default function Materials() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={15} className="px-4 py-8 text-center text-gray-400">暂无来料批次</td></tr>
+                  <tr><td colSpan={16} className="px-4 py-8 text-center text-gray-400">暂无来料批次</td></tr>
                 )}
               </tbody>
             </table>

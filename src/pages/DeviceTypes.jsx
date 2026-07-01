@@ -290,6 +290,8 @@ export default function DeviceTypes() {
                               <div><span className="text-gray-400 text-xs">设备类型名称：</span><span className="text-gray-800">{dt.name}</span></div>
                               <div><span className="text-gray-400 text-xs">配置版本：</span><span className="text-gray-700">{dt.version || 'V1'}</span></div>
                               <div><span className="text-gray-400 text-xs">URDF文件：</span><span className="font-mono text-gray-600 text-xs">{dt.urdf || '—'}</span></div>
+                              <div><span className="text-gray-400 text-xs">启用状态：</span><span className="text-xs bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full">{dt.active === false ? '已停用' : '启用中'}</span></div>
+                              <div className="col-span-3"><span className="text-gray-400 text-xs">备注：</span><span className="text-gray-600 text-xs">{dt.notes || '—'}</span></div>
                             </div>
 
                             {/* 装配 BOM 模板 */}
@@ -298,22 +300,27 @@ export default function DeviceTypes() {
                               <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
                                 <thead className="bg-gray-100">
                                   <tr>
-                                    {['装配位置', '需要模块类型', '数量', '是否必填', '是否允许替代模块', '备注'].map((h) => (
+                                    {['装配位置', '需要模块类型', '默认型号', '默认供应商', '数量', '是否必填', '是否允许替代模块', '备注'].map((h) => (
                                       <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
                                     ))}
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                  {slots.map((slot, i) => (
+                                  {slots.map((slot, i) => {
+                                    const sampleMat = state.materials.find((m) => m.category === getModuleCategory(slot.moduleTypeId));
+                                    return (
                                     <tr key={i} className="bg-white">
                                       <td className="px-3 py-2 text-gray-800 font-medium">{slot.slotName}</td>
                                       <td className="px-3 py-2 text-gray-700">{getModuleName(slot.moduleTypeId)}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{getModuleCategory(slot.moduleTypeId)}</span></td>
+                                      <td className="px-3 py-2 text-gray-600 text-xs">{sampleMat?.model || '来自ERP/来料'}</td>
+                                      <td className="px-3 py-2 text-gray-600 text-xs">{sampleMat?.supplier || '来自ERP/来料'}</td>
                                       <td className="px-3 py-2 font-bold text-slate-700">×{slot.quantity}</td>
                                       <td className="px-3 py-2 text-xs text-gray-600">是</td>
                                       <td className="px-3 py-2 text-xs text-gray-600">{['机械臂', '电机'].includes(getModuleCategory(slot.moduleTypeId)) ? '允许（同类型）' : '否'}</td>
                                       <td className="px-3 py-2 text-xs text-gray-400">—</td>
                                     </tr>
-                                  ))}
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             ) : (
@@ -325,22 +332,23 @@ export default function DeviceTypes() {
                             <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
                               <thead className="bg-gray-100">
                                 <tr>
-                                  {['顺序', '工站名称', '是否必测', 'Pass 后流向', 'NG 后处理方式'].map((h) => (
+                                  {['顺序', '工站名称', '是否必测', '可录入测试内容类型', 'Pass 后流向', 'NG 后处理方式'].map((h) => (
                                     <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
                                   ))}
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100">
                                 {[
-                                  { seq: 1, name: '半成品检验', must: '是', pass: '进入初测', ng: '生成生产返修' },
-                                  { seq: 2, name: '初测', must: '是', pass: '进入中测', ng: '生成生产返修' },
-                                  { seq: 3, name: '中测', must: '是', pass: '进入OQT终测', ng: '生成生产返修' },
-                                  { seq: 4, name: 'OQT终测', must: '是', pass: '进入整机入库', ng: '生成生产返修' },
+                                  { seq: 1, name: '半成品检验', must: '是', content: '功能测试', pass: '进入初测', ng: '生成生产返修' },
+                                  { seq: 2, name: '初测', must: '是', content: '功能测试', pass: '进入中测', ng: '生成生产返修' },
+                                  { seq: 3, name: '中测', must: '是', content: '老化测试', pass: '进入OQT终测', ng: '生成生产返修' },
+                                  { seq: 4, name: 'OQT终测', must: '是', content: 'OQT终测', pass: '进入整机入库', ng: '生成生产返修' },
                                 ].map((st) => (
                                   <tr key={st.seq} className="bg-white">
                                     <td className="px-3 py-2 text-gray-700">{st.seq}</td>
                                     <td className="px-3 py-2 text-gray-800 font-medium">{st.name}</td>
                                     <td className="px-3 py-2 text-xs text-gray-600">{st.must}</td>
+                                    <td className="px-3 py-2 text-xs text-gray-600">{st.content}</td>
                                     <td className="px-3 py-2 text-xs text-green-700">{st.pass}</td>
                                     <td className="px-3 py-2 text-xs text-red-600">{st.ng}</td>
                                   </tr>

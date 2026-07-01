@@ -122,6 +122,15 @@ const statusColorMap = {
   '待检验': 'bg-gray-100 text-gray-500 border-gray-300',
   '待录入': 'bg-gray-100 text-gray-500 border-gray-300',
   '待验收': 'bg-gray-100 text-gray-500 border-gray-300',
+
+  // ---- v-meeting: production node vocab ----
+  '录入中':       'bg-blue-100 text-blue-700 border-blue-300',
+  '已录入待测试':  'bg-green-100 text-green-700 border-green-300',
+  '待关联':       'bg-gray-100 text-gray-500 border-gray-300',
+  '测试中':       'bg-blue-100 text-blue-700 border-blue-300',
+  '未填写':       'bg-gray-100 text-gray-500 border-gray-300',
+  '部分填写':     'bg-amber-100 text-amber-700 border-amber-300',
+  '已填写':       'bg-green-100 text-green-700 border-green-300',
 };
 
 export default function StatusBadge({ status, size = 'sm' }) {

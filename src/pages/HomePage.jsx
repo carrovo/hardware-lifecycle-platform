@@ -6,6 +6,9 @@ import {
   deviceLifecycleStatus, deviceBusinessNode,
 } from '../utils/status';
 
+const STATION_LABEL = { semi: '半成品检验', init: '初测', mid: '中测', oqt: 'OQT终测' };
+const stationLabel = (t) => STATION_LABEL[t.stationKey] || t.testType || '测试';
+
 export default function HomePage() {
   const { state } = useApp();
   const wpp = state.workflowProductionPlans || [];
@@ -39,12 +42,25 @@ export default function HomePage() {
     { label: '在线运营', value: lifeCount('在线运营'), sub: '在线设备', to: '/assets?tab=devices' },
   ];
 
-  // 风险动态
+  const allWO = [...(state.deliveryWorkOrders || []), ...(state.workOrders || [])];
+  const recentNG = (state.testRecords || []).filter((t) => t.stationResult === 'NG').sort((a, b) => (b.testTime || '').localeCompare(a.testTime || ''));
+  const closedIssues = qualityIssues.filter((q) => q.status === '已关闭');
+
+  // 消息 / 动态中心：汇聚新增工单、来料缺料、交付延期、测试NG、工单超时、质量问题关闭
+  const messages = [
+    ...allWO.slice(0, 2).map((w) => ({ tag: '新增工单', color: 'text-orange-600', text: `${w.deviceSN} · ${w.description}`, to: '/after-sales?tab=orders' })),
+    ...lowStockModules.slice(0, 1).map((mt) => ({ tag: '来料缺料', color: 'text-red-600', text: `模块「${mt.name}」可用库存不足`, to: '/assets?tab=materials' })),
+    ...delayedDeliveries.slice(0, 1).map((p) => ({ tag: '交付延期', color: 'text-red-600', text: `交付计划「${p.name}」已延期`, to: `/delivery-plans/${p.id}` })),
+    ...recentNG.slice(0, 2).map((t) => ({ tag: '测试NG', color: 'text-red-600', text: `${state.devices.find((d) => d.id === t.deviceId)?.sn || t.deviceId} · ${stationLabel(t)} NG`, to: '/projects?tab=production' })),
+    ...allWO.filter((w) => !['已关闭', '已作废'].includes(w.status) && (w.createdAt || '') < '2026-06-20').slice(0, 1).map((w) => ({ tag: '工单超时', color: 'text-amber-600', text: `${w.deviceSN} 工单处理超时`, to: '/after-sales?tab=orders' })),
+    ...closedIssues.slice(0, 1).map((q) => ({ tag: '质量问题关闭', color: 'text-green-600', text: `${q.deviceSN} · ${q.issueDesc}`, to: '/after-sales?tab=quality' })),
+  ].slice(0, 8);
+
+  // 风险提醒
   const risks = [
     ...delayedDeliveries.slice(0, 2).map((p) => ({ level: '严重', text: `交付计划「${p.name}」已延期（计划验收 ${p.acceptanceDate || p.dueDate}）`, to: `/delivery-plans/${p.id}` })),
-    ...(state.deliveryWorkOrders || []).filter((w) => w.status !== '已关闭' && w.status !== '已作废').slice(0, 2).map((w) => ({ level: '严重', text: `设备 ${w.deviceSN} ${w.ngStation || '交付节点'} NG：${w.description}`, to: '/after-sales?tab=orders' })),
     ...lowStockModules.slice(0, 2).map((mt) => ({ level: '一般', text: `模块「${mt.name}」库存偏低，可用不足 2 件`, to: '/assets?tab=materials' })),
-    ...openIssues.slice(0, 2).map((q) => ({ level: '一般', text: `质量问题未关闭：${q.deviceSN} ${q.issueDesc}`, to: '/after-sales?tab=quality' })),
+    ...openIssues.filter((q) => q.severity === '高' || q.severity === '严重').slice(0, 2).map((q) => ({ level: '严重', text: `高优先级质量问题：${q.deviceSN} ${q.issueDesc}`, to: '/after-sales?tab=quality' })),
   ].slice(0, 6);
 
   const todos = [
@@ -94,10 +110,24 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* 消息 / 动态中心 */}
+      <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+        <div className="text-sm font-semibold text-gray-700 mb-3">消息 / 动态中心</div>
+        <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+          {messages.map((m, i) => (
+            <Link key={i} to={m.to} className="flex items-center gap-2 text-sm hover:bg-slate-50 rounded px-1 py-1 -mx-1">
+              <span className={`text-xs font-medium w-20 flex-shrink-0 ${m.color}`}>{m.tag}</span>
+              <span className="text-gray-600 flex-1 truncate">{m.text}</span>
+            </Link>
+          ))}
+          {messages.length === 0 && <div className="text-sm text-gray-400 py-4 col-span-2 text-center">暂无动态</div>}
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-6">
-        {/* 风险动态 */}
+        {/* 风险提醒 */}
         <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-          <div className="text-sm font-semibold text-gray-700 mb-3">风险动态</div>
+          <div className="text-sm font-semibold text-gray-700 mb-3">风险提醒</div>
           <div className="space-y-2.5">
             {risks.map((r, i) => (
               <Link key={i} to={r.to} className="flex items-start gap-2 text-sm hover:bg-slate-50 rounded px-1 py-1 -mx-1">

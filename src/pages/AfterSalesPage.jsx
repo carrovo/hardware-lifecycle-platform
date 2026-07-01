@@ -513,33 +513,56 @@ function WorkOrderTable({ workOrders, actionType, state, dispatch, currentUser, 
   );
 }
 
-/* ─────── 工单中心：新增工单弹窗（工单类型动态） ─────── */
-const SOURCE_NODES = {
-  delivery: ['出厂检验', '现场安装调试', '客户验收'],
-  aftersales: ['在线运营', '客户反馈', '手动录入'],
+/* ─────── 工单中心：工单分类与来源阶段 ─────── */
+const WO_CLASSES = ['换件工单', '软件问题工单', '其他问题工单'];
+const WO_STAGES = ['出厂检验', '现场安装调试', '客户验收', '在线运营', '客户反馈', '手动录入'];
+const WO_CLASS_STYLE = {
+  换件工单: 'bg-orange-50 text-orange-700 border-orange-200',
+  软件问题工单: 'bg-blue-50 text-blue-700 border-blue-200',
+  其他问题工单: 'bg-gray-50 text-gray-600 border-gray-200',
 };
+// 依据既有数据推断工单分类 / 阶段（无字段时兜底）。
+function woClassOf(wo) {
+  if (wo.woClass) return wo.woClass;
+  const d = wo.description || '';
+  if (/软件|固件|版本|系统|程序|算法/.test(d)) return '软件问题工单';
+  if (/更换|换件|模块|损坏|裂|烧|断|器件|传感器|电机|相机/.test(d) || wo._kind === 'aftersales') return '换件工单';
+  return '其他问题工单';
+}
+const woStageOf = (wo) => wo.stage || wo.sourceNode || wo.ngStation || (wo._kind === 'aftersales' ? '在线运营' : '出厂检验');
+
 function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
-  const { projects, devices, deliveryPlans = [] } = state;
-  const [form, setForm] = useState({ woType: 'delivery', projectId: '', deviceId: '', deliveryPlanId: '', sourceNode: '', description: '', severity: '高', assignedTo: '', notes: '' });
+  const { projects, devices, moduleTypes = [], materials = [], deliveryPlans = [] } = state;
+  const [form, setForm] = useState({ woClass: '换件工单', projectId: '', deviceId: '', deliveryPlanId: '', stage: '', needModuleType: '', oldModuleSN: '', newModuleId: '', softwareVersion: '', issueType: '功能异常', repro: '', description: '', severity: '高', assignedTo: '', notes: '' });
   const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
   const projDevices = form.projectId ? devices.filter(d => d.projectId === form.projectId) : devices;
-  const projDeliveryPlans = form.projectId ? deliveryPlans.filter(p => p.projectId === form.projectId) : deliveryPlans;
+  const chosenType = moduleTypes.find(m => m.id === form.needModuleType);
+  const availableNew = materials.filter(m => m.status === '待装配' && (!chosenType || m.category === chosenType.category));
 
   const submit = (e) => {
     e.preventDefault();
     const device = devices.find(d => d.id === form.deviceId);
+    const newMod = materials.find(m => m.id === form.newModuleId);
     const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    const prefix = form.woType === 'delivery' ? 'DWO' : 'WO';
-    onSave(form.woType, {
-      id: `${prefix}-${Date.now().toString().slice(-6)}`, type: form.woType,
-      projectId: form.projectId, deviceId: form.deviceId, deviceSN: device?.sn || '',
-      deliveryPlanId: form.woType === 'delivery' ? form.deliveryPlanId : undefined,
-      sourceNode: form.sourceNode, description: form.description, severity: form.severity,
-      status: '待处理', assignedTo: form.assignedTo, notes: form.notes,
-      createdAt: now, updatedAt: now, closedAt: null, processLogs: [],
+    onSave({
+      id: `WO-${Date.now().toString().slice(-6)}`, type: 'aftersales', woClass: form.woClass,
+      stage: form.stage, projectId: form.projectId, deviceId: form.deviceId, deviceSN: device?.sn || '',
+      deliveryPlanId: form.deliveryPlanId || undefined,
+      involvesSwap: form.woClass === '换件工单',
+      needModuleType: form.woClass === '换件工单' ? chosenType?.name : undefined,
+      oldModuleSN: form.woClass === '换件工单' ? form.oldModuleSN : undefined,
+      newModuleSN: form.woClass === '换件工单' ? (newMod?.sn || '') : undefined,
+      softwareVersion: form.woClass === '软件问题工单' ? form.softwareVersion : undefined,
+      issueType: form.woClass === '软件问题工单' ? form.issueType : undefined,
+      repro: form.woClass === '软件问题工单' ? form.repro : undefined,
+      description: form.description, severity: form.severity, status: '待处理',
+      assignedTo: form.assignedTo, notes: form.notes, createdAt: now, updatedAt: now, closedAt: null, processLogs: [],
     });
     onClose();
   };
+
+  const isSwap = form.woClass === '换件工单';
+  const isSoft = form.woClass === '软件问题工单';
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="新增工单" size="lg">
@@ -547,21 +570,20 @@ function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">工单类型 *</label>
-            <select className={inp} value={form.woType} onChange={e => setForm({ ...form, woType: e.target.value, sourceNode: '' })}>
-              <option value="delivery">交付工单</option>
-              <option value="aftersales">售后工单</option>
+            <select className={inp} value={form.woClass} onChange={e => setForm({ ...form, woClass: e.target.value })}>
+              {WO_CLASSES.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">来源节点 *</label>
-            <select className={inp} required value={form.sourceNode} onChange={e => setForm({ ...form, sourceNode: e.target.value })}>
-              <option value="">-- 选择来源节点 --</option>
-              {SOURCE_NODES[form.woType].map(n => <option key={n}>{n}</option>)}
+            <label className="block text-sm font-medium text-gray-700 mb-1">所属阶段 *</label>
+            <select className={inp} required value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
+              <option value="">-- 选择阶段 --</option>
+              {WO_STAGES.map(n => <option key={n}>{n}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">关联项目</label>
-            <select className={inp} value={form.projectId} onChange={e => setForm({ ...form, projectId: e.target.value, deviceId: '', deliveryPlanId: '' })}>
+            <select className={inp} value={form.projectId} onChange={e => setForm({ ...form, projectId: e.target.value, deviceId: '' })}>
               <option value="">-- 选择项目 --</option>
               {projects.filter(p => !p.voided).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
@@ -573,15 +595,45 @@ function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
               {projDevices.map(d => <option key={d.id} value={d.id}>{d.sn}</option>)}
             </select>
           </div>
-          {form.woType === 'delivery' && (
+
+          {isSwap && <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">关联交付计划</label>
-              <select className={inp} value={form.deliveryPlanId} onChange={e => setForm({ ...form, deliveryPlanId: e.target.value })}>
-                <option value="">-- 选择交付计划 --</option>
-                {projDeliveryPlans.map(p => <option key={p.id} value={p.id}>{p.batchNo || p.name}</option>)}
+              <label className="block text-sm font-medium text-gray-700 mb-1">需更换模块类型 *</label>
+              <select className={inp} required value={form.needModuleType} onChange={e => setForm({ ...form, needModuleType: e.target.value, newModuleId: '' })}>
+                <option value="">-- 选择模块类型 --</option>
+                {moduleTypes.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
-          )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">旧模块SN</label>
+              <input className={inp} value={form.oldModuleSN} onChange={e => setForm({ ...form, oldModuleSN: e.target.value })} placeholder="被更换的旧模块SN" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">新模块SN *（仅在库可用）</label>
+              <select className={inp} required value={form.newModuleId} onChange={e => setForm({ ...form, newModuleId: e.target.value })}>
+                <option value="">-- 选择在库可用模块 --</option>
+                {availableNew.map(m => <option key={m.id} value={m.id}>{m.sn}（{m.supplier}）</option>)}
+              </select>
+            </div>
+          </>}
+
+          {isSoft && <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">软件版本</label>
+              <input className={inp} value={form.softwareVersion} onChange={e => setForm({ ...form, softwareVersion: e.target.value })} placeholder="如 v2.3.1" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">问题类型</label>
+              <select className={inp} value={form.issueType} onChange={e => setForm({ ...form, issueType: e.target.value })}>
+                {['功能异常', '崩溃/卡死', '性能问题', '兼容性', '其他'].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">复现步骤</label>
+              <textarea rows={2} className={inp} value={form.repro} onChange={e => setForm({ ...form, repro: e.target.value })} placeholder="描述如何复现该问题" />
+            </div>
+          </>}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">负责人</label>
             <select className={inp} value={form.assignedTo} onChange={e => setForm({ ...form, assignedTo: e.target.value })}>
@@ -609,7 +661,9 @@ function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
           </div>
         </div>
         <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-          {form.woType === 'delivery' ? '交付工单来源于：出厂检验、现场安装调试、客户验收。' : '售后工单来源于：在线运营、客户反馈、手动录入。'}
+          {isSwap ? '换件工单：需选择需更换模块类型与新模块SN（仅在库可用）。换件完成后设备详情新增换件记录，旧模块可转维修中/已报废，新模块变为已装配。'
+            : isSoft ? '软件问题工单：不要求选择模块SN，可关联软件版本、问题类型与复现步骤，流转到研发/软件处理人。'
+            : '其他问题工单：用于体验优化、客户反馈等非硬件非软件明确归因的问题。'}
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
@@ -622,50 +676,105 @@ function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
 
 /* ─────── 工单中心：交付工单 + 售后工单 ─────── */
 function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
+  const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('全部');
-  const [filterType, setFilterType] = useState('全部');
+  const [filterClass, setFilterClass] = useState('全部');
+  const [filterStage, setFilterStage] = useState('全部');
+  const [filterSeverity, setFilterSeverity] = useState('全部');
   const [expandedId, setExpandedId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const { projects } = state;
+  const getProjectName = id => projects.find(p => p.id === id)?.name || '—';
 
   const deliveryWOs = (state.deliveryWorkOrders || []).map(w => ({ ...w, _kind: 'delivery' }));
   const aftersalesWOs = (state.workOrders || []).map(w => ({ ...w, _kind: 'aftersales' }));
-  const allOrders = [...deliveryWOs, ...aftersalesWOs];
+  const allOrders = [...deliveryWOs, ...aftersalesWOs].map(w => ({ ...w, _class: woClassOf(w), _stage: woStageOf(w) }));
+  const open = allOrders.filter(w => !['已关闭', '已作废'].includes(w.status));
 
-  const sourceNode = (w) => w.sourceNode || w.ngStation || (w._kind === 'aftersales' ? '在线运营' : '出厂检验');
-  const getProjectName = id => projects.find(p => p.id === id)?.name || '—';
+  const cover = {
+    pending: allOrders.filter(w => w.status === '待处理').length,
+    swap: allOrders.filter(w => w._class === '换件工单' && !['已作废'].includes(w.status)).length,
+    software: allOrders.filter(w => w._class === '软件问题工单' && !['已作废'].includes(w.status)).length,
+    overdue: open.filter(w => (w.createdAt || '') < '2026-06-20').length,
+  };
+  const recent = [...allOrders].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, 5);
 
   const filtered = allOrders
     .filter(w => (filterStatus === '全部' ? w.status !== '已作废' : w.status === filterStatus))
-    .filter(w => filterType === '全部' || w._kind === filterType)
+    .filter(w => filterClass === '全部' || w._class === filterClass)
+    .filter(w => filterStage === '全部' || w._stage === filterStage)
+    .filter(w => filterSeverity === '全部' || w.severity === filterSeverity)
+    .filter(w => !search || (w.deviceSN || '').toLowerCase().includes(search.toLowerCase()) || (w.id || '').toLowerCase().includes(search.toLowerCase()) || (w.description || '').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
-  const statusCounts = { '待处理': 0, '处理中': 0, '复检中': 0, '已关闭': 0, '已作废': 0 };
-  allOrders.forEach(w => { if (statusCounts[w.status] !== undefined) statusCounts[w.status]++; });
+  const handleAdd = (wo) => dispatch({ type: 'ADD_WORK_ORDER', payload: wo });
 
-  const handleAdd = (woType, wo) => dispatch({ type: woType === 'delivery' ? 'ADD_DELIVERY_WORK_ORDER' : 'ADD_WORK_ORDER', payload: wo });
+  const COVER = [
+    { label: '待处理工单', value: cover.pending, color: 'border-orange-500' },
+    { label: '换件工单', value: cover.swap, color: 'border-amber-500' },
+    { label: '软件问题工单', value: cover.software, color: 'border-blue-500' },
+    { label: '超时工单', value: cover.overdue, color: 'border-red-500' },
+  ];
 
   return (
-    <div>
-      <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">
-        工单中心用于派人处理、状态推进和闭环。生产测试 NG 进入「生产返修记录」不在此；出厂检验 / 现场安装调试 / 客户验收 NG → 交付工单；在线运营后的问题 → 售后工单。
+    <div className="space-y-5">
+      {/* 封面 / 概览 */}
+      <div className="grid grid-cols-4 gap-4">
+        {COVER.map(c => (
+          <div key={c.label} className={`bg-white rounded-xl shadow-sm border-l-4 ${c.color} p-4`}>
+            <div className="text-3xl font-semibold text-gray-900">{c.value}</div>
+            <div className="text-sm text-gray-500 mt-1">{c.label}</div>
+          </div>
+        ))}
       </div>
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <div className="flex flex-wrap gap-2 items-center">
-          {['全部', '待处理', '处理中', '复检中', '已关闭', '已作废'].map(s => (
-            <button key={s} onClick={() => setFilterStatus(s)}
-              className={`px-3 py-1 text-xs rounded-full border font-medium ${filterStatus === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>
-              {s === '全部' ? `全部 ${allOrders.filter(w => w.status !== '已作废').length}` : `${s} ${statusCounts[s] ?? 0}`}
-            </button>
-          ))}
-          <select className="border border-gray-300 rounded px-3 py-1 text-xs text-gray-600 focus:outline-none" value={filterType} onChange={e => setFilterType(e.target.value)}>
-            <option value="全部">全部类型</option>
-            <option value="delivery">交付工单</option>
-            <option value="aftersales">售后工单</option>
-          </select>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="col-span-2 bg-white rounded-xl shadow-sm p-4">
+          <div className="text-sm font-semibold text-gray-700 mb-3">最近工单</div>
+          <div className="space-y-2">
+            {recent.map(w => (
+              <div key={w.id} className="flex items-center gap-3 text-sm border-b border-gray-50 pb-2 last:border-0">
+                <span className="font-mono text-xs text-gray-500 w-24">{w.id}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${WO_CLASS_STYLE[w._class]}`}>{w._class}</span>
+                <span className="text-gray-700 flex-1 truncate">{w.deviceSN} · {w.description}</span>
+                <StatusBadge status={w.status} />
+              </div>
+            ))}
+            {recent.length === 0 && <div className="text-sm text-gray-400 py-4 text-center">暂无工单</div>}
+          </div>
         </div>
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <div className="text-sm font-semibold text-gray-700 mb-3">工单分类说明</div>
+          <ul className="text-xs text-gray-500 space-y-1.5 leading-relaxed">
+            <li>· 换件工单：涉及模块更换，需选择新模块SN（在库可用）。</li>
+            <li>· 软件问题工单：软件/固件/版本问题，流转研发处理。</li>
+            <li>· 其他问题工单：体验优化、客户反馈等。</li>
+            <li className="text-gray-400 pt-1">生产测试 NG 属于生产返修记录，不在工单中心。</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* 筛选 */}
+      <div className="bg-white rounded shadow-sm px-4 py-3 flex flex-wrap gap-2 items-center">
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜索工单ID / 设备SN / 描述" className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-56" />
+        <select className="border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600" value={filterClass} onChange={e => setFilterClass(e.target.value)}>
+          <option value="全部">全部类型</option>
+          {WO_CLASSES.map(c => <option key={c}>{c}</option>)}
+        </select>
+        <select className="border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600" value={filterStage} onChange={e => setFilterStage(e.target.value)}>
+          <option value="全部">全部阶段</option>
+          {WO_STAGES.map(s => <option key={s}>{s}</option>)}
+        </select>
+        <select className="border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <option value="全部">全部状态</option>
+          {['待处理', '处理中', '复检中', '已关闭', '已作废'].map(s => <option key={s}>{s}</option>)}
+        </select>
+        <select className="border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
+          <option value="全部">全部严重程度</option>
+          {['高', '中', '低'].map(s => <option key={s}>{s}</option>)}
+        </select>
+        <span className="text-xs text-gray-400">共 {filtered.length} 条</span>
         {canDo('update_work_order') && (
-          <button onClick={() => setShowAddModal(true)} className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800 flex-shrink-0">+ 新增工单</button>
+          <button onClick={() => setShowAddModal(true)} className="ml-auto px-4 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">+ 新增工单</button>
         )}
       </div>
 
@@ -673,7 +782,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {['工单ID', '工单类型', '关联项目', '关联设备SN', '关联交付计划', '来源节点', '问题描述', '严重程度', '状态', '负责人', '创建时间', ''].map(h => (
+              {['工单ID', '工单类型', '所属阶段', '关联设备SN', '是否涉及换件', '需更换模块类型', '问题描述', '严重程度', '状态', '负责人', '创建时间', ''].map(h => (
                 <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -687,13 +796,11 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
                   <tr onClick={() => setExpandedId(isExpanded ? null : wo.id)}
                     className={`cursor-pointer border-t border-gray-100 hover:bg-blue-50 ${isExpanded ? 'bg-slate-50' : ''} ${isVoided ? 'opacity-50' : ''}`}>
                     <td className="px-3 py-2.5 font-mono text-xs text-gray-600 whitespace-nowrap">{wo.id}</td>
-                    <td className="px-3 py-2.5 text-xs whitespace-nowrap">
-                      <span className={`px-2 py-0.5 rounded-full border ${wo._kind === 'delivery' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>{WO_TYPE_LABEL[wo._kind]}</span>
-                    </td>
-                    <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{getProjectName(wo.projectId)}</td>
+                    <td className="px-3 py-2.5 text-xs whitespace-nowrap"><span className={`px-2 py-0.5 rounded-full border ${WO_CLASS_STYLE[wo._class]}`}>{wo._class}</span></td>
+                    <td className="px-3 py-2.5 text-xs"><StatusBadge status={wo._stage} /></td>
                     <td className="px-3 py-2.5 font-mono text-xs text-gray-800 font-medium whitespace-nowrap">{wo.deviceSN}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{wo.deliveryPlanId || '—'}</td>
-                    <td className="px-3 py-2.5 text-xs"><StatusBadge status={sourceNode(wo)} /></td>
+                    <td className="px-3 py-2.5 text-xs">{wo._class === '换件工单' ? <span className="text-orange-600 font-medium">是</span> : <span className="text-gray-400">否</span>}</td>
+                    <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{wo.needModuleType || '—'}</td>
                     <td className="px-3 py-2.5 text-gray-700 max-w-[180px]"><div className="truncate">{wo.description}</div></td>
                     <td className="px-3 py-2.5"><StatusBadge status={wo.severity} /></td>
                     <td className="px-3 py-2.5"><StatusBadge status={wo.status} /></td>
@@ -704,6 +811,14 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
                   {isExpanded && !isVoided && (
                     <tr>
                       <td colSpan={12} className="p-0">
+                        {(wo._class === '换件工单' && (wo.oldModuleSN || wo.newModuleSN)) && (
+                          <div className="px-6 pt-4 bg-slate-50 text-xs text-gray-600 flex flex-wrap gap-x-6 gap-y-1">
+                            <span>关联项目：{getProjectName(wo.projectId)}</span>
+                            <span>关联交付计划：{wo.deliveryPlanId || '—'}</span>
+                            <span>旧模块SN：<span className="font-mono">{wo.oldModuleSN || '—'}</span></span>
+                            <span>新模块SN：<span className="font-mono">{wo.newModuleSN || '—'}</span></span>
+                          </div>
+                        )}
                         <WorkOrderDetail wo={wo} state={state} dispatch={dispatch} currentUser={currentUser} canDo={canDo} actionType={wo._kind} />
                       </td>
                     </tr>
@@ -907,6 +1022,19 @@ function QualityIssueDetail({ qi, state, dispatch, canDo }) {
     dispatch({ type: 'UPDATE_QUALITY_ISSUE', payload: { id: qi.id, status: '处理中', processLogs: [...(qi.processLogs || []), log] } });
   };
 
+  const genWorkOrder = (woClass) => {
+    const t = now();
+    const woId = `WO-${Date.now().toString().slice(-6)}`;
+    dispatch({ type: 'ADD_WORK_ORDER', payload: {
+      id: woId, type: 'aftersales', woClass, stage: qi.sourceStage || '在线运营',
+      projectId: qi.projectId, deviceId: qi.deviceId, deviceSN: qi.deviceSN,
+      involvesSwap: woClass === '换件工单', description: qi.issueDesc, severity: qi.severity || '中',
+      status: '待处理', assignedTo: '', sourceQualityIssueId: qi.id,
+      createdAt: t, updatedAt: t, closedAt: null, processLogs: [],
+    } });
+    dispatch({ type: 'UPDATE_QUALITY_ISSUE', payload: { id: qi.id, linkedWorkOrder: true, linkedWorkOrderId: woId, processLogs: [...(qi.processLogs || []), { time: t, operator: state.currentUser, fromStatus: qi.status, toStatus: qi.status, notes: `生成${woClass} ${woId}` }] } });
+  };
+
   const handleClose = (e) => {
     e.preventDefault();
     const t = now();
@@ -929,13 +1057,20 @@ function QualityIssueDetail({ qi, state, dispatch, canDo }) {
         <div className="text-xs font-medium text-gray-500 mb-1">问题描述</div>
         <div className="text-sm text-gray-800 bg-white border border-gray-200 rounded p-3 leading-relaxed">{qi.issueDesc}</div>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         {qi.status === '待处理' && canDo('update_quality_issue') && (
           <button onClick={handleStart} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">开始处理</button>
+        )}
+        {qi.status !== '已关闭' && (
+          <>
+            <button onClick={() => genWorkOrder('换件工单')} className="px-3 py-1.5 text-sm border border-orange-300 text-orange-700 rounded hover:bg-orange-50">生成换件工单</button>
+            <button onClick={() => genWorkOrder('软件问题工单')} className="px-3 py-1.5 text-sm border border-blue-300 text-blue-700 rounded hover:bg-blue-50">生成软件问题工单</button>
+          </>
         )}
         {qi.status === '处理中' && canDo('update_quality_issue') && (
           <button onClick={() => setShowClose(v => !v)} className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700">关闭问题</button>
         )}
+        {qi.linkedWorkOrderId && <span className="text-xs text-gray-500">已关联工单 <span className="font-mono">{qi.linkedWorkOrderId}</span></span>}
       </div>
       {showClose && (
         <form onSubmit={handleClose} className="bg-green-50 border border-green-200 rounded p-4 space-y-3">
@@ -1030,7 +1165,7 @@ function QualityIssueTable({ state, dispatch, canDo }) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {['问题编号', '设备SN', '设备名称', '所属点位', '所属项目', '来源阶段', '问题描述', '严重程度', '上报方式', '上报人', '上报时间', '状态'].map(h => (
+              {['问题编号', '设备SN', '设备名称', '所属点位', '所属项目', '来源阶段', '问题描述', '严重程度', '上报方式', '是否已生成工单', '上报人', '上报时间', '状态'].map(h => (
                 <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
               ))}
             </tr>
@@ -1053,13 +1188,14 @@ function QualityIssueTable({ state, dispatch, canDo }) {
                     <td className="px-3 py-2.5">
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${qi.source === '扫码上报' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>{qi.source}</span>
                     </td>
+                    <td className="px-3 py-2.5 text-xs">{qi.linkedWorkOrder || qi.linkedWorkOrderId ? <span className="text-emerald-600 font-medium">是</span> : <span className="text-gray-400">否</span>}</td>
                     <td className="px-3 py-2.5 text-gray-600 text-xs">{qi.reporterName}</td>
                     <td className="px-3 py-2.5 text-gray-400 text-xs">{qi.reportTime}</td>
                     <td className="px-3 py-2.5"><StatusBadge status={qi.status} /></td>
                   </tr>
                   {isExpanded && (
                     <tr>
-                      <td colSpan={12} className="p-0">
+                      <td colSpan={13} className="p-0">
                         <QualityIssueDetail qi={qi} state={state} dispatch={dispatch} canDo={canDo} />
                       </td>
                     </tr>
@@ -1067,7 +1203,7 @@ function QualityIssueTable({ state, dispatch, canDo }) {
                 </React.Fragment>
               );
             })}
-            {filtered.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无质量问题记录</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={13} className="px-4 py-8 text-center text-gray-400">暂无质量问题记录</td></tr>}
           </tbody>
         </table>
       </div>
