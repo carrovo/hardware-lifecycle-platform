@@ -165,6 +165,9 @@ export const devices = [
   { id: 'DEV-011', sn: 'SN-DEV-011', locationId: 'LOC-003', deviceTypeId: 'DT-001', status: '在线运营', assembler: '王五', assemblyTime: '2026-04-15 10:00', photoName: 'assembly_dev011.jpg', usedMaterials: [{ materialId: 'MAT-006', moduleTypeId: 'MT-003' }], projectId: 'PROJ-002', productionPlanId: 'WPP-004', batteryPercent: 62, storagePercent: 71, lastHeartbeat: '2026-06-21 07:30', online: true, createdAt: '2026-04-15 10:00', updatedAt: '2026-06-21 07:30' },
   { id: 'DEV-012', sn: 'SN-DEV-012', locationId: 'LOC-005', deviceTypeId: 'DT-002', status: '在线运营', assembler: '赵六', assemblyTime: '2026-04-10 09:00', photoName: 'assembly_dev012.jpg', usedMaterials: [{ materialId: 'MAT-009', moduleTypeId: 'MT-004' }], projectId: 'PROJ-003', productionPlanId: 'WPP-006', batteryPercent: 15, storagePercent: 88, lastHeartbeat: '2026-06-20 23:10', online: false, createdAt: '2026-04-10 09:00', updatedAt: '2026-06-20 23:10' },
   { id: 'DEV-013', sn: 'SN-DEV-013', locationId: 'LOC-001', deviceTypeId: 'DT-001', status: '在线运营', assembler: '张三', assemblyTime: '2026-03-25 10:00', photoName: 'assembly_dev013.jpg', usedMaterials: [], projectId: 'PROJ-001', productionPlanId: 'WPP-001', batteryPercent: 93, storagePercent: 30, lastHeartbeat: '2026-06-21 09:02', online: true, createdAt: '2026-03-25 10:00', updatedAt: '2026-06-21 09:02' },
+  // 全工站 Pass、待整机入库 (WPP-002)
+  { id: 'DEV-014', sn: 'SN-DEV-014', deviceTypeId: 'DT-001', status: '待入库', assembler: '张三', assemblyTime: '2026-06-12 10:00', photoName: 'assembly_dev014.jpg', usedMaterials: [{ materialId: 'MAT-001', moduleTypeId: 'MT-001' }], productionPlanId: 'WPP-002', createdAt: '2026-06-12 10:00', updatedAt: '2026-06-19 16:00' },
+  { id: 'DEV-015', sn: 'SN-DEV-015', deviceTypeId: 'DT-001', status: '待入库', assembler: '李四', assemblyTime: '2026-06-13 09:30', photoName: 'assembly_dev015.jpg', usedMaterials: [{ materialId: 'MAT-003', moduleTypeId: 'MT-002' }], productionPlanId: 'WPP-002', createdAt: '2026-06-13 09:30', updatedAt: '2026-06-19 16:30' },
   // 装配中 / 检验中 (WPP-002)
   { id: 'DEV-016', sn: 'SN-DEV-016', deviceTypeId: 'DT-001', status: '半成品检验中', assembler: '李四', assemblyTime: '2026-06-19 09:00', photoName: 'assembly_dev016.jpg', usedMaterials: [], productionPlanId: 'WPP-002', createdAt: '2026-06-19 09:00', updatedAt: '2026-06-19 09:00' },
   { id: 'DEV-017', sn: 'SN-DEV-017', deviceTypeId: 'DT-002', status: '初测中', assembler: '王五', assemblyTime: '2026-06-20 10:30', photoName: 'assembly_dev017.jpg', usedMaterials: [], productionPlanId: 'WPP-002', createdAt: '2026-06-20 10:30', updatedAt: '2026-06-20 10:30' },
@@ -252,6 +255,15 @@ export const testRecords = [
   { id: 'TEST-O004', deviceId: 'DEV-021', stationKey: 'oqt', stationResult: 'Pass', testType: '终测', result: '合格', operator: '赵六', testTime: '2026-06-21 14:00', reportFile: 'oqt_DEV021.pdf', reportLink: '', notes: 'OQT终测通过', status: '有效' },
   { id: 'TEST-O005', deviceId: 'DEV-022', stationKey: 'oqt', stationResult: 'NG', testType: '终测', result: '不合格', operator: '张三', testTime: '2026-06-22 10:00', reportFile: '', reportLink: '', notes: '导航定位误差超标', ngReason: '静止定位误差±8cm超过±5cm限值', repairPerson: '王五', repairAction: '重新建立地图，校准轮式里程计', estimatedCompletion: '2026-06-24', status: '有效' },
   { id: 'TEST-O006', deviceId: 'DEV-023', stationKey: 'oqt', stationResult: 'Pass', testType: '终测', result: '合格', operator: '李四', testTime: '2026-06-22 14:00', reportFile: 'oqt_DEV023.pdf', reportLink: '', notes: 'OQT全项通过', status: '有效' },
+  // DEV-014 / DEV-015：全工站 Pass，待整机入库
+  { id: 'TEST-S014', deviceId: 'DEV-014', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '张三', testTime: '2026-06-15 09:00', reportFile: 'semi_DEV014.pdf', reportLink: '', notes: '半成品检验通过', status: '有效' },
+  { id: 'TEST-I014', deviceId: 'DEV-014', stationKey: 'init', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '王五', testTime: '2026-06-16 09:00', reportFile: 'init_DEV014.pdf', reportLink: '', notes: '初测通过', status: '有效' },
+  { id: 'TEST-M014', deviceId: 'DEV-014', stationKey: 'mid', stationResult: 'Pass', testType: '老化测试', result: '合格', operator: '王五', testTime: '2026-06-17 09:00', duration: '48小时', peakTemp: '66°C', anomalyCount: 0, reportFile: 'aging_DEV014.pdf', reportLink: '', notes: '中测通过', status: '有效' },
+  { id: 'TEST-O014', deviceId: 'DEV-014', stationKey: 'oqt', stationResult: 'Pass', testType: '终测', result: '合格', operator: '张三', testTime: '2026-06-19 15:00', reportFile: 'oqt_DEV014.pdf', reportLink: '', notes: 'OQT终测通过', status: '有效' },
+  { id: 'TEST-S015', deviceId: 'DEV-015', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '张三', testTime: '2026-06-15 10:00', reportFile: 'semi_DEV015.pdf', reportLink: '', notes: '半成品检验通过', status: '有效' },
+  { id: 'TEST-I015', deviceId: 'DEV-015', stationKey: 'init', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '王五', testTime: '2026-06-16 10:00', reportFile: 'init_DEV015.pdf', reportLink: '', notes: '初测通过', status: '有效' },
+  { id: 'TEST-M015', deviceId: 'DEV-015', stationKey: 'mid', stationResult: 'Pass', testType: '老化测试', result: '合格', operator: '王五', testTime: '2026-06-17 10:00', duration: '48小时', peakTemp: '69°C', anomalyCount: 0, reportFile: 'aging_DEV015.pdf', reportLink: '', notes: '中测通过', status: '有效' },
+  { id: 'TEST-O015', deviceId: 'DEV-015', stationKey: 'oqt', stationResult: 'Pass', testType: '终测', result: '合格', operator: '张三', testTime: '2026-06-19 16:00', reportFile: 'oqt_DEV015.pdf', reportLink: '', notes: 'OQT终测通过', status: '有效' },
 ];
 
 export const operationLogs = [
@@ -287,49 +299,49 @@ export const productionPlans = [
 // Workflow-based production plans (used by ProductionPlanDetail)
 export const workflowProductionPlans = [
   {
-    id: 'WPP-001', name: '智魔方Q1批次生产', projectId: 'PROJ-001',
+    id: 'WPP-001', name: '智魔方Q1批次生产', projectId: 'PROJ-001', deviceTypeId: 'DT-001',
     targetCount: 5, status: '已完成', endDate: '2026-06-10',
     createdAt: '2026-05-15 09:00', erpProductionOrderNo: 'MO-2026-015',
     materialBatchIds: ['BATCH-001', 'BATCH-002', 'BATCH-003'],
     notes: '智魔方园区A厂房首批交付',
   },
   {
-    id: 'WPP-002', name: '智魔方Q2补单生产', projectId: 'PROJ-001',
-    targetCount: 3, status: '生产中', endDate: '2026-07-15',
+    id: 'WPP-002', name: '智魔方Q2补单生产', projectId: 'PROJ-001', deviceTypeId: 'DT-001',
+    targetCount: 8, status: '生产中', endDate: '2026-07-15',
     createdAt: '2026-06-10 10:00', erpProductionOrderNo: 'MO-2026-031',
     materialBatchIds: ['BATCH-009', 'BATCH-010'],
     notes: '',
   },
   {
-    id: 'WPP-003', name: '智魔方B厂房备货', projectId: 'PROJ-001',
+    id: 'WPP-003', name: '智魔方B厂房备货', projectId: 'PROJ-001', deviceTypeId: 'DT-001',
     targetCount: 2, status: '未开始', endDate: '2026-08-01',
     createdAt: '2026-06-20 14:00', erpProductionOrderNo: '',
     materialBatchIds: [],
     notes: 'B厂房扩产备货',
   },
   {
-    id: 'WPP-004', name: '华熙生物首批生产', projectId: 'PROJ-002',
+    id: 'WPP-004', name: '华熙生物首批生产', projectId: 'PROJ-002', deviceTypeId: 'DT-002',
     targetCount: 3, status: '已完成', endDate: '2026-06-12',
     createdAt: '2026-05-20 10:00', erpProductionOrderNo: 'MO-2026-022',
     materialBatchIds: ['BATCH-004', 'BATCH-005', 'BATCH-006'],
     notes: '医疗级洁净要求',
   },
   {
-    id: 'WPP-005', name: '华熙生物扩产订单', projectId: 'PROJ-002',
+    id: 'WPP-005', name: '华熙生物扩产订单', projectId: 'PROJ-002', deviceTypeId: 'DT-002',
     targetCount: 4, status: '生产中', endDate: '2026-07-31',
     createdAt: '2026-06-15 09:00', erpProductionOrderNo: 'MO-2026-038',
     materialBatchIds: ['BATCH-016', 'BATCH-017'],
     notes: '二期扩产',
   },
   {
-    id: 'WPP-006', name: '机场航站楼首批', projectId: 'PROJ-003',
+    id: 'WPP-006', name: '机场航站楼首批', projectId: 'PROJ-003', deviceTypeId: 'DT-002',
     targetCount: 4, status: '已完成', endDate: '2026-06-05',
     createdAt: '2026-06-01 10:00', erpProductionOrderNo: 'MO-2026-028',
     materialBatchIds: ['BATCH-007', 'BATCH-008'],
     notes: 'IP65防护需求，已通过民航认证',
   },
   {
-    id: 'WPP-007', name: '机场追加订单', projectId: 'PROJ-003',
+    id: 'WPP-007', name: '机场追加订单', projectId: 'PROJ-003', deviceTypeId: 'DT-001',
     targetCount: 3, status: '生产中', endDate: '2026-07-20',
     createdAt: '2026-06-18 14:00', erpProductionOrderNo: 'MO-2026-042',
     materialBatchIds: ['BATCH-019', 'BATCH-020'],

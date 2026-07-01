@@ -135,7 +135,7 @@ function CreatePlanModal({ isOpen, onClose, type, project, onSave }) {
     onClose();
   };
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`创建${label}`} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title={`新建${label}`} size="lg">
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div><label className="block text-sm font-medium text-gray-700 mb-1">{label}名称 *</label><input className={INPUT} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
@@ -264,8 +264,8 @@ export default function ProjectDetail() {
 
   let topActions = [
     { label: '编辑', modal: 'edit', cls: BTN_GHOST },
-    { label: '创建生产计划', modal: 'production', cls: BTN_GHOST },
-    { label: '创建交付计划', modal: 'delivery', cls: BTN_PRIMARY },
+    { label: '新建生产计划', modal: 'production', cls: BTN_GHOST },
+    { label: '新建交付计划', modal: 'delivery', cls: BTN_PRIMARY },
     { label: '查看日志', modal: 'logs', cls: BTN_GHOST },
   ];
   if (status === '已作废' || status === '已关闭') {
@@ -273,12 +273,12 @@ export default function ProjectDetail() {
   } else if (status === '未开始') {
     topActions = [
       { label: '编辑', modal: 'edit', cls: BTN_GHOST },
-      { label: '创建生产计划', modal: 'production', cls: BTN_PRIMARY },
+      { label: '新建生产计划', modal: 'production', cls: BTN_PRIMARY },
       { label: '作废', modal: 'void', cls: 'px-3 py-1.5 text-sm text-red-600 border border-red-300 rounded hover:bg-red-50' },
     ];
   } else if (status === '已交付') {
     topActions = [
-      { label: '创建交付计划', modal: 'delivery', cls: BTN_GHOST },
+      { label: '新建交付计划', modal: 'delivery', cls: BTN_GHOST },
       { label: '关闭项目', modal: 'close', cls: BTN_PRIMARY },
       { label: '查看日志', modal: 'logs', cls: BTN_GHOST },
     ];

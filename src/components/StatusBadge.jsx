@@ -131,6 +131,9 @@ const statusColorMap = {
   '未填写':       'bg-gray-100 text-gray-500 border-gray-300',
   '部分填写':     'bg-amber-100 text-amber-700 border-amber-300',
   '已填写':       'bg-green-100 text-green-700 border-green-300',
+  '待录入':       'bg-gray-100 text-gray-500 border-gray-300',
+  '待补齐模块':   'bg-amber-100 text-amber-700 border-amber-300',
+  '待补齐标签':   'bg-amber-100 text-amber-700 border-amber-300',
 };
 
 export default function StatusBadge({ status, size = 'sm' }) {

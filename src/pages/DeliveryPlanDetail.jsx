@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
+import { Pagination, usePaged } from '../components/Pagination';
 import {
   isPass, deliveryPlanStatus, resultLabel,
   bindingDeviceStatus, factoryStageStatus, siteStageStatus, acceptStageStatus,
@@ -55,7 +56,7 @@ function FlowStepper({ activeNode, onChange, counts }) {
         {NODES.map((node, index) => (
           <div key={node.key} className="flex items-center flex-1">
             <button onClick={() => onChange(node.key)} className="flex-1 flex flex-col items-center gap-1">
-              <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${activeNode === node.key ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-600'}`}>{index + 1}</span>
+              <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${activeNode === node.key ? 'bg-blue-600 text-white ring-2 ring-blue-200' : 'bg-gray-100 text-gray-500'}`}>{index + 1}</span>
               <span className={`text-xs ${activeNode === node.key ? 'text-slate-800 font-medium' : 'text-gray-500'}`}>{node.label}</span>
               <span className="text-xs text-gray-400">{counts[node.key] || 0}</span>
             </button>
@@ -71,6 +72,8 @@ const DELIVERY_ACTION_FIELDS = {
   确认出厂: ['实际出厂时间', '出厂确认人', 'ERP销售出库单号', '物流方式', '物流单号', '备注'],
   调整点位: ['设备SN', '原预分配点位', '新预分配点位', '调整原因'],
   解绑设备: ['设备SN', '当前状态', '解绑原因', '二次确认'],
+  生成交付工单: ['设备SN', '来源节点', '问题类型', '问题描述', '严重程度', '负责人'],
+  生成质量问题: ['设备SN', '来源节点', '问题类型', '严重程度', '问题描述', '责任模块'],
 };
 const DELIVERY_ACTION_TEXT = {
   确认绑定完成: '已确认绑定完成，设备状态将更新为待出厂检验，交付计划进入出厂检验节点。',
@@ -193,8 +196,12 @@ function BindingNode({ plan, boundDevices, eligibleDevices, locations, deviceTyp
   const target = plan.targetCount || 0;
   const remaining = Math.max(target - boundDevices.length, 0);
   const isFull = target > 0 && remaining === 0;
+  const paged = usePaged(boundDevices, 10);
   return (
     <div className="space-y-5">
+      <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
+        本节点用于为交付计划绑定具体设备 SN，并可预分配点位。全部绑定完成后进入出厂检验。
+      </div>
       <MetricCards items={[
         { label: '计划交付', value: target, color: 'border-slate-500' },
         { label: '已绑定', value: boundDevices.length, color: 'border-blue-500' },
@@ -216,32 +223,36 @@ function BindingNode({ plan, boundDevices, eligibleDevices, locations, deviceTyp
           : <div className="mt-2 text-xs bg-amber-50 border border-amber-100 text-amber-700 rounded px-3 py-2">当前仍有 {remaining} 台设备未绑定，需绑定完成后才能进入出厂检验。</div>}
       </Section>
       <Section title="已绑定设备列表">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '来源生产计划', '当前状态', '预分配点位', '绑定状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-gray-100">
-            {boundDevices.map((device) => {
-              const type = deviceTypes.find((item) => item.id === device.deviceTypeId);
-              const location = locations.find((item) => item.id === device.preAssignedLocationId || item.id === device.locationId);
-              return (
-                <tr key={device.id}>
-                  <td className="px-3 py-2 font-mono text-xs"><Link to={`/devices/${device.id}`} className="text-blue-600 hover:underline">{device.sn}</Link></td>
-                  <td className="px-3 py-2">{type?.name || device.deviceTypeId}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-gray-500">{device.productionPlanId || '—'}</td>
-                  <td className="px-3 py-2"><StatusBadge status={bindingDeviceStatus(device, true)} /></td>
-                  <td className="px-3 py-2">{location?.name || '—'}</td>
-                  <td className="px-3 py-2"><StatusBadge status="已绑定" /></td>
-                  <td className="px-3 py-2">
-                    <div className="flex gap-2">
-                      <button className="text-xs text-slate-600 hover:underline" onClick={() => openAction('调整点位')}>调整点位</button>
-                      <button className="text-xs text-red-500 hover:underline" onClick={() => openAction('解绑设备')}>解绑</button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {boundDevices.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">暂无已绑定设备</td></tr>}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '来源生产计划', '当前状态', '入库时间', '预分配点位', '绑定状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-gray-100">
+              {paged.pageItems.map((device) => {
+                const type = deviceTypes.find((item) => item.id === device.deviceTypeId);
+                const location = locations.find((item) => item.id === device.preAssignedLocationId || item.id === device.locationId);
+                return (
+                  <tr key={device.id}>
+                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap"><Link to={`/devices/${device.id}`} className="text-blue-600 hover:underline">{device.sn}</Link></td>
+                    <td className="px-3 py-2 whitespace-nowrap">{type?.name || device.deviceTypeId}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{device.productionPlanId || '—'}</td>
+                    <td className="px-3 py-2"><StatusBadge status={bindingDeviceStatus(device, true)} /></td>
+                    <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{device.inboundTime || device.updatedAt || '—'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{location?.name || '—'}</td>
+                    <td className="px-3 py-2"><StatusBadge status="已绑定" /></td>
+                    <td className="px-3 py-2 text-xs">
+                      <div className="flex gap-x-3 whitespace-nowrap">
+                        <button className="text-slate-600 hover:underline" onClick={() => openAction('调整点位')}>调整点位</button>
+                        <button className="text-red-400 hover:text-red-600 hover:underline" onClick={() => openAction('解绑设备')}>解绑</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {boundDevices.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">暂无已绑定设备</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </Section>
     </div>
   );
@@ -267,7 +278,8 @@ const locName = (locations, ...ids) => {
   return found?.name || '—';
 };
 
-function FactoryNode({ devices, records, locations, deviceTypes, onAction, onConfirmOut, onAdvance }) {
+function FactoryNode({ devices, records, locations, deviceTypes, onAction, onConfirmOut, onAdvance, openAction }) {
+  const paged = usePaged(devices, 10);
   return (
     <div className="space-y-5">
       <StageMetrics label0="待检设备" devices={devices} records={records} />
@@ -275,32 +287,42 @@ function FactoryNode({ devices, records, locations, deviceTypes, onAction, onCon
         <div className="text-sm text-gray-600">Pass 后才允许确认出厂；NG 时生成交付工单。所有设备出厂检验 Pass 且确认出厂后，才允许推进到现场安装调试。</div>
       </Section>
       <Section title="出厂检验设备列表">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '预分配点位', '检验结果', '出厂状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-gray-100">
-            {devices.map((device) => {
-              const record = latestFor(records, device.id);
-              const type = deviceTypes.find((item) => item.id === device.deviceTypeId);
-              return (
-                <tr key={device.id}>
-                  <td className="px-3 py-2 font-mono text-xs">{device.sn}</td>
-                  <td className="px-3 py-2">{type?.name || device.deviceTypeId}</td>
-                  <td className="px-3 py-2">{locName(locations, device.preAssignedLocationId, device.locationId)}</td>
-                  <td className="px-3 py-2"><StatusBadge status={resultLabel(record, '待检验')} /></td>
-                  <td className="px-3 py-2"><StatusBadge status={factoryStageStatus(record)} /></td>
-                  <td className="px-3 py-2"><button className="text-xs text-slate-600 hover:underline" onClick={onAction}>录入结果</button></td>
-                </tr>
-              );
-            })}
-            {devices.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">暂无设备</td></tr>}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '预分配点位', '检验结果', '出厂状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-gray-100">
+              {paged.pageItems.map((device) => {
+                const record = latestFor(records, device.id);
+                const type = deviceTypes.find((item) => item.id === device.deviceTypeId);
+                return (
+                  <tr key={device.id}>
+                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{device.sn}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{type?.name || device.deviceTypeId}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{locName(locations, device.preAssignedLocationId, device.locationId)}</td>
+                    <td className="px-3 py-2"><StatusBadge status={resultLabel(record, '待检验')} /></td>
+                    <td className="px-3 py-2"><StatusBadge status={factoryStageStatus(record)} /></td>
+                    <td className="px-3 py-2 text-xs">
+                      <div className="flex gap-x-3 whitespace-nowrap">
+                        <button className="text-blue-600 hover:underline" onClick={onAction}>录入结果</button>
+                        <button className="text-slate-600 hover:underline" onClick={onConfirmOut}>确认出厂</button>
+                        <button className="text-emerald-600 hover:underline" onClick={() => openAction('生成交付工单')}>生成工单</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {devices.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">暂无设备</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </Section>
     </div>
   );
 }
 
-function SiteNode({ devices, records, locations, onAction, onAdvance }) {
+function SiteNode({ devices, records, locations, onAction, onAdvance, openAction }) {
+  const paged = usePaged(devices, 10);
   return (
     <div className="space-y-5">
       <StageMetrics label0="待安装调试设备" devices={devices} records={records} />
@@ -308,31 +330,41 @@ function SiteNode({ devices, records, locations, onAction, onAdvance }) {
         <div className="text-sm text-gray-600">现场确认点位必填；若现场确认点位与预分配点位不一致，需要填写点位变更原因；NG 时生成交付工单。</div>
       </Section>
       <Section title="现场安装调试设备列表">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50"><tr>{['设备SN', '预分配点位', '现场确认点位', '安装调试结果', '当前状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-gray-100">
-            {devices.map((device) => {
-              const record = latestFor(records, device.id);
-              return (
-                <tr key={device.id}>
-                  <td className="px-3 py-2 font-mono text-xs">{device.sn}</td>
-                  <td className="px-3 py-2">{locName(locations, device.preAssignedLocationId)}</td>
-                  <td className="px-3 py-2">{locName(locations, record?.locationId, device.locationId)}</td>
-                  <td className="px-3 py-2"><StatusBadge status={resultLabel(record, '待录入')} /></td>
-                  <td className="px-3 py-2"><StatusBadge status={siteStageStatus(record)} /></td>
-                  <td className="px-3 py-2"><button className="text-xs text-slate-600 hover:underline" onClick={onAction}>录入结果</button></td>
-                </tr>
-              );
-            })}
-            {devices.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">暂无设备</td></tr>}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50"><tr>{['设备SN', '预分配点位', '现场确认点位', '安装调试结果', '当前状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-gray-100">
+              {paged.pageItems.map((device) => {
+                const record = latestFor(records, device.id);
+                return (
+                  <tr key={device.id}>
+                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{device.sn}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{locName(locations, device.preAssignedLocationId)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{locName(locations, record?.locationId, device.locationId)}</td>
+                    <td className="px-3 py-2"><StatusBadge status={resultLabel(record, '待录入')} /></td>
+                    <td className="px-3 py-2"><StatusBadge status={siteStageStatus(record)} /></td>
+                    <td className="px-3 py-2 text-xs">
+                      <div className="flex gap-x-3 whitespace-nowrap">
+                        <button className="text-blue-600 hover:underline" onClick={onAction}>录入结果</button>
+                        <button className="text-slate-600 hover:underline" onClick={() => openAction('调整点位')}>调整现场点位</button>
+                        <button className="text-emerald-600 hover:underline" onClick={() => openAction('生成交付工单')}>生成工单</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {devices.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">暂无设备</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </Section>
     </div>
   );
 }
 
-function AcceptNode({ devices, records, locations, onAction, onAdvance }) {
+function AcceptNode({ devices, records, locations, onAction, onAdvance, openAction }) {
+  const paged = usePaged(devices, 10);
   return (
     <div className="space-y-5">
       <StageMetrics label0="待验收设备" devices={devices} records={records} />
@@ -340,25 +372,34 @@ function AcceptNode({ devices, records, locations, onAction, onAdvance }) {
         <div className="text-sm text-gray-600">Pass 后设备状态变为在线运营；NG 时生成交付工单，必要时生成质量问题记录。全部设备验收 Pass 后，交付计划状态变为已验收。</div>
       </Section>
       <Section title="客户验收设备列表">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50"><tr>{['设备SN', '现场确认点位', '验收结果', '验收时间', '当前状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-gray-100">
-            {devices.map((device) => {
-              const record = latestFor(records, device.id);
-              return (
-                <tr key={device.id}>
-                  <td className="px-3 py-2 font-mono text-xs">{device.sn}</td>
-                  <td className="px-3 py-2">{locName(locations, record?.locationId, device.locationId, device.preAssignedLocationId)}</td>
-                  <td className="px-3 py-2"><StatusBadge status={resultLabel(record, '待验收')} /></td>
-                  <td className="px-3 py-2 text-xs text-gray-500">{record?.time || '—'}</td>
-                  <td className="px-3 py-2"><StatusBadge status={acceptStageStatus(record)} /></td>
-                  <td className="px-3 py-2"><button className="text-xs text-slate-600 hover:underline" onClick={onAction}>录入结果</button></td>
-                </tr>
-              );
-            })}
-            {devices.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">暂无设备</td></tr>}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50"><tr>{['设备SN', '现场确认点位', '验收结果', '验收时间', '当前状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+            <tbody className="divide-y divide-gray-100">
+              {paged.pageItems.map((device) => {
+                const record = latestFor(records, device.id);
+                return (
+                  <tr key={device.id}>
+                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{device.sn}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{locName(locations, record?.locationId, device.locationId, device.preAssignedLocationId)}</td>
+                    <td className="px-3 py-2"><StatusBadge status={resultLabel(record, '待验收')} /></td>
+                    <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{record?.time || '—'}</td>
+                    <td className="px-3 py-2"><StatusBadge status={acceptStageStatus(record)} /></td>
+                    <td className="px-3 py-2 text-xs">
+                      <div className="flex gap-x-3 whitespace-nowrap">
+                        <button className="text-blue-600 hover:underline" onClick={onAction}>录入结果</button>
+                        <button className="text-emerald-600 hover:underline" onClick={() => openAction('生成交付工单')}>生成工单</button>
+                        <button className="text-slate-600 hover:underline" onClick={() => openAction('生成质量问题')}>生成质量问题</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {devices.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">暂无设备</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </Section>
     </div>
   );
@@ -511,6 +552,7 @@ export default function DeliveryPlanDetail() {
           onAction={() => setModal('factoryResult')}
           onConfirmOut={() => setActionName('确认出厂')}
           onAdvance={() => advance('现场安装调试', '交付中')}
+          openAction={(name) => setActionName(name)}
         />
       )}
       {activeNode === 'siteInstall' && (
@@ -520,6 +562,7 @@ export default function DeliveryPlanDetail() {
           locations={projectLocations}
           onAction={() => setModal('siteResult')}
           onAdvance={() => advance('客户验收', '交付中')}
+          openAction={(name) => setActionName(name)}
         />
       )}
       {activeNode === 'customerAccept' && (
@@ -529,6 +572,7 @@ export default function DeliveryPlanDetail() {
           locations={projectLocations}
           onAction={() => setModal('acceptResult')}
           onAdvance={() => advance('客户验收', '已验收')}
+          openAction={(name) => setActionName(name)}
         />
       )}
 
