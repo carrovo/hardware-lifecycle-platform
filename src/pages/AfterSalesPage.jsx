@@ -1471,27 +1471,211 @@ function QualityIssueDetail({ qi, state, dispatch, canDo }) {
 const QI_SOURCE_STAGES = ['生产测试', '出厂检验', '现场安装调试', '客户验收', '在线运营'];
 const QI_ISSUE_TYPES = ['功能异常', '外观缺陷', '性能不达标', '通信异常', '工单转质量问题', '其他'];
 
-// 质量问题详情抽屉（只读；生成工单 / 关闭等操作仍在表格行内）。
-function QIDetailDrawer({ qi, state, onClose }) {
-  if (!qi) return null;
+/* ─────── 质量问题动作弹窗（质量问题台账处理台）─────── */
+const QI_IS_SOFT = (qi) => /软件|算法|固件|版本|系统|程序/.test(qi.issueType || '');
+const QI_NEXT_SUGGESTION = {
+  待处理: '建议指派负责人，并判断是否需要生成换件 / 软件问题工单。',
+  处理中: '建议更新处理进展；能闭环则关闭问题，需执行则生成工单。',
+  已关闭: '问题已关闭，如需继续处理可重新打开。',
+};
+function AssignQIModal({ qi, onClose, onConfirm }) {
+  const [assignee, setAssignee] = useState('');
+  const [note, setNote] = useState('');
+  const [toProcessing, setToProcessing] = useState(qi.status === '待处理');
+  return (
+    <Modal isOpen onClose={onClose} title="指派负责人">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3 text-sm">{woField('问题编号', qi.id)}{woField('当前负责人', qi.owner || qi.reporterName || '待指派')}</div>
+        <div><label className="block text-xs text-gray-600 mb-1">新负责人 *</label><select className={WOINP} value={assignee} onChange={e => setAssignee(e.target.value)}><option value="">-- 选择负责人 --</option>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}（{u.dept}）</option>)}</select></div>
+        <div><label className="block text-xs text-gray-600 mb-1">分配说明</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        {qi.status === '待处理' && <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={toProcessing} onChange={e => setToProcessing(e.target.checked)} />指派后同时转入「处理中」</label>}
+        <WOFooter onClose={onClose} disabled={!assignee} confirmLabel="确认指派" onConfirm={() => onConfirm({ assignee, note, toProcessing })} />
+      </div>
+    </Modal>
+  );
+}
+function UpdateQIProgressModal({ qi, currentUser, onClose, onConfirm }) {
+  const pending = qi.status === '待处理';
+  const [content, setContent] = useState('');
+  const [person, setPerson] = useState(qi.owner || currentUser);
+  const [note, setNote] = useState('');
+  const t = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  return (
+    <Modal isOpen onClose={onClose} title={pending ? '更新处理建议' : '更新处理进展'}>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3 text-sm">{woField('问题编号', qi.id)}<div><span className="text-gray-400 text-xs">当前状态：</span><StatusBadge status={qi.status} /></div></div>
+        <div><label className="block text-xs text-gray-600 mb-1">{pending ? '处理建议 *' : '处理进展 *'}</label><textarea rows={3} className={WOINP} value={content} onChange={e => setContent(e.target.value)} placeholder={pending ? '填写初步处理建议 / 判断' : '填写本次处理进展'} /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="block text-xs text-gray-600 mb-1">处理人</label><select className={WOINP} value={person} onChange={e => setPerson(e.target.value)}>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+          <div><label className="block text-xs text-gray-600 mb-1">更新时间</label><input className={`${WOINP} bg-gray-50`} readOnly value={t} /></div>
+        </div>
+        <div><label className="block text-xs text-gray-600 mb-1">附件 / 图片</label><input className={`${WOINP} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）支持上传附件" /></div>
+        <div><label className="block text-xs text-gray-600 mb-1">备注</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        {pending && <div className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded px-2 py-1">提交后问题将转入「处理中」。</div>}
+        <WOFooter onClose={onClose} disabled={!content.trim()} confirmLabel="保存" onConfirm={() => onConfirm({ content: content.trim(), person, note })} />
+      </div>
+    </Modal>
+  );
+}
+function GenSwapWOFromQIModal({ qi, onClose, onConfirm }) {
+  const [needType, setNeedType] = useState('');
+  const [assignee, setAssignee] = useState('');
+  const [note, setNote] = useState('');
+  const soft = QI_IS_SOFT(qi);
+  return (
+    <Modal isOpen onClose={onClose} title="生成换件工单">
+      <div className="space-y-3">
+        {soft && <div className="bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-800">该问题疑似软件问题，不建议生成换件工单，请确认。</div>}
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3 text-sm">{woField('问题编号', qi.id)}{woField('关联设备SN', qi.deviceSN)}{woField('问题类型', qi.issueType)}<div><span className="text-gray-400 text-xs">严重程度：</span><StatusBadge status={qi.severity || '中'} /></div></div>
+        <div><label className="block text-xs text-gray-600 mb-1">需更换模块类型 *</label><input className={WOINP} value={needType} onChange={e => setNeedType(e.target.value)} placeholder="如：电机模块 / 预控模块 / 机械臂模块" /></div>
+        <div className="grid grid-cols-3 gap-3 text-sm">{woField('旧模块SN', '待确认')}{woField('新模块SN', '待选择')}{woField('新模块库存状态', '待选择')}</div>
+        <div className="text-xs text-gray-400">旧 / 新模块 SN 与库存状态将在工单中心的换件处理流程中确认。</div>
+        <div><label className="block text-xs text-gray-600 mb-1">工单负责人</label><select className={WOINP} value={assignee} onChange={e => setAssignee(e.target.value)}><option value="">-- 待指派 --</option>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+        <div><label className="block text-xs text-gray-600 mb-1">生成说明</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        <WOFooter onClose={onClose} disabled={!needType.trim()} confirmLabel="生成换件工单" color="bg-orange-600 hover:bg-orange-700" onConfirm={() => onConfirm({ needType: needType.trim(), assignee, note })} />
+      </div>
+    </Modal>
+  );
+}
+function GenSoftWOFromQIModal({ qi, onClose, onConfirm }) {
+  const [softwareVersion, setSoftwareVersion] = useState('');
+  const [repro, setRepro] = useState('');
+  const [expect, setExpect] = useState('');
+  const [actual, setActual] = useState('');
+  const [assignee, setAssignee] = useState('');
+  const [note, setNote] = useState('');
+  const hardwareLike = !QI_IS_SOFT(qi) && ['外观缺陷', '性能不达标'].includes(qi.issueType);
+  return (
+    <Modal isOpen onClose={onClose} title="生成软件问题工单">
+      <div className="space-y-3">
+        {hardwareLike && <div className="bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-800">该问题疑似硬件 / 来料 / 装配问题，请确认是否为软件问题。</div>}
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3 text-sm">{woField('问题编号', qi.id)}{woField('关联设备SN', qi.deviceSN)}{woField('问题类型', qi.issueType)}</div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="block text-xs text-gray-600 mb-1">软件版本</label><input className={WOINP} value={softwareVersion} onChange={e => setSoftwareVersion(e.target.value)} placeholder="如 v2.3.1" /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">工单负责人</label><select className={WOINP} value={assignee} onChange={e => setAssignee(e.target.value)}><option value="">-- 待指派 --</option>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+        </div>
+        <div><label className="block text-xs text-gray-600 mb-1">复现步骤</label><textarea rows={2} className={WOINP} value={repro} onChange={e => setRepro(e.target.value)} /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="block text-xs text-gray-600 mb-1">期望表现</label><textarea rows={2} className={WOINP} value={expect} onChange={e => setExpect(e.target.value)} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">实际表现</label><textarea rows={2} className={WOINP} value={actual} onChange={e => setActual(e.target.value)} /></div>
+        </div>
+        <div><label className="block text-xs text-gray-600 mb-1">生成说明</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        <WOFooter onClose={onClose} confirmLabel="生成软件问题工单" onConfirm={() => onConfirm({ softwareVersion, repro, expect, actual, assignee, note })} />
+      </div>
+    </Modal>
+  );
+}
+function CloseQIModal({ qi, currentUser, onClose, onConfirm }) {
+  const [reason, setReason] = useState('');
+  const [conclusion, setConclusion] = useState('');
+  const [closer, setCloser] = useState(qi.owner || currentUser);
+  const [confirmed, setConfirmed] = useState(false);
+  const t = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  return (
+    <Modal isOpen onClose={onClose} title="关闭问题">
+      <div className="space-y-3">
+        {woField('问题编号', qi.id)}
+        <div><label className="block text-xs text-gray-600 mb-1">关闭原因 *</label><textarea rows={2} className={WOINP} value={reason} onChange={e => setReason(e.target.value)} /></div>
+        <div><label className="block text-xs text-gray-600 mb-1">处理结论</label><textarea rows={2} className={WOINP} value={conclusion} onChange={e => setConclusion(e.target.value)} /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="block text-xs text-gray-600 mb-1">关闭人</label><select className={WOINP} value={closer} onChange={e => setCloser(e.target.value)}>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+          <div><label className="block text-xs text-gray-600 mb-1">关闭时间</label><input className={`${WOINP} bg-gray-50`} readOnly value={t} /></div>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />我已确认问题可关闭（二次确认）。</label>
+        <WOFooter onClose={onClose} disabled={!reason.trim() || !confirmed} confirmLabel="确认关闭" color="bg-green-600 hover:bg-green-700" onConfirm={() => onConfirm({ reason: reason.trim(), conclusion, closer })} />
+      </div>
+    </Modal>
+  );
+}
+function ReopenQIModal({ qi, currentUser, onClose, onConfirm }) {
+  const [reason, setReason] = useState('');
+  const [owner, setOwner] = useState(qi.owner || currentUser);
+  const [note, setNote] = useState('');
+  return (
+    <Modal isOpen onClose={onClose} title="重新打开问题">
+      <div className="space-y-3">
+        {woField('问题编号', qi.id)}
+        <div><label className="block text-xs text-gray-600 mb-1">重新打开原因 *</label><textarea rows={2} className={WOINP} value={reason} onChange={e => setReason(e.target.value)} /></div>
+        <div><label className="block text-xs text-gray-600 mb-1">负责人</label><select className={WOINP} value={owner} onChange={e => setOwner(e.target.value)}>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+        <div><label className="block text-xs text-gray-600 mb-1">备注</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        <WOFooter onClose={onClose} disabled={!reason.trim()} confirmLabel="重新打开" color="bg-orange-600 hover:bg-orange-700" onConfirm={() => onConfirm({ reason: reason.trim(), owner, note })} />
+      </div>
+    </Modal>
+  );
+}
+
+// 质量问题详情抽屉 = 处理台：展示信息 + 当前可执行操作区 + 下一步建议（问题沉淀 / 归因 / 生成工单 / 关闭 / 重新打开）。
+function QIDetailDrawer({ qi: snapshot, state, dispatch, currentUser, onClose }) {
+  const [modal, setModal] = useState(null);
+  if (!snapshot) return null;
+  const qi = (state.qualityIssues || []).find(q => q.id === snapshot.id) || snapshot;
+  const now = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
   const project = state.projects.find(p => p.id === qi.projectId);
   const location = (state.locations || []).find(l => l.id === qi.locationId);
   const dev = (state.devices || []).find(d => d.id === qi.deviceId || d.sn === qi.deviceSN);
   const deviceType = qi.deviceName || (state.deviceTypes || []).find(dt => dt.id === dev?.deviceTypeId)?.name || '—';
   const linked = !!(qi.linkedWorkOrder || qi.linkedWorkOrderId);
-  const isSoftIssue = /软件|算法|固件|版本|系统|程序/.test(qi.issueType || '');
-  const genTypes = linked ? '已生成，不可重复生成' : isSoftIssue ? '软件问题工单' : '换件工单 / 软件问题工单';
-  const suggestion = qi.status === '已关闭' ? '问题已关闭，归档留存'
-    : qi.status === '处理中' ? '跟进处理进度，必要时生成工单，处理完成后关闭'
-    : '尽快分配负责人并判断是否生成工单';
+  const closed = qi.status === '已关闭';
+  const soft = QI_IS_SOFT(qi);
+  const close = () => setModal(null);
+
+  const patchQI = (p, note, toStatus) => {
+    const t = now();
+    dispatch({ type: 'UPDATE_QUALITY_ISSUE', payload: { id: qi.id, ...p, processLogs: [...(qi.processLogs || []), { time: t, operator: currentUser, fromStatus: qi.status, toStatus: toStatus ?? p.status ?? qi.status, notes: note }] } });
+    close();
+  };
+  const assign = ({ assignee, note, toProcessing }) => patchQI({ owner: assignee, status: toProcessing ? '处理中' : qi.status }, `指派负责人：${assignee}${note ? `（${note}）` : ''}`, toProcessing ? '处理中' : qi.status);
+  const updateProgress = ({ content, person, note }) => { const to = qi.status === '待处理' ? '处理中' : qi.status; patchQI({ status: to, owner: qi.owner || person, handleNote: content }, `更新处理${qi.status === '待处理' ? '（转处理中）' : '进展'}：${content}${note ? `（${note}）` : ''}`, to); };
+  const closeIssue = ({ reason, conclusion, closer }) => patchQI({ status: '已关闭', closeReason: reason, closeConclusion: conclusion, owner: qi.owner || closer }, `关闭问题：${reason}${conclusion ? `；结论：${conclusion}` : ''}`, '已关闭');
+  const reopen = ({ reason, owner, note }) => patchQI({ status: '处理中', owner }, `重新打开：${reason}${note ? `（${note}）` : ''}`, '处理中');
+  const genSwapWO = ({ needType, assignee, note }) => {
+    if (linked) return;
+    const t = now();
+    const woId = `WO-${Date.now().toString().slice(-6)}`;
+    dispatch({ type: 'ADD_WORK_ORDER', payload: { id: woId, type: 'aftersales', woClass: '换件工单', stage: qi.sourceStage || '在线运营', projectId: qi.projectId, deviceId: qi.deviceId, deviceSN: qi.deviceSN, involvesReplacement: true, needReplaceModuleType: needType || '待确认', oldModuleSN: '待确认', newModuleSN: '待选择', newModuleStockStatus: '待选择', description: qi.issueDesc, severity: qi.severity || '中', status: '待处理', assignedTo: assignee || '', sourceQualityIssueId: qi.id, createdAt: t, updatedAt: t, closedAt: null, processLogs: [] } });
+    patchQI({ linkedWorkOrder: true, linkedWorkOrderId: woId }, `生成换件工单 ${woId}${note ? `（${note}）` : ''}`);
+  };
+  const genSoftWO = ({ softwareVersion, repro, expect, actual, assignee, note }) => {
+    if (linked) return;
+    const t = now();
+    const woId = `WO-${Date.now().toString().slice(-6)}`;
+    dispatch({ type: 'ADD_WORK_ORDER', payload: { id: woId, type: 'aftersales', woClass: '软件问题工单', stage: qi.sourceStage || '在线运营', projectId: qi.projectId, deviceId: qi.deviceId, deviceSN: qi.deviceSN, involvesReplacement: false, softwareVersion, repro, expectBehavior: expect, actualBehavior: actual, description: qi.issueDesc, severity: qi.severity || '中', status: '待处理', assignedTo: assignee || '', sourceQualityIssueId: qi.id, createdAt: t, updatedAt: t, closedAt: null, processLogs: [] } });
+    patchQI({ linkedWorkOrder: true, linkedWorkOrderId: woId }, `生成软件问题工单 ${woId}${note ? `（${note}）` : ''}`);
+  };
+
+  const abtn = (label, key, color = 'bg-blue-600 hover:bg-blue-700', extra = {}) => (
+    <button onClick={() => setModal(key)} className={`px-3 py-1.5 text-sm text-white rounded ${color} disabled:opacity-40`} disabled={extra.disabled} title={extra.title || ''}>{label}</button>
+  );
+  const gbtn = (label, key, extra = {}) => (
+    <button onClick={() => setModal(key)} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded hover:bg-gray-50 disabled:opacity-40" disabled={extra.disabled} title={extra.title || ''}>{label}</button>
+  );
+  const swapTitle = linked ? `已生成工单 ${qi.linkedWorkOrderId || ''}` : soft ? '疑似软件问题，不建议生成换件工单' : '';
+  const softTitle = linked ? `已生成工单 ${qi.linkedWorkOrderId || ''}` : '';
+
   return (
-    <Drawer open={!!qi} onClose={onClose}
+    <Drawer open={!!snapshot} onClose={onClose}
       title={<span className="font-mono">{qi.id}</span>}
       chips={<>
         <span className="text-xs px-2 py-0.5 rounded-full border whitespace-nowrap bg-slate-50 text-slate-600 border-slate-200">{qi.issueType || '—'}</span>
         <StatusBadge status={qi.status} />
         <span className="text-xs text-gray-500 whitespace-nowrap">负责人：{qi.owner || qi.reporterName || '—'}</span>
       </>}>
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+        <div className="text-xs font-semibold text-gray-500 mb-2">当前可执行操作</div>
+        {closed ? (
+          <div className="flex flex-wrap gap-2">{abtn('重新打开', 'reopen', 'bg-orange-600 hover:bg-orange-700')}<span className="text-sm text-gray-400 self-center">问题已关闭，其余处理动作不可用。</span></div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {gbtn('指派负责人', 'assign')}
+            {gbtn(qi.status === '待处理' ? '更新处理建议' : '更新处理进展', 'progress')}
+            {abtn('生成换件工单', 'swapWO', 'bg-orange-600 hover:bg-orange-700', { disabled: linked || soft, title: swapTitle })}
+            {abtn('生成软件问题工单', 'softWO', 'bg-blue-600 hover:bg-blue-700', { disabled: linked, title: softTitle })}
+            {abtn('关闭问题', 'close', 'bg-green-600 hover:bg-green-700')}
+          </div>
+        )}
+        <div className="mt-2 text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded px-2 py-1">下一步建议：{QI_NEXT_SUGGESTION[qi.status] || '—'}</div>
+      </div>
+
       <DSection title="基础信息">
         <DGrid items={[
           ['问题编号', qi.id], ['问题类型', qi.issueType || '—'], ['来源阶段', qi.sourceStage || '在线运营'],
@@ -1512,17 +1696,25 @@ function QIDetailDrawer({ qi, state, onClose }) {
         <DGrid items={[
           ['是否已生成工单', linked ? '是' : '否'],
           ['关联工单ID', qi.linkedWorkOrderId || '—'],
-          ['可生成工单类型', genTypes, true],
+          ['可生成工单类型', linked ? '已生成，不可重复生成' : soft ? '软件问题工单' : '换件工单 / 软件问题工单', true],
         ]} />
       </DSection>
       <DSection title="处理记录">
         <DGrid items={[
-          ['当前处理建议', suggestion, true],
+          ['当前处理建议 / 进展', qi.handleNote || '暂无', true],
           ['处理人', qi.owner || qi.reporterName || '—'],
           ['最近更新时间', (qi.processLogs && qi.processLogs.length ? qi.processLogs[qi.processLogs.length - 1].time : qi.reportTime)],
+          ...(closed ? [['关闭原因', qi.closeReason || '—', true], ['处理结论', qi.closeConclusion || '—', true]] : []),
         ]} />
       </DSection>
       <DSection title="操作日志"><DLogs logs={qi.processLogs} /></DSection>
+
+      {modal === 'assign' && <AssignQIModal qi={qi} onClose={close} onConfirm={assign} />}
+      {modal === 'progress' && <UpdateQIProgressModal qi={qi} currentUser={currentUser} onClose={close} onConfirm={updateProgress} />}
+      {modal === 'swapWO' && <GenSwapWOFromQIModal qi={qi} onClose={close} onConfirm={genSwapWO} />}
+      {modal === 'softWO' && <GenSoftWOFromQIModal qi={qi} onClose={close} onConfirm={genSoftWO} />}
+      {modal === 'close' && <CloseQIModal qi={qi} currentUser={currentUser} onClose={close} onConfirm={closeIssue} />}
+      {modal === 'reopen' && <ReopenQIModal qi={qi} currentUser={currentUser} onClose={close} onConfirm={reopen} />}
     </Drawer>
   );
 }
@@ -1585,6 +1777,11 @@ function QualityIssueTable({ state, dispatch, canDo }) {
     if (qi.status === '已关闭') return;
     const t = nowText();
     dispatch({ type: 'UPDATE_QUALITY_ISSUE', payload: { id: qi.id, status: '已关闭', processLogs: [...(qi.processLogs || []), { time: t, operator: state.currentUser, fromStatus: qi.status, toStatus: '已关闭', notes: '关闭问题' }] } });
+  };
+  const reopenQI = (qi) => {
+    if (qi.status !== '已关闭') return;
+    const t = nowText();
+    dispatch({ type: 'UPDATE_QUALITY_ISSUE', payload: { id: qi.id, status: '处理中', processLogs: [...(qi.processLogs || []), { time: t, operator: state.currentUser, fromStatus: qi.status, toStatus: '处理中', notes: '重新打开问题' }] } });
   };
 
   const selInp = 'border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600 focus:outline-none';
@@ -1696,7 +1893,9 @@ function QualityIssueTable({ state, dispatch, canDo }) {
                           <button className="text-slate-600 hover:underline" onClick={(e) => { e.stopPropagation(); setDetailQI(qi); }}>查看详情</button>
                           {opBtn('生成换件工单', () => genWorkOrder(qi, '换件工单'), { disabled: swapDisabled, title: linked ? `已生成工单 ${qi.linkedWorkOrderId || ''}` : closed ? '已关闭问题不可生成' : isSoftIssue ? '软件问题请生成软件问题工单' : '' })}
                           {opBtn('生成软件问题工单', () => genWorkOrder(qi, '软件问题工单'), { disabled: softDisabled, title: linked ? `已生成工单 ${qi.linkedWorkOrderId || ''}` : closed ? '已关闭问题不可生成' : '' })}
-                          {opBtn('关闭问题', () => closeQI(qi), { disabled: closed, title: closed ? '问题已关闭' : '', danger: true })}
+                          {closed
+                            ? opBtn('重新打开', () => reopenQI(qi))
+                            : opBtn('关闭问题', () => closeQI(qi), { danger: true })}
                         </div>
                       </td>
                     </tr>
@@ -1710,7 +1909,7 @@ function QualityIssueTable({ state, dispatch, canDo }) {
         <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </div>
 
-      <QIDetailDrawer qi={detailQI} state={state} onClose={() => setDetailQI(null)} />
+      <QIDetailDrawer qi={detailQI} state={state} dispatch={dispatch} currentUser={state.currentUser} onClose={() => setDetailQI(null)} />
       <ScanQRModal isOpen={showScanModal} onClose={() => setShowScanModal(false)} />
       {showManualModal && <ManualEntryModal isOpen={showManualModal} onClose={() => setShowManualModal(false)} onSave={handleSave} state={state} />}
     </div>

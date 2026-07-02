@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
-import { FEISHU_USERS, ROLES_LIST } from '../data/mockData';
+import { FEISHU_USERS } from '../data/mockData';
 
 // 一级导航 + 可展开的二级菜单。二级菜单通过 ?tab= 深链到既有页面。
 const NAV_ITEMS = [
@@ -51,6 +51,21 @@ const NAV_ITEMS = [
   },
 ];
 
+// 角色切换列表（内部角色值 → 展示名）。ERP 统一为「ERP 协同角色」，不再显示「财务 / ERP」。
+const SWITCH_ROLES = [
+  ['管理员', '管理员'],
+  ['项目负责人', '项目负责人'],
+  ['厂长', '工厂负责人'],
+  ['质检员', '质检员'],
+  ['装配工', '装配工'],
+  ['测试员', '测试员'],
+  ['运维工程师', '运维工程师'],
+  ['维修工程师', '维修工程师'],
+  ['ERP协同角色', 'ERP 协同角色'],
+];
+const ROLE_DISPLAY = { '厂长': '工厂负责人', 'ERP协同角色': 'ERP 协同角色' };
+const roleLabel = (r) => ROLE_DISPLAY[r] || r;
+
 const ROLE_COLORS = {
   '管理员': 'bg-purple-600',
   '厂长': 'bg-blue-600',
@@ -60,6 +75,7 @@ const ROLE_COLORS = {
   '运维工程师': 'bg-teal-600',
   '项目负责人': 'bg-indigo-600',
   '维修工程师': 'bg-red-600',
+  'ERP协同角色': 'bg-slate-600',
 };
 
 function isGroupActive(item, pathname) {
@@ -68,14 +84,61 @@ function isGroupActive(item, pathname) {
   return bases.some((b) => pathname === b || pathname.startsWith(`${b}/`));
 }
 
+// 右上角用户 / 角色区域（所有页面可见）。
+function UserRoleMenu({ currentUser, currentRole, setCurrentRole }) {
+  const [open, setOpen] = useState(false);
+  const roleColor = ROLE_COLORS[currentRole] || 'bg-slate-600';
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-full pl-1 pr-3 py-1 hover:bg-gray-50">
+        <span className="w-6 h-6 rounded-full bg-slate-600 flex items-center justify-center text-white text-xs font-bold">{currentUser.avatar}</span>
+        <span className="text-gray-800">{currentUser.name}（{currentUser.dept}）</span>
+        <span className="text-gray-300">｜</span>
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs ${roleColor}`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-white/60" />{roleLabel(currentRole)}
+        </span>
+        <span className="text-gray-400 text-xs">▾</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 space-y-3">
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between"><span className="text-gray-400 text-xs">当前用户</span><span className="text-gray-800 font-medium">{currentUser.name}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400 text-xs">所属部门</span><span className="text-gray-700">{currentUser.dept}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400 text-xs">当前角色</span><span className="text-gray-800 font-medium">{roleLabel(currentRole)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400 text-xs">飞书通知</span><span className="text-blue-600">已集成</span></div>
+            </div>
+            <div className="border-t border-gray-100 pt-2">
+              <div className="text-xs text-gray-400 mb-1.5">切换角色（预览不同权限范围）</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {SWITCH_ROLES.map(([value, label]) => (
+                  <button key={value} onClick={() => { setCurrentRole(value); setOpen(false); }}
+                    className={`text-xs px-2 py-1.5 rounded border text-left ${
+                      currentRole === value
+                        ? 'bg-slate-700 text-white border-slate-700'
+                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                    }`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Layout({ children }) {
-  const { state, dispatch } = useApp();
+  const { state } = useApp();
   const { currentRole, setCurrentRole, canSeeNav } = useRole();
   const location = useLocation();
   const activeTab = new URLSearchParams(location.search).get('tab');
 
   const currentUser = FEISHU_USERS.find((u) => u.id === (state.currentUserId || 'u1')) || FEISHU_USERS[0];
-  const roleColor = ROLE_COLORS[currentRole] || 'bg-slate-600';
 
   const visibleItems = NAV_ITEMS.filter((item) => canSeeNav(item.path || item.base));
 
@@ -85,15 +148,13 @@ export default function Layout({ children }) {
 
   return (
     <div className="flex min-h-screen w-full bg-gray-100">
-      {/* Sidebar */}
+      {/* Sidebar：仅平台名称 + 主导航 + 极简飞书状态 */}
       <aside className="w-52 bg-slate-800 flex flex-col fixed top-0 left-0 h-full z-40">
-        {/* Logo */}
         <div className="px-4 py-4 border-b border-slate-700">
           <div className="text-white font-bold text-sm leading-tight">设备全生命周期</div>
           <div className="text-slate-400 text-xs mt-0.5">质量管理平台</div>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 py-2 overflow-y-auto">
           {visibleItems.map((item) => {
             if (item.path) {
@@ -154,59 +215,23 @@ export default function Layout({ children }) {
           })}
         </nav>
 
-        {/* Feishu indicator */}
         <div className="px-4 py-2 border-t border-slate-700">
           <div className="flex items-center gap-1.5 text-xs text-slate-400">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0"></span>
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
             <span>飞书通知已集成</span>
           </div>
         </div>
-
-        {/* Role Switch */}
-        <div className="px-4 py-3 border-t border-slate-700">
-          <div className="text-xs text-slate-400 mb-1.5">切换身份预览</div>
-          <select
-            value={currentRole}
-            onChange={(e) => setCurrentRole(e.target.value)}
-            className="w-full bg-slate-700 text-white text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-slate-400 mb-2"
-          >
-            {ROLES_LIST.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
-          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-white text-xs ${roleColor}`}>
-            <span className="w-1.5 h-1.5 rounded-full bg-white/60"></span>
-            {currentRole}
-          </span>
-        </div>
-
-        {/* Current User */}
-        <div className="px-4 py-3 border-t border-slate-700">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-7 h-7 rounded-full bg-slate-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-              {currentUser.avatar}
-            </div>
-            <div className="min-w-0">
-              <div className="text-white text-xs font-medium truncate">{currentUser.name}</div>
-              <div className="text-slate-400 text-xs truncate">{currentUser.dept}</div>
-            </div>
-          </div>
-          <select
-            value={state.currentUserId || 'u1'}
-            onChange={(e) => dispatch({ type: 'SET_CURRENT_USER', payload: e.target.value })}
-            className="w-full bg-slate-700 text-white text-xs rounded px-2 py-1 border border-slate-600 focus:outline-none"
-          >
-            {FEISHU_USERS.map((u) => (
-              <option key={u.id} value={u.id}>{u.name} ({u.dept})</option>
-            ))}
-          </select>
-        </div>
       </aside>
 
-      {/* Content */}
-      <main className="flex-1 min-w-0 ml-52 min-h-screen">
-        {children}
-      </main>
+      {/* Content：顶部条（右上角用户 / 角色区域）+ 页面内容 */}
+      <div className="flex-1 min-w-0 ml-52 min-h-screen flex flex-col">
+        <header className="sticky top-0 z-30 h-12 bg-white border-b border-gray-200 flex items-center justify-end px-4 flex-shrink-0">
+          <UserRoleMenu currentUser={currentUser} currentRole={currentRole} setCurrentRole={setCurrentRole} />
+        </header>
+        <main className="flex-1 min-w-0">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

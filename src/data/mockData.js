@@ -591,6 +591,8 @@ export const ROLE_NAV_PERMISSIONS = {
   '项目负责人':  ['/home', '/dashboard', '/projects', '/assets', '/after-sales'],
   '厂长':       ['/home', '/dashboard', '/projects', '/assets', '/after-sales'],
   '管理员':     ['/home', '/dashboard', '/projects', '/assets', '/after-sales', '/system'],
+  // ERP 协同角色（生产计划 / 库管 / 供应链采购 / 质量检验 / 财务等，只读核对 ERP 单据关联）
+  'ERP协同角色': ['/home', '/projects', '/assets'],
 };
 
 export const ROLE_ACTION_PERMISSIONS = {
@@ -602,6 +604,7 @@ export const ROLE_ACTION_PERMISSIONS = {
   '厂长':       ['add_material_batch', 'add_assembly', 'add_test_record', 'void_test_record', 'add_production_plan', 'add_project', 'add_device_allocation', 'add_delivery', 'add_work_order', 'add_retirement', 'add_device_type', 'add_module_type', 'edit_device_type', 'edit_module_type', 'void_project', 'update_work_order', 'recheck_work_order', 'manage_locations', 'add_quality_issue', 'update_quality_issue'],
   '维修工程师':  ['add_work_order', 'update_work_order', 'add_quality_issue', 'update_quality_issue'],
   '管理员':     ['add_material_batch', 'add_assembly', 'add_test_record', 'void_test_record', 'add_production_plan', 'add_project', 'add_device_allocation', 'add_delivery', 'add_work_order', 'add_retirement', 'add_device_type', 'add_module_type', 'edit_device_type', 'edit_module_type', 'void_project', 'manage_users', 'manage_roles', 'update_work_order', 'recheck_work_order', 'manage_locations', 'add_quality_issue', 'update_quality_issue'],
+  'ERP协同角色': [], // 只读核对 ERP 单据关联，默认无处理动作权限
 };
 
 // ============ 点位（deviceIds 只放在线运营设备；交付中设备通过 device.locationId 关联）============
