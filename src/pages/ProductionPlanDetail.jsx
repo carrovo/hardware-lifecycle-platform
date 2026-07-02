@@ -170,7 +170,7 @@ function MaterialPrepNode({ plan, state, openAction, goMaterials }) {
   return (
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-        来料准备节点用于建立生产计划与 ERP采购单、来料批次、库存模块之间的主动关联关系，不仅仅是自动识别库存。
+        来料准备节点用于建立生产计划与 ERP采购单、来料批次、库存模块之间的主动关联关系。系统可根据已关联批次计算可用库存和缺口，但不应仅依赖自动识别库存。
       </div>
       <MetricCards items={[
         { label: '齐套进度', value: `${readyCount}/${rows.length}`, color: 'border-cyan-500' },
@@ -382,6 +382,7 @@ function AssemblyNode({ planDevices, state, openRecord, openAction }) {
   const paged = usePaged(rows, 10);
   const done = rows.filter((r) => r.aStatus === '已录入待测试').length;
   const allDone = rows.length > 0 && done === rows.length;
+  const notReady = rows.length - done;
   return (
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
@@ -398,9 +399,16 @@ function AssemblyNode({ planDevices, state, openRecord, openAction }) {
           <button className={BTN_GHOST} onClick={() => openAction('批量导入待测试设备')}>批量导入待测试设备</button>
           <button className={BTN_GHOST} onClick={() => openAction('查看装配模板')}>查看装配模板</button>
           <button className={BTN_GHOST} onClick={openRecord}>录入待测试设备</button>
-          <button className={`${BTN_PRIMARY} disabled:opacity-40`} disabled={!allDone} onClick={() => openAction('确认装配完成')}>确认装配完成并进入质量测试</button>
+          <button className={`${BTN_PRIMARY} disabled:opacity-40`} disabled={!allDone}
+            title={!allDone ? `仍有 ${notReady} 台设备未完成必填模块绑定或标签填写，暂不能进入质量测试。` : ''}
+            onClick={() => openAction('确认装配完成')}>确认装配完成并进入质量测试</button>
         </div>
       }>
+        {!allDone && rows.length > 0 && (
+          <div className="mb-3 text-xs bg-amber-50 border border-amber-100 text-amber-700 rounded px-3 py-2">
+            仍有 {notReady} 台设备未完成必填模块绑定或标签填写，暂不能进入质量测试。
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '装配状态', '模块绑定进度', '必填模块完成数', '设备标签状态', '装配人', '装配时间', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
@@ -418,7 +426,7 @@ function AssemblyNode({ planDevices, state, openRecord, openAction }) {
                   <td className="px-3 py-2 text-xs">
                     <div className="flex gap-x-3 whitespace-nowrap">
                       <button className="text-slate-600 hover:underline" onClick={() => openAction('查看装配记录')}>查看记录</button>
-                      <button className="text-blue-600 hover:underline" onClick={() => openAction('编辑装配')}>编辑装配</button>
+                      <button className="text-blue-600 hover:underline" onClick={openRecord}>绑定模块</button>
                       <button className="text-emerald-600 hover:underline" onClick={() => openAction('补充标签')}>补充标签</button>
                       <button className="text-red-400 hover:text-red-600 hover:underline" onClick={() => openAction('作废录入')}>作废录入</button>
                     </div>

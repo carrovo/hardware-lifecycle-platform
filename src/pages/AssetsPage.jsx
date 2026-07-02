@@ -457,14 +457,133 @@ function AllDevicesSubTab({ state }) {
 }
 
 /* ─────────── Locations tab ─────────── */
-function LocationsTab({ state }) {
-  const { locations = [], projects, devices, deliveryPlans = [] } = state;
+const LOC_OWNERS = ['张三', '李四', '王五', '赵六', '蔡八'];
+const LOC_STATUS_STYLE = {
+  待部署: 'bg-gray-100 text-gray-600 border-gray-300',
+  部署中: 'bg-blue-100 text-blue-700 border-blue-300',
+  已部署: 'bg-teal-100 text-teal-700 border-teal-300',
+  在线运营: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+  已停用: 'bg-gray-100 text-gray-400 border-gray-200',
+};
+function locStatusOf(loc, boundCount, onlineCount, planned) {
+  if (loc.disabled) return '已停用';
+  if (onlineCount > 0) return '在线运营';
+  if (boundCount === 0) return '待部署';
+  if (planned && boundCount < planned) return '部署中';
+  return '已部署';
+}
+
+function LocationFormModal({ isOpen, onClose, initial, projects, onSave }) {
+  const [form, setForm] = useState(initial || { projectId: projects[0]?.id || '', name: '', address: '', plannedCount: 1, owner: '', notes: '' });
+  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+  const submit = (e) => { e.preventDefault(); onSave({ ...form, plannedCount: Number(form.plannedCount || 0) }); onClose(); };
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={initial ? '编辑点位' : '新增点位'} size="lg">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">所属项目 *</label>
+            <select className={inp} required value={form.projectId} onChange={e => setForm({ ...form, projectId: e.target.value })}>
+              <option value="">-- 选择项目 --</option>
+              {projects.filter(p => !p.voided).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">点位名称 *</label><input className={inp} required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
+          <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">地址 / 描述</label><input className={inp} value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">计划设备数</label><input type="number" min="0" className={inp} value={form.plannedCount} onChange={e => setForm({ ...form, plannedCount: e.target.value })} /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">负责人</label>
+            <select className={inp} value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })}>
+              <option value="">-- 选择负责人 --</option>
+              {LOC_OWNERS.map(o => <option key={o}>{o}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">备注</label><textarea rows={2} className={inp} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function LocationDetailModal({ isOpen, onClose, loc, projects, devices, deviceTypes = [], deliveryPlans, getProjectName }) {
+  if (!loc) return null;
+  const boundDevices = devices.filter(d => d.locationId === loc.id || (loc.deviceIds || []).includes(d.id));
+  const plans = deliveryPlans.filter(dp => dp.projectId === loc.projectId);
+  const typeName = id => deviceTypes.find(t => t.id === id)?.name || id;
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`点位详情 · ${loc.name}`} size="lg">
+      <div className="space-y-5">
+        <div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">基础信息</div>
+          <div className="grid grid-cols-3 gap-3 text-sm bg-gray-50 border border-gray-200 rounded p-3">
+            <div><span className="text-gray-400 text-xs">点位ID：</span><span className="font-mono text-gray-700">{loc.id}</span></div>
+            <div><span className="text-gray-400 text-xs">所属项目：</span><span className="text-gray-700">{getProjectName(loc.projectId)}</span></div>
+            <div><span className="text-gray-400 text-xs">负责人：</span><span className="text-gray-700">{loc.owner || '—'}</span></div>
+            <div className="col-span-2"><span className="text-gray-400 text-xs">地址/描述：</span><span className="text-gray-700">{loc.address || '—'}</span></div>
+            <div><span className="text-gray-400 text-xs">计划设备数：</span><span className="text-gray-700">{loc.plannedCount || (loc.deviceIds || []).length || 0}</span></div>
+            <div className="col-span-3"><span className="text-gray-400 text-xs">备注：</span><span className="text-gray-700">{loc.notes || '—'}</span></div>
+          </div>
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">该点位设备（{boundDevices.length}）</div>
+          <div className="border border-gray-200 rounded overflow-hidden max-h-56 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 sticky top-0"><tr>{['设备SN', '设备类型', '当前状态', '操作'].map(h => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {boundDevices.map(d => (
+                  <tr key={d.id}>
+                    <td className="px-3 py-2 font-mono text-xs">{d.sn}</td>
+                    <td className="px-3 py-2 text-gray-600">{typeName(d.deviceTypeId)}</td>
+                    <td className="px-3 py-2"><StatusBadge status={d.status} /></td>
+                    <td className="px-3 py-2 text-xs"><Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline" onClick={onClose}>查看详情</Link></td>
+                  </tr>
+                ))}
+                {boundDevices.length === 0 && <tr><td colSpan={4} className="px-3 py-6 text-center text-gray-400">该点位暂无绑定设备</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">关联交付计划（{plans.length}）</div>
+          <div className="flex flex-wrap gap-2">
+            {plans.map(dp => <Link key={dp.id} to={`/delivery-plans/${dp.id}`} onClick={onClose} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2.5 py-1 hover:bg-blue-100">{dp.batchNo || dp.name}</Link>)}
+            {plans.length === 0 && <span className="text-sm text-gray-400">暂无关联交付计划</span>}
+          </div>
+        </div>
+        <div className="flex justify-end"><button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">关闭</button></div>
+      </div>
+    </Modal>
+  );
+}
+
+function LocationsTab() {
+  const { state, dispatch } = useApp();
+  const { locations = [], projects, devices, deviceTypes = [], deliveryPlans = [] } = state;
   const getProjectName = id => projects.find(p => p.id === id)?.name || '—';
   const deliveryPlanNames = (projectId) => deliveryPlans.filter(dp => dp.projectId === projectId).map(dp => dp.batchNo || dp.name);
   const paged = usePaged(locations, 10);
+  const [formTarget, setFormTarget] = useState(null); // 'new' | loc | null
+  const [detailTarget, setDetailTarget] = useState(null);
+  const nowText = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
+
+  const saveLocation = (form) => {
+    if (formTarget && formTarget !== 'new') {
+      dispatch({ type: 'UPDATE_LOCATION', payload: { id: formTarget.id, ...form, updatedAt: nowText() } });
+    } else {
+      dispatch({ type: 'ADD_LOCATION', payload: { id: `LOC-${Date.now().toString().slice(-6)}`, ...form, deviceIds: [], createdAt: nowText(), updatedAt: nowText() } });
+    }
+    setFormTarget(null);
+  };
+  const toggleDisabled = (loc) => dispatch({ type: 'UPDATE_LOCATION', payload: { id: loc.id, disabled: !loc.disabled, updatedAt: nowText() } });
 
   return (
     <div>
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-xs text-gray-500">点位管理是资产管理中的点位主数据，用于支撑交付计划的预分配点位、现场安装调试的现场确认点位，以及设备在线运营后的点位归属。</div>
+        <button onClick={() => setFormTarget('new')} className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800 flex-shrink-0">+ 新增点位</button>
+      </div>
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
           { label: '点位总数', value: locations.length, color: 'border-slate-500' },
@@ -483,7 +602,7 @@ function LocationsTab({ state }) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {['所属项目', '点位名称', '地址/描述', '计划设备数', '已绑定设备数', '在线设备数', '关联交付计划', '操作'].map(h => (
+              {['点位ID', '所属项目', '点位名称', '地址/描述', '计划设备数', '已绑定设备数', '在线设备数', '关联交付计划', '点位状态', '负责人', '最近更新', '操作'].map(h => (
                 <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -492,29 +611,44 @@ function LocationsTab({ state }) {
             {paged.pageItems.map(loc => {
               const boundDevices = devices.filter(d => d.locationId === loc.id || (loc.deviceIds || []).includes(d.id));
               const onlineCount = boundDevices.filter(d => d.status === '在线运营').length;
+              const planned = loc.plannedCount || (loc.deviceIds || []).length || 0;
+              const st = locStatusOf(loc, boundDevices.length, onlineCount, planned);
               return (
-                <tr key={loc.id} className="hover:bg-gray-50">
+                <tr key={loc.id} className={`hover:bg-gray-50 ${loc.disabled ? 'opacity-60' : ''}`}>
+                  <td className="px-4 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{loc.id}</td>
                   <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">
                     <Link to={`/projects/${loc.projectId}`} className="text-slate-700 hover:underline">{getProjectName(loc.projectId)}</Link>
                   </td>
                   <td className="px-4 py-2.5 text-gray-800 font-medium whitespace-nowrap">{loc.name}</td>
                   <td className="px-4 py-2.5 text-gray-500 text-xs whitespace-nowrap">{loc.address || '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-600">{loc.plannedCount || (loc.deviceIds || []).length || '—'}</td>
+                  <td className="px-4 py-2.5 text-gray-600">{planned}</td>
                   <td className="px-4 py-2.5 text-gray-600">{boundDevices.length}</td>
                   <td className="px-4 py-2.5 text-gray-600">{onlineCount}</td>
                   <td className="px-4 py-2.5 text-gray-500 text-xs whitespace-nowrap">{deliveryPlanNames(loc.projectId).join('、') || '—'}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap"><span className={`text-xs px-2 py-0.5 rounded-full border ${LOC_STATUS_STYLE[st]}`}>{st}</span></td>
+                  <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">{loc.owner || '—'}</td>
+                  <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{loc.updatedAt || '—'}</td>
                   <td className="px-4 py-2.5 text-xs whitespace-nowrap">
-                    <Link to={`/projects/${loc.projectId}`} className="text-slate-600 hover:underline">查看项目</Link>
+                    <div className="flex items-center gap-x-3">
+                      <button className="text-slate-600 hover:underline" onClick={() => setDetailTarget(loc)}>查看详情</button>
+                      <button className="text-blue-600 hover:underline" onClick={() => setFormTarget(loc)}>编辑</button>
+                      <button className="text-slate-600 hover:underline" onClick={() => setDetailTarget(loc)}>查看设备</button>
+                      <button className="text-emerald-600 hover:underline" onClick={() => setDetailTarget(loc)}>查看交付计划</button>
+                      <button className={`hover:underline ${loc.disabled ? 'text-green-600' : 'text-red-400 hover:text-red-600'}`} onClick={() => toggleDisabled(loc)}>{loc.disabled ? '启用' : '停用'}</button>
+                    </div>
                   </td>
                 </tr>
               );
             })}
-            {locations.length === 0 && <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">暂无点位</td></tr>}
+            {locations.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无点位</td></tr>}
           </tbody>
         </table>
         </div>
         <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </div>
+
+      {formTarget && <LocationFormModal isOpen={!!formTarget} onClose={() => setFormTarget(null)} initial={formTarget === 'new' ? null : formTarget} projects={projects} onSave={saveLocation} />}
+      {detailTarget && <LocationDetailModal isOpen={!!detailTarget} onClose={() => setDetailTarget(null)} loc={detailTarget} projects={projects} devices={devices} deviceTypes={deviceTypes} deliveryPlans={deliveryPlans} getProjectName={getProjectName} />}
     </div>
   );
 }
@@ -565,7 +699,7 @@ export default function AssetsPage() {
         {activeTab === 'devices' && <DevicesTab />}
         {activeTab === 'materials' && <Materials />}
         {activeTab === 'types' && <DeviceTypes />}
-        {activeTab === 'locations' && <LocationsTab state={state} />}
+        {activeTab === 'locations' && <LocationsTab />}
       </div>
     </div>
   );
