@@ -68,37 +68,168 @@ function FlowStepper({ activeNode, onChange, counts }) {
   );
 }
 
-const DELIVERY_ACTION_FIELDS = {
-  确认出厂: ['实际出厂时间', '出厂确认人', 'ERP销售出库单号', '物流方式', '物流单号', '备注'],
-  调整点位: ['设备SN', '原预分配点位', '新预分配点位', '调整原因'],
-  解绑设备: ['设备SN', '当前状态', '解绑原因', '二次确认'],
-  生成交付工单: ['设备SN', '来源节点', '问题类型', '问题描述', '严重程度', '负责人'],
-  生成质量问题: ['设备SN', '来源节点', '问题类型', '严重程度', '问题描述', '责任模块'],
-};
-const DELIVERY_ACTION_TEXT = {
-  确认绑定完成: '已确认绑定完成，设备状态将更新为待出厂检验，交付计划进入出厂检验节点。',
-  暂存绑定结果: '已暂存当前绑定结果。仍有设备未绑定，需绑定完成后才能推进到出厂检验。',
-};
+// 交付计划详情核心动作的业务弹窗（调整点位 / 解绑设备 / 确认出厂 / 生成交付工单 /
+// 生成质量问题 / 暂存绑定结果 / 确认绑定完成），不再展示原型占位。
+const QI_ISSUE_TYPES = ['现场质量问题', '功能异常', '外观缺陷', '性能不达标', '通信异常', '其他'];
 
-function ActionPlaceholderModal({ isOpen, onClose, title }) {
-  const fields = DELIVERY_ACTION_FIELDS[title];
-  const customText = DELIVERY_ACTION_TEXT[title];
+function DField({ label, value, full }) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title || '交付动作'} size="lg">
+    <div className={full ? 'col-span-2' : ''}>
+      <div className="text-xs font-medium text-gray-500 mb-1">{label}</div>
+      <div className="text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded px-3 py-2 min-h-[38px] break-all">{value === undefined || value === null || value === '' ? '—' : value}</div>
+    </div>
+  );
+}
+
+function DeliveryActionModal({ isOpen, onClose, action, plan, boundDevices, records, locations, state, dispatch }) {
+  const name = action?.name || '';
+  const device = action?.device || null;
+  const locNameOf = (id) => locations.find((l) => l.id === id)?.name || '—';
+  const [newLoc, setNewLoc] = useState('');
+  const [reason, setReason] = useState('');
+  const [confirmChk, setConfirmChk] = useState(false);
+  const [operator, setOperator] = useState(state.currentUser);
+  const [notes, setNotes] = useState('');
+  const [severity, setSeverity] = useState('中');
+  const [desc, setDesc] = useState('');
+  const [owner, setOwner] = useState('');
+  const [issueType, setIssueType] = useState('现场质量问题');
+  const [genWO, setGenWO] = useState(false);
+  const [linkPlan, setLinkPlan] = useState(true);
+  const sourceNode = plan.currentNode || '出厂检验';
+
+  const close = () => { setNewLoc(''); setReason(''); setConfirmChk(false); setNotes(''); setDesc(''); setOwner(''); setGenWO(false); onClose(); };
+
+  const target = plan.targetCount || 0;
+  const bound = boundDevices.length;
+  const gap = Math.max(target - bound, 0);
+  const factoryPass = boundDevices.filter((d) => (records.factoryInspection || []).some((r) => r.deviceId === d.id && ['Pass', '通过'].includes(r.result))).length;
+  const curLoc = device ? locNameOf(device.locationId || device.preAssignedLocationId) : '—';
+
+  const submitAdjust = () => {
+    if (!device || !newLoc) return;
+    dispatch({ type: 'UPDATE_DEVICE', payload: { id: device.id, preAssignedLocationId: newLoc, updatedAt: nowText() } });
+    dispatch({ type: 'ADD_OPERATION_LOG', payload: { id: `LOG-${Date.now()}-${plan.id}`, deliveryPlanId: plan.id, projectId: plan.projectId, deviceId: device.id, operator, timestamp: nowText(), actionType: '调整点位', fromStatus: plan.status, toStatus: plan.status, notes: `${device.sn} 点位调整为 ${locNameOf(newLoc)}：${reason || '—'}` } });
+    close();
+  };
+  const submitUnbind = () => {
+    if (!device || !reason.trim() || !confirmChk) return;
+    const nextBinding = (plan.records?.binding || []).filter((b) => b.deviceId !== device.id);
+    const nextBound = (plan.boundDeviceIds || []).filter((x) => x !== device.id);
+    dispatch({ type: 'UPDATE_DELIVERY_PLAN', payload: { ...plan, boundDeviceIds: nextBound, records: { ...plan.records, binding: nextBinding } } });
+    dispatch({ type: 'UPDATE_DEVICE', payload: { id: device.id, deliveryPlanId: null, preAssignedLocationId: null, updatedAt: nowText() } });
+    dispatch({ type: 'ADD_OPERATION_LOG', payload: { id: `LOG-${Date.now()}-${plan.id}`, deliveryPlanId: plan.id, projectId: plan.projectId, deviceId: device.id, operator: state.currentUser, timestamp: nowText(), actionType: '解绑设备', fromStatus: plan.status, toStatus: plan.status, notes: `解绑 ${device.sn}：${reason}` } });
+    close();
+  };
+  const submitConfirmFactory = () => {
+    dispatch({ type: 'ADD_OPERATION_LOG', payload: { id: `LOG-${Date.now()}-${plan.id}`, deliveryPlanId: plan.id, projectId: plan.projectId, operator, timestamp: nowText(), actionType: '确认出厂', fromStatus: plan.status, toStatus: plan.status, notes: `确认出厂：已绑定 ${bound} 台，出厂检验 Pass ${factoryPass} 台。${notes || ''}` } });
+    close();
+  };
+  const submitGenWO = () => {
+    if (!device || !desc.trim()) return;
+    dispatch({ type: 'ADD_DELIVERY_WORK_ORDER', payload: { id: `DWO-${plan.id}-${device.id}-${Date.now().toString().slice(-4)}`, type: 'delivery', deliveryPlanId: linkPlan ? plan.id : undefined, deviceId: device.id, deviceSN: device.sn, sourceNode, stage: sourceNode, description: desc, severity, status: '待处理', assignedTo: owner, createdAt: nowText(), updatedAt: nowText(), processLogs: [] } });
+    close();
+  };
+  const submitGenQI = () => {
+    if (!device || !desc.trim()) return;
+    dispatch({ type: 'ADD_QUALITY_ISSUE', payload: { id: `QI-${Date.now().toString().slice(-6)}`, deviceId: device.id, deviceSN: device.sn, projectId: plan.projectId, sourceStage: sourceNode, issueType, severity, issueDesc: desc, description: desc, owner, reporterName: state.currentUser, reportTime: nowText(), status: '待处理', source: '手动录入', linkedWorkOrder: genWO, processLogs: [] } });
+    close();
+  };
+
+  let body = null; let footer = null;
+  if (name === '调整点位') {
+    body = (
+      <div className="grid grid-cols-2 gap-3">
+        <DField label="设备SN" value={device?.sn} />
+        <DField label="当前点位" value={curLoc} />
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">新点位 *</label>
+          <select className={INPUT} value={newLoc} onChange={(e) => setNewLoc(e.target.value)}><option value="">-- 选择点位 --</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select>
+        </div>
+        <div><label className="block text-xs font-medium text-gray-600 mb-1">操作人</label><input className={INPUT} value={operator} onChange={(e) => setOperator(e.target.value)} /></div>
+        <div className="col-span-2"><label className="block text-xs font-medium text-gray-600 mb-1">调整原因</label><textarea className={INPUT} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+        <DField label="操作时间" value={nowText()} />
+      </div>
+    );
+    footer = <button onClick={submitAdjust} disabled={!device || !newLoc} className={`${BTN_PRIMARY} disabled:opacity-40`}>确认调整</button>;
+  } else if (name === '解绑设备') {
+    body = (
       <div className="space-y-4">
-        <p className="text-sm text-gray-600">{customText || `已保留「${title || '交付动作'}」动作入口，后续可接入真实审批、工单和状态流转。`}</p>
-        {fields && (
-          <div className="grid grid-cols-2 gap-3">
-            {fields.map((f) => (
-              <div key={f} className={f.length > 4 ? 'col-span-2' : ''}>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{f}</label>
-                <input disabled className="w-full border border-gray-200 rounded px-3 py-2 text-sm bg-gray-50 text-gray-400" placeholder={`（原型占位）${f}`} />
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">本阶段重点是可演示的原型结构与规则表达。</div>
-        <div className="flex justify-end"><button onClick={onClose} className={BTN_PRIMARY}>知道了</button></div>
+        <div className="grid grid-cols-2 gap-3">
+          <DField label="设备SN" value={device?.sn} />
+          <DField label="所属交付计划" value={plan.name || plan.id} />
+          <DField label="当前点位" value={curLoc} />
+        </div>
+        <div><label className="block text-xs font-medium text-gray-600 mb-1">解绑原因 *</label><textarea className={INPUT} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="请填写解绑原因（必填）" /></div>
+        <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={confirmChk} onChange={(e) => setConfirmChk(e.target.checked)} />我确认将该设备从本交付计划解绑</label>
+        <div className="bg-amber-50 border border-amber-100 rounded p-3 text-xs text-amber-700">解绑后该设备回到可交付设备池，可重新绑定到其他交付计划。</div>
+      </div>
+    );
+    footer = <button onClick={submitUnbind} disabled={!device || !reason.trim() || !confirmChk} className={`${BTN_PRIMARY} disabled:opacity-40`}>确认解绑</button>;
+  } else if (name === '确认出厂') {
+    body = (
+      <div className="grid grid-cols-2 gap-3">
+        <DField label="交付计划" value={plan.name || plan.id} />
+        <DField label="已绑定设备数" value={`${bound} 台`} />
+        <DField label="出厂检验Pass设备数" value={`${factoryPass} 台`} />
+        <div><label className="block text-xs font-medium text-gray-600 mb-1">确认人</label><input className={INPUT} value={operator} onChange={(e) => setOperator(e.target.value)} /></div>
+        <DField label="确认时间" value={nowText()} />
+        <div className="col-span-2"><label className="block text-xs font-medium text-gray-600 mb-1">备注</label><textarea className={INPUT} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+      </div>
+    );
+    footer = <button onClick={submitConfirmFactory} className={BTN_PRIMARY}>确认出厂</button>;
+  } else if (name === '生成交付工单') {
+    body = (
+      <div className="grid grid-cols-2 gap-3">
+        <DField label="设备SN" value={device?.sn} />
+        <DField label="来源节点" value={sourceNode} />
+        <div><label className="block text-xs font-medium text-gray-600 mb-1">严重程度</label><select className={INPUT} value={severity} onChange={(e) => setSeverity(e.target.value)}>{['高', '中', '低'].map((s) => <option key={s}>{s}</option>)}</select></div>
+        <div><label className="block text-xs font-medium text-gray-600 mb-1">负责人</label><input className={INPUT} value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="待指派" /></div>
+        <div className="col-span-2"><label className="block text-xs font-medium text-gray-600 mb-1">问题描述 *</label><textarea className={INPUT} rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} /></div>
+        <label className="col-span-2 flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={linkPlan} onChange={(e) => setLinkPlan(e.target.checked)} />关联当前交付计划</label>
+      </div>
+    );
+    footer = <button onClick={submitGenWO} disabled={!device || !desc.trim()} className={`${BTN_PRIMARY} disabled:opacity-40`}>生成交付工单</button>;
+  } else if (name === '生成质量问题') {
+    body = (
+      <div className="grid grid-cols-2 gap-3">
+        <DField label="设备SN" value={device?.sn} />
+        <DField label="来源节点" value={sourceNode} />
+        <div><label className="block text-xs font-medium text-gray-600 mb-1">问题类型</label><select className={INPUT} value={issueType} onChange={(e) => setIssueType(e.target.value)}>{QI_ISSUE_TYPES.map((s) => <option key={s}>{s}</option>)}</select></div>
+        <div><label className="block text-xs font-medium text-gray-600 mb-1">严重程度</label><select className={INPUT} value={severity} onChange={(e) => setSeverity(e.target.value)}>{['高', '中', '低'].map((s) => <option key={s}>{s}</option>)}</select></div>
+        <div className="col-span-2"><label className="block text-xs font-medium text-gray-600 mb-1">问题描述 *</label><textarea className={INPUT} rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} /></div>
+        <div><label className="block text-xs font-medium text-gray-600 mb-1">负责人</label><input className={INPUT} value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="待指派" /></div>
+        <label className="flex items-center gap-2 text-sm text-gray-700 pt-6"><input type="checkbox" checked={genWO} onChange={(e) => setGenWO(e.target.checked)} />是否已生成工单</label>
+      </div>
+    );
+    footer = <button onClick={submitGenQI} disabled={!device || !desc.trim()} className={`${BTN_PRIMARY} disabled:opacity-40`}>生成质量问题</button>;
+  } else if (name === '暂存绑定结果' || name === '确认绑定完成') {
+    body = (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <DField label="交付计划" value={plan.name || plan.id} />
+          <DField label="已选择设备数" value={`${bound} 台`} />
+          <DField label="缺口数量" value={`${gap} 台`} />
+          <div><label className="block text-xs font-medium text-gray-600 mb-1">操作人</label><input className={INPUT} value={operator} onChange={(e) => setOperator(e.target.value)} /></div>
+          <DField label="操作时间" value={nowText()} />
+          <div className="col-span-2"><label className="block text-xs font-medium text-gray-600 mb-1">备注</label><textarea className={INPUT} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+        </div>
+        <div className={`rounded p-3 text-xs border ${name === '确认绑定完成' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-amber-50 border-amber-100 text-amber-700'}`}>
+          {name === '确认绑定完成' ? '已确认绑定完成，交付计划进入出厂检验节点。' : `已暂存当前绑定结果，仍有 ${gap} 台未绑定，需绑定完成后才能推进到出厂检验。`}
+        </div>
+      </div>
+    );
+    footer = <button onClick={close} className={BTN_PRIMARY}>知道了</button>;
+  }
+
+  return (
+    <Modal isOpen={isOpen} onClose={close} title={name || '交付动作'} size="lg">
+      <div className="space-y-4">
+        {body}
+        <div className="flex justify-end gap-2">
+          {name !== '暂存绑定结果' && name !== '确认绑定完成' && <button onClick={close} className={BTN_GHOST}>取消</button>}
+          {footer}
+        </div>
       </div>
     </Modal>
   );
@@ -272,8 +403,8 @@ function BindingNode({ plan, boundDevices, eligibleDevices, locations, deviceTyp
                     <td className="px-3 py-2"><StatusBadge status="已绑定" /></td>
                     <td className="px-3 py-2 text-xs">
                       <div className="flex gap-x-3 whitespace-nowrap">
-                        <button className="text-slate-600 hover:underline" onClick={() => openAction('调整点位')}>调整点位</button>
-                        <button className="text-red-400 hover:text-red-600 hover:underline" onClick={() => openAction('解绑设备')}>解绑</button>
+                        <button className="text-slate-600 hover:underline" onClick={() => openAction('调整点位', device)}>调整点位</button>
+                        <button className="text-red-400 hover:text-red-600 hover:underline" onClick={() => openAction('解绑设备', device)}>解绑</button>
                       </div>
                     </td>
                   </tr>
@@ -336,7 +467,7 @@ function FactoryNode({ devices, records, locations, deviceTypes, onAction, onCon
                       <div className="flex gap-x-3 whitespace-nowrap">
                         <button className="text-blue-600 hover:underline" onClick={onAction}>录入结果</button>
                         <button className="text-slate-600 hover:underline" onClick={onConfirmOut}>确认出厂</button>
-                        <button className="text-emerald-600 hover:underline" onClick={() => openAction('生成交付工单')}>生成工单</button>
+                        <button className="text-emerald-600 hover:underline" onClick={() => openAction('生成交付工单', device)}>生成工单</button>
                       </div>
                     </td>
                   </tr>
@@ -377,8 +508,8 @@ function SiteNode({ devices, records, locations, onAction, onAdvance, openAction
                     <td className="px-3 py-2 text-xs">
                       <div className="flex gap-x-3 whitespace-nowrap">
                         <button className="text-blue-600 hover:underline" onClick={onAction}>录入结果</button>
-                        <button className="text-slate-600 hover:underline" onClick={() => openAction('调整点位')}>调整现场点位</button>
-                        <button className="text-emerald-600 hover:underline" onClick={() => openAction('生成交付工单')}>生成工单</button>
+                        <button className="text-slate-600 hover:underline" onClick={() => openAction('调整点位', device)}>调整现场点位</button>
+                        <button className="text-emerald-600 hover:underline" onClick={() => openAction('生成交付工单', device)}>生成工单</button>
                       </div>
                     </td>
                   </tr>
@@ -419,8 +550,8 @@ function AcceptNode({ devices, records, locations, onAction, onAdvance, openActi
                     <td className="px-3 py-2 text-xs">
                       <div className="flex gap-x-3 whitespace-nowrap">
                         <button className="text-blue-600 hover:underline" onClick={onAction}>录入结果</button>
-                        <button className="text-emerald-600 hover:underline" onClick={() => openAction('生成交付工单')}>生成工单</button>
-                        <button className="text-slate-600 hover:underline" onClick={() => openAction('生成质量问题')}>生成质量问题</button>
+                        <button className="text-emerald-600 hover:underline" onClick={() => openAction('生成交付工单', device)}>生成工单</button>
+                        <button className="text-slate-600 hover:underline" onClick={() => openAction('生成质量问题', device)}>生成质量问题</button>
                       </div>
                     </td>
                   </tr>
@@ -442,7 +573,7 @@ export default function DeliveryPlanDetail() {
   const { state, dispatch } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const [modal, setModal] = useState(null);
-  const [actionName, setActionName] = useState(null);
+  const [action, setAction] = useState(null);
   const nodeParam = searchParams.get('node');
   const activeNode = NODES.some((node) => node.key === nodeParam) ? nodeParam : 'binding';
   const setActiveNode = (key) => setSearchParams({ node: key }, { replace: true });
@@ -573,9 +704,9 @@ export default function DeliveryPlanDetail() {
           locations={projectLocations}
           deviceTypes={state.deviceTypes}
           openSelector={() => setModal('selectDevices')}
-          confirmBinding={() => { setActionName('确认绑定完成'); advance('出厂检验', '交付中'); }}
-          onStash={() => setActionName('暂存绑定结果')}
-          openAction={(name) => setActionName(name)}
+          confirmBinding={() => { advance('出厂检验', '交付中'); setAction({ name: '确认绑定完成' }); }}
+          onStash={() => setAction({ name: '暂存绑定结果' })}
+          openAction={(name, device) => setAction({ name, device })}
         />
       )}
       {activeNode === 'factoryInspection' && (
@@ -585,9 +716,9 @@ export default function DeliveryPlanDetail() {
           locations={projectLocations}
           deviceTypes={state.deviceTypes}
           onAction={() => setModal('factoryResult')}
-          onConfirmOut={() => setActionName('确认出厂')}
+          onConfirmOut={() => setAction({ name: '确认出厂' })}
           onAdvance={() => advance('现场安装调试', '交付中')}
-          openAction={(name) => setActionName(name)}
+          openAction={(name, device) => setAction({ name, device })}
         />
       )}
       {activeNode === 'siteInstall' && (
@@ -597,7 +728,7 @@ export default function DeliveryPlanDetail() {
           locations={projectLocations}
           onAction={() => setModal('siteResult')}
           onAdvance={() => advance('客户验收', '交付中')}
-          openAction={(name) => setActionName(name)}
+          openAction={(name, device) => setAction({ name, device })}
         />
       )}
       {activeNode === 'customerAccept' && (
@@ -607,7 +738,7 @@ export default function DeliveryPlanDetail() {
           locations={projectLocations}
           onAction={() => setModal('acceptResult')}
           onAdvance={() => advance('客户验收', '已验收')}
-          openAction={(name) => setActionName(name)}
+          openAction={(name, device) => setAction({ name, device })}
         />
       )}
 
@@ -649,7 +780,17 @@ export default function DeliveryPlanDetail() {
         deviceTypes={state.deviceTypes}
         onSave={(form) => saveStageResult('customerAccept', form)}
       />
-      <ActionPlaceholderModal isOpen={!!actionName} onClose={() => setActionName(null)} title={actionName} />
+      <DeliveryActionModal
+        isOpen={!!action}
+        onClose={() => setAction(null)}
+        action={action}
+        plan={plan}
+        boundDevices={boundDevices}
+        records={records}
+        locations={projectLocations}
+        state={state}
+        dispatch={dispatch}
+      />
     </div>
   );
 }

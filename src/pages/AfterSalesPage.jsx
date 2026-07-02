@@ -66,107 +66,6 @@ function SubmitRecheckModal({ isOpen, onClose, onConfirm }) {
   );
 }
 
-/* ─────── Add Work Order Modal ─────── */
-
-function AddWorkOrderModal({ isOpen, onClose, onSave, actionType, state }) {
-  const { devices, workflowProductionPlans = [], deliveryPlans = [] } = state;
-  const blankForm = actionType === 'production'
-    ? { deviceId: '', planId: '', ngStation: '', description: '', severity: '高', notes: '' }
-    : { deviceId: '', planId: '', description: '', severity: '高', notes: '' };
-  const [form, setForm] = useState(blankForm);
-  const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const device = devices.find(d => d.id === form.deviceId);
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    const prefix = actionType === 'production' ? 'PWO' : 'DWO';
-    const newId = `${prefix}-${Date.now().toString().slice(-6)}`;
-    const planKey = actionType === 'production' ? 'productionPlanId' : 'deliveryPlanId';
-    onSave({
-      id: newId,
-      type: actionType,
-      [planKey]: form.planId,
-      deviceId: form.deviceId,
-      deviceSN: device?.sn || '',
-      ...(actionType === 'production' ? { ngStation: form.ngStation } : {}),
-      description: form.description,
-      severity: form.severity,
-      status: '待处理',
-      assignedTo: '',
-      notes: form.notes,
-      createdAt: now,
-      updatedAt: now,
-      closedAt: null,
-      repairActions: '',
-      recheckResult: null,
-      recheckPerson: null,
-      processLogs: [],
-    });
-    setForm(blankForm);
-    onClose();
-  };
-
-  const plans = actionType === 'production' ? workflowProductionPlans : deliveryPlans;
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`新增${actionType === 'production' ? '生产' : '交付'}工单`} size="lg">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">关联设备SN *</label>
-            <select className={inp} required value={form.deviceId} onChange={e => setForm({ ...form, deviceId: e.target.value })}>
-              <option value="">-- 选择设备 --</option>
-              {devices.map(d => <option key={d.id} value={d.id}>{d.sn}（{d.status}）</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              关联{actionType === 'production' ? '生产计划' : '交付计划'} *
-            </label>
-            <select className={inp} required value={form.planId} onChange={e => setForm({ ...form, planId: e.target.value })}>
-              <option value="">-- 选择计划 --</option>
-              {plans.map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)}
-            </select>
-          </div>
-        </div>
-        {actionType === 'production' && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">NG工站 *</label>
-            <select className={inp} required value={form.ngStation} onChange={e => setForm({ ...form, ngStation: e.target.value })}>
-              <option value="">-- 选择工站 --</option>
-              {['半成品检验', '初测', '中测', 'OQT终测'].map(s => <option key={s}>{s}</option>)}
-            </select>
-          </div>
-        )}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">故障描述 *</label>
-          <textarea rows={3} className={inp} required value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">严重程度 *</label>
-          <div className="flex gap-4">
-            {['高', '中', '低'].map(s => (
-              <label key={s} className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="severity-add" value={s} checked={form.severity === s} onChange={() => setForm({ ...form, severity: s })} />
-                <span className="text-sm">{s}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
-          <textarea rows={2} className={inp} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-          <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">提交</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
 /* ─────── Edit Work Order Modal ─────── */
 
 function EditWorkOrderModal({ isOpen, onClose, wo, onSave }) {
@@ -419,101 +318,6 @@ function WorkOrderDetail({ wo, state, dispatch, currentUser, canDo, actionType }
   );
 }
 
-/* ─────── Generic Work Order Table ─────── */
-function WorkOrderTable({ workOrders, actionType, state, dispatch, currentUser, canDo }) {
-  const [filterStatus, setFilterStatus] = useState('全部');
-  const [expandedId, setExpandedId] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-
-  const activeWOs = workOrders.filter(w => w.status !== '已作废');
-  const filtered = [...workOrders]
-    .filter(w => {
-      if (filterStatus === '全部') return w.status !== '已作废';
-      return w.status === filterStatus;
-    })
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-
-  const statusCounts = { '待处理': 0, '处理中': 0, '复检中': 0, '已关闭': 0, '已作废': 0 };
-  workOrders.forEach(w => { if (statusCounts[w.status] !== undefined) statusCounts[w.status]++; });
-
-  const handleAdd = (wo) => {
-    dispatch({ type: actionType === 'production' ? 'ADD_PRODUCTION_WORK_ORDER' : 'ADD_DELIVERY_WORK_ORDER', payload: wo });
-  };
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex flex-wrap gap-2">
-          {['全部', '待处理', '处理中', '复检中', '已关闭', '已作废'].map(s => (
-            <button key={s} onClick={() => setFilterStatus(s)}
-              className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors ${filterStatus === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>
-              {s === '全部'
-                ? <>{s} <span className="ml-1">{activeWOs.length}</span></>
-                : <>{s} <span className="ml-1 font-bold">{statusCounts[s] ?? 0}</span></>}
-            </button>
-          ))}
-        </div>
-        {canDo('update_work_order') && (
-          <button onClick={() => setShowAddModal(true)} className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800 flex-shrink-0">
-            + 新增工单
-          </button>
-        )}
-      </div>
-
-      <div className="bg-white rounded shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              {['工单号', '设备SN', '故障描述', '严重程度', '状态', '处理人', '创建时间', ''].map(h => (
-                <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(wo => {
-              const isExpanded = expandedId === wo.id;
-              const isVoided = wo.status === '已作废';
-              return (
-                <React.Fragment key={wo.id}>
-                  <tr onClick={() => setExpandedId(isExpanded ? null : wo.id)}
-                    className={`cursor-pointer border-t border-gray-100 transition-colors hover:bg-blue-50 ${isExpanded ? 'bg-slate-50' : ''} ${isVoided ? 'opacity-50' : ''}`}>
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-600">{wo.id}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-800 font-medium">{wo.deviceSN}</td>
-                    <td className="px-4 py-2.5 text-gray-700 max-w-[200px]"><div className="truncate">{wo.description}</div></td>
-                    <td className="px-4 py-2.5"><StatusBadge status={wo.severity} /></td>
-                    <td className="px-4 py-2.5"><StatusBadge status={wo.status} /></td>
-                    <td className="px-4 py-2.5 text-gray-600">{wo.assignedTo || '—'}</td>
-                    <td className="px-4 py-2.5 text-gray-400 text-xs">{wo.createdAt}</td>
-                    <td className="px-4 py-2.5 text-gray-400 text-xs">{isExpanded ? '▲ 收起' : '▼ 展开'}</td>
-                  </tr>
-                  {isExpanded && !isVoided && (
-                    <tr>
-                      <td colSpan={8} className="p-0">
-                        <WorkOrderDetail wo={wo} state={state} dispatch={dispatch} currentUser={currentUser} canDo={canDo} actionType={actionType} />
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-            {filtered.length === 0 && <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">暂无工单</td></tr>}
-          </tbody>
-        </table>
-      </div>
-
-      {showAddModal && (
-        <AddWorkOrderModal
-          isOpen={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          onSave={handleAdd}
-          actionType={actionType}
-          state={state}
-        />
-      )}
-    </div>
-  );
-}
-
 /* ─────── 工单中心：工单分类与来源阶段 ─────── */
 const WO_CLASSES = ['换件工单', '软件问题工单', '其他问题工单'];
 const WO_STAGES = ['出厂检验', '现场安装调试', '客户验收', '在线运营', '客户反馈', '手动录入'];
@@ -545,15 +349,20 @@ function OrderCenterAddModal({ isOpen, onClose, onSave, state }) {
     e.preventDefault();
     const device = devices.find(d => d.id === form.deviceId);
     const newMod = materials.find(m => m.id === form.newModuleId);
+    const isSwapWO = form.woClass === '换件工单';
     const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
     onSave({
       id: `WO-${Date.now().toString().slice(-6)}`, type: 'aftersales', woClass: form.woClass,
       stage: form.stage, projectId: form.projectId, deviceId: form.deviceId, deviceSN: device?.sn || '',
       deliveryPlanId: form.deliveryPlanId || undefined,
-      involvesSwap: form.woClass === '换件工单',
-      needModuleType: form.woClass === '换件工单' ? chosenType?.name : undefined,
-      oldModuleSN: form.woClass === '换件工单' ? form.oldModuleSN : undefined,
-      newModuleSN: form.woClass === '换件工单' ? (newMod?.sn || '') : undefined,
+      // 换件工单标准字段（兼容旧 involvesSwap / needModuleType）
+      involvesReplacement: isSwapWO,
+      involvesSwap: isSwapWO,
+      needReplaceModuleType: isSwapWO ? (chosenType?.name || '待确认') : undefined,
+      needModuleType: isSwapWO ? chosenType?.name : undefined,
+      oldModuleSN: isSwapWO ? (form.oldModuleSN || '待确认') : undefined,
+      newModuleSN: isSwapWO ? (newMod?.sn || '待选择') : undefined,
+      newModuleStockStatus: isSwapWO ? (newMod?.sn ? '在库可用' : '待选择') : undefined,
       softwareVersion: form.woClass === '软件问题工单' ? form.softwareVersion : undefined,
       issueType: form.woClass === '软件问题工单' ? form.issueType : undefined,
       repro: form.woClass === '软件问题工单' ? form.repro : undefined,
@@ -1177,10 +986,16 @@ function QualityIssueDetail({ qi, state, dispatch, canDo }) {
   const genWorkOrder = (woClass) => {
     const t = now();
     const woId = `WO-${Date.now().toString().slice(-6)}`;
+    const isSwapWO = woClass === '换件工单';
     dispatch({ type: 'ADD_WORK_ORDER', payload: {
       id: woId, type: 'aftersales', woClass, stage: qi.sourceStage || '在线运营',
       projectId: qi.projectId, deviceId: qi.deviceId, deviceSN: qi.deviceSN,
-      involvesSwap: woClass === '换件工单', description: qi.issueDesc, severity: qi.severity || '中',
+      involvesReplacement: isSwapWO, involvesSwap: isSwapWO,
+      needReplaceModuleType: isSwapWO ? '待确认' : undefined,
+      oldModuleSN: isSwapWO ? '待确认' : undefined,
+      newModuleSN: isSwapWO ? '待选择' : undefined,
+      newModuleStockStatus: isSwapWO ? '待选择' : undefined,
+      description: qi.issueDesc, severity: qi.severity || '中',
       status: '待处理', assignedTo: '', sourceQualityIssueId: qi.id,
       createdAt: t, updatedAt: t, closedAt: null, processLogs: [],
     } });
@@ -1315,7 +1130,8 @@ function QualityIssueTable({ state, dispatch, canDo }) {
     if (hasWO(qi) || qi.status === '已关闭') return;
     const t = nowText();
     const woId = `WO-${Date.now().toString().slice(-6)}`;
-    dispatch({ type: 'ADD_WORK_ORDER', payload: { id: woId, type: 'aftersales', woClass, stage: qi.sourceStage || '在线运营', projectId: qi.projectId, deviceId: qi.deviceId, deviceSN: qi.deviceSN, involvesSwap: woClass === '换件工单', description: qi.issueDesc, severity: qi.severity || '中', status: '待处理', assignedTo: '', sourceQualityIssueId: qi.id, createdAt: t, updatedAt: t, closedAt: null, processLogs: [] } });
+    const isSwapWO = woClass === '换件工单';
+    dispatch({ type: 'ADD_WORK_ORDER', payload: { id: woId, type: 'aftersales', woClass, stage: qi.sourceStage || '在线运营', projectId: qi.projectId, deviceId: qi.deviceId, deviceSN: qi.deviceSN, involvesReplacement: isSwapWO, involvesSwap: isSwapWO, needReplaceModuleType: isSwapWO ? '待确认' : undefined, oldModuleSN: isSwapWO ? '待确认' : undefined, newModuleSN: isSwapWO ? '待选择' : undefined, newModuleStockStatus: isSwapWO ? '待选择' : undefined, description: qi.issueDesc, severity: qi.severity || '中', status: '待处理', assignedTo: '', sourceQualityIssueId: qi.id, createdAt: t, updatedAt: t, closedAt: null, processLogs: [] } });
     dispatch({ type: 'UPDATE_QUALITY_ISSUE', payload: { id: qi.id, linkedWorkOrder: true, linkedWorkOrderId: woId, processLogs: [...(qi.processLogs || []), { time: t, operator: state.currentUser, fromStatus: qi.status, toStatus: qi.status, notes: `生成${woClass} ${woId}` }] } });
   };
   const closeQI = (qi) => {
