@@ -463,8 +463,9 @@ function AssemblyNode({ planDevices, state, openRecord, openAction }) {
 }
 
 /* ═════════ 质量测试：设备测试矩阵 ═════════ */
-const LEGACY_TESTTYPE_STATION = { 功能测试: '初测', 老化测试: '中测', 终测: 'OQT终测', 半成品检验: '半成品检验', 初测: '初测', 中测: '中测', OQT终测: 'OQT终测' };
-const stationOf = (record) => STATION_KEY_LABEL[record.stationKey] || LEGACY_TESTTYPE_STATION[record.testType] || null;
+// 工站矩阵只认 stationKey（当前可录入工站）；测试内容类型 testType 只是记录分类，
+// 绝不参与工站推进。缺少 stationKey 的历史记录一律不进入工站矩阵。
+const stationOf = (record) => STATION_KEY_LABEL[record.stationKey] || null;
 const isPassRecord = (record) => record.stationResult === 'Pass' || (!record.stationResult && ['合格', 'Pass', '通过'].includes(record.result));
 const isNGRecord = (record) => record.stationResult === 'NG' || (!record.stationResult && ['不合格', 'NG', '不通过'].includes(record.result));
 
@@ -491,7 +492,10 @@ function cellStatus(device, records, idx) {
   const rec = latestStationRec(records, device.id, STATIONS[idx]);
   if (!rec) return '待测';
   if (isPassRecord(rec)) return 'Pass';
-  return device.status === '生产返修中' ? '返修中' : 'NG';
+  // 该工站最新记录为 NG：返修中不可重录；返修完成待重测则回到该工站可重测（显示待测）。
+  if (device.status === '生产返修中') return '返修中';
+  if (device.status === '返修完成待重测') return '待测';
+  return 'NG';
 }
 const CELL_STYLE = {
   Pass: 'bg-green-100 text-green-700', NG: 'bg-red-100 text-red-700',
@@ -513,8 +517,9 @@ function TestResultModal({ isOpen, onClose, planDevices, records, state, dispatc
   // 工站由设备当前进度自动带出，用户不能自由选择，避免跳站破坏流程。
   const stationKey = stationIdx >= 0 ? STATION_KEYS[stationIdx] : null;
   const stationName = stationIdx >= 0 ? STATIONS[stationIdx] : (device ? '已完成（全部工站 Pass）' : '请先选择设备');
-  const cellNow = device && stationIdx >= 0 ? cellStatus(device, records, stationIdx) : null;
-  const canRecord = !!device && stationIdx >= 0;
+  // 返修中设备不允许直接录入，需先完成返修（返修完成待重测）。
+  const repairBlocked = device?.status === '生产返修中';
+  const canRecord = !!device && stationIdx >= 0 && !repairBlocked;
   const isNG = form.result === 'NG';
 
   const submit = (e) => {
@@ -542,7 +547,7 @@ function TestResultModal({ isOpen, onClose, planDevices, records, state, dispatc
             <input className={`${INPUT} bg-gray-50 ${!canRecord && device ? 'text-gray-400' : 'text-gray-700'}`} readOnly value={stationName} />
             <p className="text-xs text-gray-400 mt-1">工站由设备测试进度自动带出，需上一工站 Pass 后才能录入下一工站。</p>
           </div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">测试内容类型</label><select className={INPUT} value={form.testType} onChange={(e) => setForm({ ...form, testType: e.target.value })}>{['功能测试', '老化测试', 'OQT终测', '其他'].map((s) => <option key={s}>{s}</option>)}</select></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">测试内容类型</label><select className={INPUT} value={form.testType} onChange={(e) => setForm({ ...form, testType: e.target.value })}>{['功能测试', '老化测试', '安全检查', '外观检查', '其他'].map((s) => <option key={s}>{s}</option>)}</select><p className="text-xs text-gray-400 mt-1">仅作测试记录分类，不影响当前工站与矩阵推进。</p></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">测试结果</label><select className={INPUT} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}><option>Pass</option><option>NG</option></select></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">测试人</label><input className={INPUT} value={form.operator} onChange={(e) => setForm({ ...form, operator: e.target.value })} /></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">测试时间</label><input className={`${INPUT} bg-gray-50`} readOnly value={nowText()} /></div>
@@ -554,8 +559,9 @@ function TestResultModal({ isOpen, onClose, planDevices, records, state, dispatc
           <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">异常说明 / 备注</label><textarea className={INPUT} rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">附件 / 报告</label><input className={`${INPUT} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）上传测试报告" /></div>
         </div>
-        {device && !canRecord && <div className="bg-amber-50 border border-amber-100 rounded p-3 text-xs text-amber-700">该设备已全部工站 Pass，无可录入工站，请前往整机入库节点。</div>}
-        {canRecord && cellNow === 'NG' && <div className="bg-red-50 border border-red-100 rounded p-3 text-xs text-red-600">该设备当前工站为 NG / 返修中，返修完成后在原工站（{stationName}）重新录入结果。</div>}
+        {device && repairBlocked && <div className="bg-red-50 border border-red-100 rounded p-3 text-xs text-red-600">该设备返修中，暂不允许录入测试结果。需先完成返修（状态变为「返修完成待重测」）后，才能在原 NG 工站（{stationName}）重新录入。</div>}
+        {device && !repairBlocked && stationIdx < 0 && <div className="bg-amber-50 border border-amber-100 rounded p-3 text-xs text-amber-700">该设备已全部工站 Pass，无可录入工站，请前往整机入库节点。</div>}
+        {canRecord && device?.status === '返修完成待重测' && <div className="bg-amber-50 border border-amber-100 rounded p-3 text-xs text-amber-700">该设备返修完成待重测，请在原 NG 工站（{stationName}）重新录入测试结果。</div>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className={BTN_GHOST}>取消</button>
           <button type="submit" disabled={!canRecord} className={`${BTN_PRIMARY} disabled:opacity-40`}>保存测试结果</button>
@@ -577,12 +583,14 @@ function QualityNode({ planDevices, testRecords, workOrders, openTest, openActio
     return { label, waiting, pass, ng, repair };
   });
 
+  const repairIds = new Set((workOrders || []).map((w) => w.deviceId));
   const matrix = planDevices.map((d) => {
     const cells = STATIONS.map((_, idx) => cellStatus(d, records, idx));
     // 当前工站 = 第一个非 Pass 的工站；全 Pass 则已完成。
     const currentIdx = cells.findIndex((c) => c !== 'Pass');
     const currentCell = currentIdx === -1 ? null : cells[currentIdx];
-    const ngCount = records.filter((r) => r.deviceId === d.id && isNGRecord(r)).length;
+    // NG次数只统计有效工站（stationKey）的 NG 记录，历史 testType-only 记录不计入。
+    const ngCount = records.filter((r) => r.deviceId === d.id && stationOf(r) && isNGRecord(r)).length;
     const hasNG = cells.includes('NG') || cells.includes('返修中');
     // 当前状态严格由当前工站单元格推导：NG→待返修、返修中→返修中、待测→测试中、全过→测试通过。
     const currentStatus = currentIdx === -1 ? '测试通过'
@@ -596,6 +604,8 @@ function QualityNode({ planDevices, testRecords, workOrders, openTest, openActio
       currentStatus,
       ngCount,
       hasNG,
+      hasRepair: repairIds.has(d.id),
+      repairBlocked: currentStatus === '返修中',
       repair: currentCell === '返修中' ? '返修中' : currentCell === 'NG' ? '待返修' : '—',
     };
   });
@@ -639,11 +649,15 @@ function QualityNode({ planDevices, testRecords, workOrders, openTest, openActio
                   <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{m.device.erpInspectionStatus || (m.currentStatus === '测试通过' ? '待检' : '—')}</td>
                   <td className="px-3 py-2 text-xs">
                     <div className="flex gap-x-3 whitespace-nowrap">
-                      <button className="text-blue-600 hover:underline" onClick={openTest}>录入结果</button>
+                      {m.repairBlocked
+                        ? <span className="text-gray-300 cursor-not-allowed" title="返修中设备需先完成返修（返修完成待重测）后，才能在原 NG 工站重新录入测试结果">录入结果</span>
+                        : <button className="text-blue-600 hover:underline" onClick={openTest}>录入结果</button>}
                       <Link to={`/devices/${m.device.id}`} className="text-slate-600 hover:underline">查看测试记录</Link>
-                      {m.hasNG
-                        ? <button className="text-red-500 hover:text-red-700 hover:underline" onClick={() => openAction('生成生产返修记录')}>生成返修记录</button>
-                        : <span className="text-gray-300 cursor-not-allowed">生成返修记录</span>}
+                      {m.hasRepair
+                        ? <button className="text-slate-600 hover:underline" onClick={() => openAction('查看返修')}>查看返修记录</button>
+                        : m.hasNG
+                          ? <button className="text-red-500 hover:text-red-700 hover:underline" onClick={() => openAction('生成生产返修记录')}>生成返修记录</button>
+                          : <span className="text-gray-300 cursor-not-allowed">生成返修记录</span>}
                     </div>
                   </td>
                 </tr>
