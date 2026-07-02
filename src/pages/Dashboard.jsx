@@ -181,6 +181,10 @@ function OperationBoard({ state }) {
         <select className={SELECT} value={range} onChange={(e) => setRange(e.target.value)}>{['近30天', '本月', '本周'].map((r) => <option key={r}>{r}</option>)}</select>
       </FilterBar>
 
+      <div className="text-xs text-gray-400">
+        取数边界：生产订单 / 材料出库 / 超额出库 / 产品入库 / 产品检验 / 库存状态以 <span className="text-gray-500">ERP</span> 为权威来源；项目 / 生产跟踪计划 / 设备与模块 SN 绑定 / 工站测试 / 返修 / 工单 / 质量问题 / 点位交付来自<span className="text-gray-500">平台</span>。当前 mock 为平台侧展示口径，不逐条联动 ERP。
+      </div>
+
       {(view === '全部' || view === '按设备类型') && (
         <Board title="全局运营概览">
           <div className="space-y-4">
@@ -367,6 +371,10 @@ function QualityBoard({ state }) {
         <select className={SELECT} value={deviceTypeId} onChange={(e) => setDeviceTypeId(e.target.value)}><option value="">全部设备类型</option>{deviceTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
         <select className={SELECT} value={range} onChange={(e) => setRange(e.target.value)}>{['近30天', '本月', '本周'].map((r) => <option key={r}>{r}</option>)}</select>
       </FilterBar>
+
+      <div className="text-xs text-gray-400">
+        取数边界：ERP 产品检验结果、库存状态以 <span className="text-gray-500">ERP</span> 为权威；平台工站测试（半成品检验 / 初测 / 中测 / OQT终测）、交付阶段质量问题、售后 / 工单问题来自<span className="text-gray-500">平台</span>，四类分区展示、互不替代（平台工站测试 ≠ ERP 产品检验）。
+      </div>
 
       {view === '总体' && (
         <Board title="质量核心指标">

@@ -70,12 +70,14 @@ function Section({ title, action, children }) {
 
 // 生产计划详情内的通用动作占位弹窗，按动作名展示对应字段。
 const ACTION_FIELDS = {
-  关联来料批次: ['生产计划', '模块类型', '型号', '供应商', '需求数量', '可选来料批次', 'ERP采购单号', 'ERP到货通知单号', '批次到货数量', '批次可用数量', '本次锁定数量', '关联说明'],
-  新增计划外模块: ['模块类型', '型号', '供应商', '是否必填', '需求数量', 'ERP采购单号', '备注'],
-  查看关联批次: ['批次号', '模块类型', '供应商', 'ERP采购单号', '可用数量', '本计划锁定数量'],
+  关联ERP生产订单: ['生产计划', 'ERP生产订单号', '交易类型', '订单数量', '订单状态', '关联说明'],
+  查看ERP材料出库: ['ERP生产订单号', '材料出库单号', '模块类型', '批号', '仓库', '领用数量', '是否超额出库', '超额申请单号'],
+  查看关联批次: ['批次号', '模块类型', '供应商', 'ERP采购单号', 'ERP到货通知单号', '可用数量', '批号', '仓库'],
   生成生产返修记录: ['设备SN', '来源工站', 'NG原因', '返修说明', '负责人', '状态'],
   查看返修: ['返修记录ID', '设备SN', '来源工站', '返修说明', '状态'],
-  录入ERP产成品入库单号: ['ERP生产订单号', 'ERP产成品入库单号', '入库仓库', '入库时间', '入库操作人'],
+  关联ERP产品入库单: ['ERP生产订单号', 'ERP产品入库单号', '批号', '序列号', '入库仓库', '入库时间'],
+  关联ERP产品检验单: ['ERP产品入库单号', 'ERP产品检验单号', '检验员', '检验结果', 'ERP检验状态', 'ERP库存状态'],
+  查看入库记录: ['设备SN', 'ERP产品入库单号', '批号', '序列号', '入库仓库', '入库时间'],
 };
 
 function ActionPlaceholderModal({ isOpen, onClose, title, text }) {
@@ -142,7 +144,7 @@ function MaterialPrepNode({ plan, state, openAction, goMaterials }) {
     const need = (bomByCategory[cat] || 1) * target;
     const catMats = state.materials.filter((m) => m.category === cat);
     const available = catMats.filter((m) => m.status === '待装配').length;
-    const locked = catMats.filter((m) => m.status === '已占用').length;
+    const issued = catMats.filter((m) => m.status === '已占用').length; // 已领用/已出库（ERP 材料出库口径的展示近似）
     const catBatches = linkedBatches.filter((b) => b.category === cat);
     const sample = catMats[0] || {};
     const batch = catBatches[0] || {};
@@ -151,10 +153,10 @@ function MaterialPrepNode({ plan, state, openAction, goMaterials }) {
       model: batch.model || sample.model || '—',
       supplier: batch.supplier || sample.supplier || '—',
       need,
-      linked: catBatches.length,
-      locked,
+      issued,
       available,
-      gap: Math.max(need - available - locked, 0),
+      overIssue: issued > need,
+      gap: Math.max(need - available - issued, 0),
       erpPO: batch.erpPurchaseOrderNo || '—',
       erpArrival: batch.erpArrivalNo || batch.arrivalNo || '—',
       status: kitStatus(need, available, catBatches.length),
@@ -163,6 +165,7 @@ function MaterialPrepNode({ plan, state, openAction, goMaterials }) {
   const readyCount = rows.filter((r) => r.status === '已齐套').length;
   const waitLink = rows.filter((r) => r.status === '待关联').length;
   const gapCount = rows.filter((r) => r.gap > 0).length;
+  const overCount = rows.filter((r) => r.overIssue).length;
   const canConfirm = waitLink === 0 && gapCount === 0;
   const rowsPaged = usePaged(rows, 10);
   const batchPaged = usePaged(linkedBatches, 10);
@@ -170,48 +173,49 @@ function MaterialPrepNode({ plan, state, openAction, goMaterials }) {
   return (
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-        来料准备节点用于建立生产计划与 ERP采购单、来料批次、库存模块之间的主动关联关系。系统可根据已关联批次计算可用库存和缺口，但不应仅依赖自动识别库存。
+        领料与齐套确认：本节点关联 ERP 生产订单，查看该订单的 BOM 需求与 ERP 材料出库 / 超额出库记录（仓库、批号、领用数量），对比后由平台侧给出齐套状态与缺口提示。
+        <span className="text-blue-500">平台不创建 ERP 出库单、不锁定 ERP 库存，也不依赖 MRP/LRP 计算结果。</span>
       </div>
       <MetricCards items={[
         { label: '齐套进度', value: `${readyCount}/${rows.length}`, color: 'border-cyan-500' },
-        { label: '已关联批次', value: linkedBatches.length, color: 'border-blue-500' },
         { label: 'ERP生产订单号', value: plan.erpProductionOrderNo || '未关联', color: plan.erpProductionOrderNo ? 'border-green-500' : 'border-amber-500' },
+        { label: '关联材料出库单', value: linkedBatches.length, color: 'border-blue-500' },
         { label: '计划数量', value: plan.targetCount || 0, color: 'border-slate-500' },
       ]} />
       <div className={`rounded p-3 text-xs border ${canConfirm ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-amber-50 border-amber-100 text-amber-700'}`}>
-        当前结论：共 {rows.length} 类模块，{waitLink} 类待关联，{gapCount} 类存在缺口，{canConfirm ? '已满足齐套条件，可确认来料齐套。' : '暂不可确认来料齐套。'}
+        当前结论：共 {rows.length} 类模块，{waitLink} 类未见出库/待关联，{gapCount} 类存在缺口，{overCount} 类存在超额出库，{canConfirm ? '已满足齐套条件，可标记齐套确认。' : '暂不可标记齐套确认。'}
       </div>
-      <Section title="所需模块清单" action={
+      <Section title="BOM 需求 vs 实际出库" action={
         <div className="flex gap-2 flex-wrap">
-          <button className={BTN_GHOST} onClick={() => openAction('关联来料批次')}>关联来料批次</button>
-          <button className={BTN_GHOST} onClick={() => openAction('新增计划外模块')}>新增计划外模块</button>
-          <button className={`${BTN_PRIMARY} disabled:opacity-40`} disabled={!canConfirm} onClick={() => openAction('确认来料齐套')}>确认来料齐套</button>
+          <button className={BTN_GHOST} onClick={() => openAction('关联ERP生产订单')}>关联ERP生产订单</button>
+          <button className={BTN_GHOST} onClick={() => openAction('查看ERP材料出库')}>查看ERP材料出库</button>
+          <button className={`${BTN_PRIMARY} disabled:opacity-40`} disabled={!canConfirm} title={!canConfirm ? '仍有模块未见出库或存在缺口，暂不可标记齐套确认。' : ''} onClick={() => openAction('确认来料齐套')}>确认齐套（平台判断）</button>
         </div>
       }>
         <div className="text-xs text-gray-400 mb-2">
-          可在下方行内「查看批次」，或
+          领料 / 出库 / 批号在 ERP 材料出库单维护，本表按 BOM 需求对比实际出库与可用；可
           <button className="text-blue-600 hover:underline mx-1" onClick={goMaterials}>跳转模块与来料</button>
-          （已按当前生产计划所需模块筛选可用批次）。
+          查看批次与模块 SN。
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['模块类型', '型号', '供应商', '需求数量', '已关联批次数', '已锁定数量', '可用库存', '缺口数量', 'ERP采购单号', 'ERP到货通知单号', '齐套状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+            <thead className="bg-gray-50"><tr>{['模块类型', '型号', '供应商', 'BOM需求数量', '已出库数量', '可用库存', '缺口数量', '是否超额出库', 'ERP采购单号', 'ERP到货通知单号', '齐套状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-100">{rowsPaged.pageItems.map((r) => (
               <tr key={r.category}>
                 <td className="px-3 py-2 whitespace-nowrap">{r.category}</td>
                 <td className="px-3 py-2 text-gray-600">{r.model}</td>
                 <td className="px-3 py-2 text-gray-600">{r.supplier}</td>
                 <td className="px-3 py-2">{r.need}</td>
-                <td className="px-3 py-2">{r.linked}</td>
-                <td className="px-3 py-2 text-gray-500">{r.locked}</td>
+                <td className="px-3 py-2 text-gray-600">{r.issued}</td>
                 <td className="px-3 py-2">{r.available}</td>
                 <td className="px-3 py-2">{r.gap > 0 ? <span className="text-red-600 font-medium">{r.gap}</span> : <span className="text-gray-400">0</span>}</td>
+                <td className="px-3 py-2 text-xs whitespace-nowrap">{r.overIssue ? <span className="text-amber-600 font-medium">超额出库</span> : <span className="text-gray-400">否</span>}</td>
                 <td className="px-3 py-2 font-mono text-xs text-gray-500">{r.erpPO}</td>
                 <td className="px-3 py-2 font-mono text-xs text-gray-500">{r.erpArrival}</td>
                 <td className="px-3 py-2"><StatusBadge status={r.status} /></td>
                 <td className="px-3 py-2 text-xs whitespace-nowrap">
                   <div className="flex gap-x-3">
-                    <button className="text-slate-600 hover:underline" onClick={() => openAction('关联来料批次')}>关联批次</button>
+                    <button className="text-slate-600 hover:underline" onClick={() => openAction('查看ERP材料出库')}>查看出库记录</button>
                     <button className="text-blue-600 hover:underline" onClick={() => openAction('查看关联批次')}>查看批次</button>
                   </div>
                 </td>
@@ -221,13 +225,28 @@ function MaterialPrepNode({ plan, state, openAction, goMaterials }) {
         </div>
         <Pagination page={rowsPaged.page} total={rowsPaged.total} totalPages={rowsPaged.totalPages} onChange={rowsPaged.setPage} />
       </Section>
-      <Section title="已关联来料批次" action={<button className={BTN_GHOST} onClick={() => openAction('查看关联批次')}>查看关联批次</button>}>
+      <Section title="ERP 材料出库记录（含超额出库）">
+        <div className="text-xs text-gray-400 mb-2">数据口径：ERP 按生产订单领料生成材料出库单，超出 BOM 比例部分走超额出库 / 超额申请；平台仅关联展示。</div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['批次号', '模块类型', '型号', '供应商', 'ERP采购单号', '数量', '合格数', '本计划锁定'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+            <thead className="bg-gray-50"><tr>{['出库单号', '关联生产订单', '模块类型', '批号', '仓库', '领用数量', '合格数', '是否超额'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-100">
-              {batchPaged.pageItems.map((batch) => <tr key={batch.id}><td className="px-3 py-2 font-mono text-xs">{batch.batchNo}</td><td className="px-3 py-2">{batch.category}</td><td className="px-3 py-2">{batch.model}</td><td className="px-3 py-2">{batch.supplier}</td><td className="px-3 py-2 font-mono text-xs">{batch.erpPurchaseOrderNo || '—'}</td><td className="px-3 py-2">{batch.quantity}</td><td className="px-3 py-2">{(batch.items || []).filter((item) => item.result !== '不合格').length}</td><td className="px-3 py-2">{(batch.items || []).filter((it) => it.status === '已占用').length}</td></tr>)}
-              {linkedBatches.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">暂无关联来料批次，请先「关联来料批次」</td></tr>}
+              {batchPaged.pageItems.map((batch) => {
+                const used = (batch.items || []).filter((it) => it.status === '已占用').length;
+                return (
+                  <tr key={batch.id}>
+                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{batch.erpDeliveryNo || `MO-OUT-${batch.batchNo}`}</td>
+                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{plan.erpProductionOrderNo || '—'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{batch.category}</td>
+                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{batch.batchNo}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{batch.warehouse || '生产领料库'}</td>
+                    <td className="px-3 py-2">{used || batch.quantity}</td>
+                    <td className="px-3 py-2">{(batch.items || []).filter((item) => item.result !== '不合格').length}</td>
+                    <td className="px-3 py-2 text-xs whitespace-nowrap">{batch.overIssued ? <span className="text-amber-600 font-medium">是</span> : <span className="text-gray-400">否</span>}</td>
+                  </tr>
+                );
+              })}
+              {linkedBatches.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">暂无关联 ERP 材料出库记录</td></tr>}
             </tbody>
           </table>
         </div>
@@ -586,6 +605,7 @@ function QualityNode({ planDevices, testRecords, workOrders, openTest, openActio
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
         质量测试按设备逐工站录入结果：仅上一工站 Pass 后才能录入下一工站；NG 生成生产返修记录，返修完成后回到原 NG 工站重测；全部工站 Pass 后设备方可进入整机入库。
+        <span className="text-blue-500">平台工站测试（半成品检验 / 初测 / 中测 / OQT终测）为生产过程测试追溯，不替代 ERP 产品检验单；ERP 产品检验单是正式入库检验，可在矩阵中关联展示其单号与检验状态。</span>
       </div>
       <Section title="工站进度概览">
         <div className="grid grid-cols-4 gap-3">
@@ -605,7 +625,7 @@ function QualityNode({ planDevices, testRecords, workOrders, openTest, openActio
       <Section title="设备测试矩阵" action={<button className={BTN_PRIMARY} onClick={openTest}>录入测试结果</button>}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['设备SN', '半成品检验', '初测', '中测', 'OQT终测', '当前工站', '当前状态', 'NG次数', '返修状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+            <thead className="bg-gray-50"><tr>{['设备SN', '半成品检验', '初测', '中测', 'OQT终测', '当前工站', '当前状态', 'NG次数', '返修状态', 'ERP产品检验单', 'ERP检验状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-100">
               {paged.pageItems.map((m) => (
                 <tr key={m.device.id}>
@@ -615,6 +635,8 @@ function QualityNode({ planDevices, testRecords, workOrders, openTest, openActio
                   <td className="px-3 py-2"><StatusBadge status={m.currentStatus} /></td>
                   <td className="px-3 py-2">{m.ngCount > 0 ? <span className="text-red-600 font-medium">{m.ngCount}</span> : <span className="text-gray-400">0</span>}</td>
                   <td className="px-3 py-2"><StatusBadge status={m.repair} /></td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{m.device.erpInspectionNo || '未关联'}</td>
+                  <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{m.device.erpInspectionStatus || (m.currentStatus === '测试通过' ? '待检' : '—')}</td>
                   <td className="px-3 py-2 text-xs">
                     <div className="flex gap-x-3 whitespace-nowrap">
                       <button className="text-blue-600 hover:underline" onClick={openTest}>录入结果</button>
@@ -626,7 +648,7 @@ function QualityNode({ planDevices, testRecords, workOrders, openTest, openActio
                   </td>
                 </tr>
               ))}
-              {matrix.length === 0 && <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">暂无待测试设备</td></tr>}
+              {matrix.length === 0 && <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-400">暂无待测试设备</td></tr>}
             </tbody>
           </table>
         </div>
@@ -652,40 +674,47 @@ function WarehouseNode({ plan, planDevices, testRecords, state, dispatch, openAc
   const allPass = (device) => STATIONS.every((_, idx) => stationPassed(records, device.id, idx)) || device.status === '待入库';
   const stored = planDevices.filter((device) => ['已入库', '待分配项目', '已分配项目', '在线运营'].includes(device.status));
   const pending = planDevices.filter((device) => !stored.includes(device) && allPass(device));
-  const confirmWarehouse = (device) => {
-    dispatch({ type: 'UPDATE_DEVICE', payload: { id: device.id, status: '已入库', erpInboundNo: plan.erpInboundNo || `IN-${plan.id}`, updatedAt: nowText() } });
+  // 平台侧确认设备进入可交付状态（不代替 ERP 创建入库单）。
+  const markDeliverable = (device) => {
+    dispatch({ type: 'UPDATE_DEVICE', payload: { id: device.id, status: '已入库', updatedAt: nowText() } });
   };
   const finishPlan = () => {
     dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: plan.id, status: '已完成', currentNode: '整机入库', updatedAt: nowText() } });
   };
   const typeName = (id) => state.deviceTypes.find((t) => t.id === id)?.name || id;
+  const erpInbound = (device) => device.erpInboundNo || plan.erpInboundNo || '未关联';
+  const erpInspect = (device) => device.erpInspectionNo || plan.erpInspectionNo || '未关联';
+  const erpInspectStatus = (device) => device.erpInspectionStatus || (['已入库', '待分配项目', '已分配项目', '在线运营'].includes(device.status) ? '合格' : '待检');
+  const erpStock = (device) => device.erpStockStatus || (['已入库', '待分配项目', '已分配项目', '在线运营'].includes(device.status) ? '合格可用' : '待检');
   const pendingPaged = usePaged(pending, 10);
   const storedPaged = usePaged(stored, 10);
 
   return (
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-        整机入库只处理通过全部工站（半成品检验 / 初测 / 中测 / OQT终测）Pass 的设备。入库后设备状态变为待交付 / 可交付；计划数量全部入库后生产计划可标记为已完成。
+        产品入库确认：ERP 由库管员选择已完工生产订单生成产品入库单（批号 / 序列号 / 仓库），审核后下推产品检验单，检验合格后 ERP 自动调整库存状态。
+        <span className="text-blue-500">本节点只关联 ERP 产品入库单 / 产品检验单、展示 ERP 库存状态，并由平台侧确认设备是否进入可交付状态；不代替 ERP 创建入库单。</span>
       </div>
       <MetricCards items={[
-        { label: '待入库', value: pending.length, color: 'border-teal-500' },
+        { label: '待入库/待确认', value: pending.length, color: 'border-teal-500' },
         { label: '已入库', value: stored.length, color: 'border-green-500' },
         { label: '可入库设备', value: pending.length, color: 'border-blue-500' },
         { label: '目标数量', value: plan.targetCount || 0, color: 'border-slate-500' },
       ]} />
-      <Section title="ERP入库信息" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={() => openAction('录入ERP产成品入库单号')}>录入ERP产成品入库单号</button><button className={BTN_GHOST} onClick={() => openAction('查看入库记录')}>查看入库记录</button></div>}>
+      <Section title="ERP 产品入库 / 检验关联" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={() => openAction('关联ERP产品入库单')}>关联ERP产品入库单</button><button className={BTN_GHOST} onClick={() => openAction('关联ERP产品检验单')}>关联ERP产品检验单</button></div>}>
         <div className="grid grid-cols-3 gap-4 text-sm">
           <div><span className="text-gray-500">ERP生产订单号：</span><span className="font-mono text-gray-700">{plan.erpProductionOrderNo || '—'}</span></div>
-          <div><span className="text-gray-500">ERP产成品入库单号：</span><span className="font-mono text-gray-700">{plan.erpInboundNo || 'IN-' + plan.id}</span></div>
+          <div><span className="text-gray-500">ERP产品入库单号：</span><span className="font-mono text-gray-700">{plan.erpInboundNo || '未关联'}</span></div>
+          <div><span className="text-gray-500">ERP产品检验单号：</span><span className="font-mono text-gray-700">{plan.erpInspectionNo || '未关联'}</span></div>
           <div><span className="text-gray-500">入库仓库：</span><span className="text-gray-700">{plan.warehouse || '成品库'}</span></div>
-          <div><span className="text-gray-500">入库时间：</span><span className="text-gray-700">{plan.inboundTime || '按确认时间'}</span></div>
-          <div><span className="text-gray-500">入库操作人：</span><span className="text-gray-700">{state.currentUser}</span></div>
+          <div><span className="text-gray-500">ERP库存状态：</span><span className="text-gray-700">{plan.erpStockStatus || '按 ERP 检验结果'}</span></div>
+          <div><span className="text-gray-500">说明：</span><span className="text-gray-500 text-xs">批号 / 序列号 / 仓库以 ERP 产品入库单为准</span></div>
         </div>
       </Section>
-      <Section title="待入库设备列表" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={() => pending.forEach(confirmWarehouse)}>批量确认入库</button><button className={BTN_PRIMARY} onClick={finishPlan}>推进生产计划完成</button></div>}>
+      <Section title="可入库设备列表" action={<div className="flex gap-2"><button className={BTN_PRIMARY} onClick={finishPlan}>推进生产计划完成</button></div>}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', 'OQT结果', '当前状态', '是否可入库', '入库仓库', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+            <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', 'OQT结果', '当前状态', 'ERP产品入库单', 'ERP检验状态', 'ERP库存状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-100">
               {pendingPaged.pageItems.map((device) => (
                 <tr key={device.id}>
@@ -693,17 +722,19 @@ function WarehouseNode({ plan, planDevices, testRecords, state, dispatch, openAc
                   <td className="px-3 py-2 whitespace-nowrap">{typeName(device.deviceTypeId)}</td>
                   <td className="px-3 py-2"><StatusBadge status="Pass" /></td>
                   <td className="px-3 py-2"><StatusBadge status="待入库" /></td>
-                  <td className="px-3 py-2 text-emerald-600 text-xs">可入库</td>
-                  <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{plan.warehouse || '成品库'}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{erpInbound(device)}</td>
+                  <td className="px-3 py-2 text-xs whitespace-nowrap">{erpInspectStatus(device)}</td>
+                  <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{erpStock(device)}</td>
                   <td className="px-3 py-2 text-xs">
                     <div className="flex gap-x-3 whitespace-nowrap">
-                      <button className="text-teal-600 hover:underline" onClick={() => confirmWarehouse(device)}>确认入库</button>
-                      <button className="text-blue-600 hover:underline" onClick={() => openAction('录入ERP产成品入库单号')}>录入ERP入库单号</button>
+                      <button className="text-teal-600 hover:underline" onClick={() => markDeliverable(device)}>确认可交付</button>
+                      <button className="text-blue-600 hover:underline" onClick={() => openAction('关联ERP产品入库单')}>关联入库单</button>
+                      <button className="text-slate-600 hover:underline" onClick={() => openAction('关联ERP产品检验单')}>关联检验单</button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {pending.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">暂无待入库设备（需全部工站 Pass）</td></tr>}
+              {pending.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">暂无可入库设备（需全部工站 Pass）</td></tr>}
             </tbody>
           </table>
         </div>
@@ -712,24 +743,27 @@ function WarehouseNode({ plan, planDevices, testRecords, state, dispatch, openAc
       <Section title="已入库设备列表">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '当前状态', '入库仓库', '入库时间', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+            <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '当前状态', 'ERP产品入库单', 'ERP产品检验单', 'ERP库存状态', '入库仓库', '入库时间', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-100">
               {storedPaged.pageItems.map((device) => (
                 <tr key={device.id}>
                   <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{device.sn}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{typeName(device.deviceTypeId)}</td>
                   <td className="px-3 py-2"><StatusBadge status={device.status} /></td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{erpInbound(device)}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{erpInspect(device)}</td>
+                  <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{erpStock(device)}</td>
                   <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{plan.warehouse || '成品库'}</td>
                   <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{device.inboundTime || device.updatedAt || '—'}</td>
                   <td className="px-3 py-2 text-xs">
                     <div className="flex gap-x-3 whitespace-nowrap">
                       <button className="text-slate-600 hover:underline" onClick={() => openAction('查看入库记录')}>查看入库记录</button>
-                      <button className="text-blue-600 hover:underline" onClick={() => openAction('录入ERP产成品入库单号')}>录入ERP入库单号</button>
+                      <button className="text-blue-600 hover:underline" onClick={() => openAction('关联ERP产品检验单')}>关联检验单</button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {stored.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400">暂无已入库设备</td></tr>}
+              {stored.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-400">暂无已入库设备</td></tr>}
             </tbody>
           </table>
         </div>
