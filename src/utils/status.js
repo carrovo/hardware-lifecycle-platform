@@ -139,5 +139,6 @@ const DEVICE_NODE_MAP = {
   现场安装调试中: '现场安装调试', 客户验收中: '客户验收', 在线运营: '在线运营',
 };
 export function deviceBusinessNode(device) {
+  if (['退役', '已作废', '已报废'].includes(device.status)) return '退役';
   return DEVICE_NODE_MAP[device.status] || '整机装配';
 }

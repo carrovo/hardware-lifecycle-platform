@@ -229,8 +229,21 @@ function buildLifecycleTimeline(device, testRecords, operationLogs, deviceAlloca
     });
   });
 
+  // Defensive lifecycle filter: 时间线事件必须与设备当前生命周期阶段一致，
+  // 避免生产中/测试中/返修中设备误显示交付、在线告警、售后工单、客户验收等下游事件。
+  // （mock 数据已按阶段隔离，此处为兜底过滤，双重保证。）
+  const lifecycle = deviceLifecycleStatus(device);
+  const DELIVERY_TYPES = new Set(['出厂检验', '现场安装调试', '客户验收']);
+  const ONLINE_TYPES = new Set(['在线运营', '维修工单', '模块更换', '告警处理']);
+  const allowAll = ['在线运营', '已作废', '维修中'].includes(lifecycle);
+  const visible = allowAll ? events : events.filter((ev) => {
+    if (ONLINE_TYPES.has(ev.type)) return false;
+    if ((lifecycle === '生产中' || lifecycle === '待入库') && DELIVERY_TYPES.has(ev.type)) return false;
+    return true;
+  });
+
   // Sort descending (newest first)
-  return events.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  return visible.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 }
 
 function LifecycleTimeline({ events }) {
