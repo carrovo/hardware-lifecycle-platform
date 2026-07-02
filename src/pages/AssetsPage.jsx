@@ -185,26 +185,37 @@ function AlertDetail({ alert, state, dispatch, currentRole, currentUser }) {
   );
 }
 
-function AddAlertModal({ isOpen, onClose, onSave, devices }) {
-  const [form, setForm] = useState({ deviceId: '', severity: '轻微', description: '', source: '人工上报' });
+const ALERT_TYPES = ['电池异常', '温度异常', '通信中断', '传感器异常', '导航异常', '机械结构', '其他'];
+const ALERT_OWNERS = ['张三', '李四', '王五', '赵六'];
+function AddAlertModal({ isOpen, onClose, onSave, devices, projects = [], locations = [] }) {
+  const [form, setForm] = useState({ deviceId: '', alertType: '电池异常', severity: '轻微', description: '', source: '人工上报', owner: '', notes: '' });
   const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+  const device = devices.find(d => d.id === form.deviceId);
+  const projName = device ? (projects.find(p => p.id === device.projectId)?.name || '—') : '';
+  const locName = device ? (locations.find(l => l.id === device.locationId)?.name || '—') : '';
   const handleSubmit = (e) => {
     e.preventDefault();
-    const device = devices.find(d => d.id === form.deviceId);
-    onSave({ ...form, deviceSN: device?.sn || '' });
+    onSave({ ...form, deviceSN: device?.sn || '', projectId: device?.projectId || null, locationId: device?.locationId || null });
     onClose();
-    setForm({ deviceId: '', severity: '轻微', description: '', source: '人工上报' });
+    setForm({ deviceId: '', alertType: '电池异常', severity: '轻微', description: '', source: '人工上报', owner: '', notes: '' });
   };
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="新增告警">
+    <Modal isOpen={isOpen} onClose={onClose} title="新增健康告警" size="lg">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">设备 *</label>
-          <select className={inp} required value={form.deviceId} onChange={e => setForm({ ...form, deviceId: e.target.value })}>
-            <option value="">-- 选择设备 --</option>
-            {devices.map(d => <option key={d.id} value={d.id}>{d.sn}</option>)}
-          </select>
-        </div>
         <div className="grid grid-cols-2 gap-4">
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">设备SN *</label>
+            <select className={inp} required value={form.deviceId} onChange={e => setForm({ ...form, deviceId: e.target.value })}>
+              <option value="">-- 选择设备 --</option>
+              {devices.map(d => <option key={d.id} value={d.id}>{d.sn}</option>)}
+            </select>
+          </div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">告警类型 *</label>
+            <select className={inp} value={form.alertType} onChange={e => setForm({ ...form, alertType: e.target.value })}>
+              {ALERT_TYPES.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">所属项目</label><input className={`${inp} bg-gray-50`} readOnly value={projName} placeholder="选择设备后自动带出" /></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">所属点位</label><input className={`${inp} bg-gray-50`} readOnly value={locName} placeholder="选择设备后自动带出" /></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">严重程度</label>
             <select className={inp} value={form.severity} onChange={e => setForm({ ...form, severity: e.target.value })}>
               <option>轻微</option><option>严重</option>
@@ -212,12 +223,21 @@ function AddAlertModal({ isOpen, onClose, onSave, devices }) {
           </div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">来源</label>
             <select className={inp} value={form.source} onChange={e => setForm({ ...form, source: e.target.value })}>
-              <option>人工上报</option><option>系统自动</option>
+              <option>人工上报</option><option>系统监测</option>
             </select>
           </div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">负责人</label>
+            <select className={inp} value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })}>
+              <option value="">-- 待指派 --</option>
+              {ALERT_OWNERS.map(o => <option key={o}>{o}</option>)}
+            </select>
+          </div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">附件</label><input className={`${inp} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）支持上传日志 / 图片" /></div>
         </div>
         <div><label className="block text-sm font-medium text-gray-700 mb-1">告警描述 *</label>
           <textarea rows={3} className={inp} required value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+          <textarea rows={2} className={inp} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
           <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存</button>
@@ -233,7 +253,7 @@ function AlertsSubTab({ state, dispatch, currentRole }) {
   const [expandedId, setExpandedId] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
-  const { alerts, devices, projects } = state;
+  const { alerts, devices, projects, locations = [] } = state;
   const currentUser = state.currentUser;
   const onlineDevices = devices.filter(d => d.status === '在线运营');
   const canAdd = ['运维工程师', '维修工程师', '厂长', '管理员'].includes(currentRole);
@@ -255,11 +275,14 @@ function AlertsSubTab({ state, dispatch, currentRole }) {
     const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
     const device = devices.find(d => d.id === form.deviceId);
     const notifiedUsers = [{ name: '赵六', role: '运维工程师' }, { name: form.severity === '严重' ? '李七' : '蔡八', role: form.severity === '严重' ? '厂长' : '项目负责人' }];
-    dispatch({ type: 'ADD_ALERT', payload: { id: `ALERT-${Date.now()}`, deviceId: form.deviceId, projectId: device?.projectId || null, deviceSN: form.deviceSN, alertTime: now, source: form.source, severity: form.severity, description: form.description, status: '待处理', workOrderId: null, notifiedUsers, processLogs: [] } });
+    dispatch({ type: 'ADD_ALERT', payload: { id: `ALERT-${Date.now()}`, deviceId: form.deviceId, projectId: form.projectId ?? device?.projectId ?? null, locationId: form.locationId ?? device?.locationId ?? null, deviceSN: form.deviceSN, alertType: form.alertType, owner: form.owner, notes: form.notes, alertTime: now, source: form.source, severity: form.severity, description: form.description, status: '待处理', workOrderId: null, notifiedUsers, processLogs: [] } });
   };
 
   return (
     <div>
+      <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">
+        健康告警用于记录设备在线运营 / 运行过程中的健康异常监控，不等同于质量问题台账或工单中心。需要处理的告警可生成工单；需要质量沉淀的可生成质量问题。
+      </div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-3 text-sm">
           {severeCount > 0 && <span className="text-red-600 font-medium">{severeCount} 条严重告警待处理</span>}
@@ -348,44 +371,54 @@ function AlertsSubTab({ state, dispatch, currentRole }) {
         <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </div>
 
-      {showModal && <AddAlertModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleSave} devices={onlineDevices} />}
+      {showModal && <AddAlertModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleSave} devices={onlineDevices} projects={projects} locations={locations} />}
     </div>
   );
 }
 
 const LIFECYCLE_STATUSES = ['生产中', '待入库', '待交付', '交付中', '在线运营', '维修中', '已作废'];
 
-function AllDevicesSubTab({ state }) {
-  const [filterStatus, setFilterStatus] = useState('全部');
-  const [search, setSearch] = useState('');
+function AllDevicesSubTab({ state, goAlerts }) {
+  const [f, setF] = useState({ q: '', project: '', deviceType: '', lifecycle: '', node: '', location: '', online: '', hasAlert: '', prodPlan: '', delivPlan: '', from: '', to: '' });
   const navigate = useNavigate();
+  const upd = (k, v) => setF({ ...f, [k]: v });
 
-  const { devices, deviceTypes, projects, locations = [], workflowProductionPlans = [], deliveryPlans = [] } = state;
+  const { devices, deviceTypes, projects, locations = [], workflowProductionPlans = [], deliveryPlans = [], alerts = [] } = state;
   const getTypeName = id => deviceTypes.find(dt => dt.id === id)?.name || id;
   const getLocationName = id => id ? (locations.find(l => l.id === id)?.name || '—') : '—';
   const getPlanName = id => id ? (workflowProductionPlans.find(p => p.id === id)?.name || id) : '—';
   const deliveryPlanOf = (deviceId) => deliveryPlans.find(dp => (dp.boundDeviceIds || []).includes(deviceId) || (dp.records?.binding || []).some(b => b.deviceId === deviceId));
+  const alertCountOf = (deviceId) => alerts.filter(a => a.deviceId === deviceId && !['已解决', '已关闭'].includes(a.status)).length;
+  const isOnline = (d) => d.online === true || d.status === '在线运营';
 
-  const rows = devices.map(d => ({ ...d, lifecycle: deviceLifecycleStatus(d), node: deviceBusinessNode(d) }));
-
+  const rows = devices.map(d => ({ ...d, lifecycle: deviceLifecycleStatus(d), node: deviceBusinessNode(d), dp: deliveryPlanOf(d.id), alertCount: alertCountOf(d.id), online: isOnline(d) }));
   const total = rows.length;
   const producing = rows.filter(d => d.lifecycle === '生产中').length;
   const online = rows.filter(d => d.lifecycle === '在线运营').length;
   const readyToDeliver = rows.filter(d => d.lifecycle === '待交付').length;
-
-  const statusCounts = {};
-  rows.forEach(d => { statusCounts[d.lifecycle] = (statusCounts[d.lifecycle] || 0) + 1; });
+  const nodeOptions = [...new Set(rows.map(d => d.node).filter(Boolean))];
 
   const filtered = rows.filter(d => {
-    const matchStatus = filterStatus === '全部' || d.lifecycle === filterStatus;
-    const matchSearch = !search || d.sn.toLowerCase().includes(search.toLowerCase()) || getTypeName(d.deviceTypeId).toLowerCase().includes(search.toLowerCase());
-    return matchStatus && matchSearch;
+    const q = f.q.trim().toLowerCase();
+    return (!q || d.sn.toLowerCase().includes(q) || getTypeName(d.deviceTypeId).toLowerCase().includes(q))
+      && (!f.project || d.projectId === f.project)
+      && (!f.deviceType || d.deviceTypeId === f.deviceType)
+      && (!f.lifecycle || d.lifecycle === f.lifecycle)
+      && (!f.node || d.node === f.node)
+      && (!f.location || d.locationId === f.location)
+      && (!f.online || (f.online === '在线' ? d.online : !d.online))
+      && (!f.hasAlert || (f.hasAlert === '有' ? d.alertCount > 0 : d.alertCount === 0))
+      && (!f.prodPlan || d.productionPlanId === f.prodPlan)
+      && (!f.delivPlan || d.dp?.id === f.delivPlan)
+      && (!f.from || (d.updatedAt || '') >= f.from)
+      && (!f.to || (d.updatedAt || '') <= `${f.to} 23:59`);
   });
   const paged = usePaged(filtered, 10);
+  const sel = 'border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600 focus:outline-none';
 
   return (
     <div>
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-4">
         {[{ label: '设备总数', value: total, color: 'border-slate-500' }, { label: '生产中', value: producing, color: 'border-blue-500' }, { label: '在线运营', value: online, color: 'border-emerald-500' }, { label: '待交付', value: readyToDeliver, color: 'border-amber-500' }].map(({ label, value, color }) => (
           <div key={label} className={`bg-white rounded-xl border border-gray-100 shadow-sm border-l-4 ${color} p-4`}>
             <div className="text-3xl font-semibold text-gray-900">{value}</div>
@@ -394,16 +427,25 @@ function AllDevicesSubTab({ state }) {
         ))}
       </div>
 
-      <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 flex flex-wrap gap-2 items-center">
-        <button onClick={() => setFilterStatus('全部')} className={`px-3 py-1 text-xs rounded-full border font-medium ${filterStatus === '全部' ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>全部 {total}</button>
-        {LIFECYCLE_STATUSES.map(key => (statusCounts[key] > 0) && (
-          <button key={key} onClick={() => setFilterStatus(key)} className={`px-3 py-1 text-xs rounded-full border font-medium ${filterStatus === key ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>
-            {key} {statusCounts[key]}
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-2">
-          <input type="text" placeholder="搜索SN / 类型..." value={search} onChange={e => setSearch(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-44" />
-          <span className="text-sm text-gray-400">共 {filtered.length} 台</span>
+      <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 space-y-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          <input placeholder="搜索设备SN / 设备类型" value={f.q} onChange={e => upd('q', e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-52" />
+          <select className={sel} value={f.project} onChange={e => upd('project', e.target.value)}><option value="">全部项目</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+          <select className={sel} value={f.deviceType} onChange={e => upd('deviceType', e.target.value)}><option value="">全部设备类型</option>{deviceTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+          <select className={sel} value={f.lifecycle} onChange={e => upd('lifecycle', e.target.value)}><option value="">全部生命周期</option>{LIFECYCLE_STATUSES.map(s => <option key={s}>{s}</option>)}</select>
+          <select className={sel} value={f.node} onChange={e => upd('node', e.target.value)}><option value="">全部业务节点</option>{nodeOptions.map(s => <option key={s}>{s}</option>)}</select>
+          <select className={sel} value={f.location} onChange={e => upd('location', e.target.value)}><option value="">全部点位</option>{locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select>
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          <select className={sel} value={f.online} onChange={e => upd('online', e.target.value)}><option value="">是否在线</option><option value="在线">在线</option><option value="离线">离线</option></select>
+          <select className={sel} value={f.hasAlert} onChange={e => upd('hasAlert', e.target.value)}><option value="">是否有健康告警</option><option value="有">有告警</option><option value="无">无告警</option></select>
+          <select className={sel} value={f.prodPlan} onChange={e => upd('prodPlan', e.target.value)}><option value="">全部生产计划</option>{workflowProductionPlans.map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)}</select>
+          <select className={sel} value={f.delivPlan} onChange={e => upd('delivPlan', e.target.value)}><option value="">全部交付计划</option>{deliveryPlans.map(p => <option key={p.id} value={p.id}>{p.batchNo || p.name}</option>)}</select>
+          <label className="text-xs text-gray-500">时间</label>
+          <input type="date" className={sel} value={f.from} onChange={e => upd('from', e.target.value)} />
+          <span className="text-xs text-gray-400">~</span>
+          <input type="date" className={sel} value={f.to} onChange={e => upd('to', e.target.value)} />
+          <span className="ml-auto text-sm text-gray-400">共 {filtered.length} 台</span>
         </div>
       </div>
 
@@ -412,41 +454,39 @@ function AllDevicesSubTab({ state }) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {['设备SN', '设备类型', '所属项目', '生命周期状态', '当前业务节点', '生产计划', '交付计划', '当前点位', '最近更新', '在此状态天数', '操作'].map(h => (
+              {['设备SN', '设备类型', '所属项目', '生命周期状态', '当前业务节点', '所属点位', '是否在线', '健康告警数', '关联生产计划', '关联交付计划', '最近更新', '操作'].map(h => (
                 <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {paged.pageItems.map(d => {
-              const days = daysSince(d.updatedAt || d.assemblyTime);
-              const isStuck = days > 3 && d.lifecycle === '生产中';
               const project = d.projectId ? projects.find(p => p.id === d.projectId) : null;
-              const dp = deliveryPlanOf(d.id);
               return (
-                <tr key={d.id} className={`hover:bg-blue-50 cursor-pointer transition-colors ${isStuck ? 'bg-amber-50' : ''}`}
-                  onClick={() => navigate(`/devices/${d.id}`)}>
-                  <td className="px-3 py-2 font-medium text-gray-800 font-mono text-xs whitespace-nowrap">{d.sn}</td>
+                <tr key={d.id} className="hover:bg-blue-50 transition-colors">
+                  <td className="px-3 py-2 font-medium text-gray-800 font-mono text-xs whitespace-nowrap"><Link to={`/devices/${d.id}`} className="text-blue-600 hover:underline">{d.sn}</Link></td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{getTypeName(d.deviceTypeId)}</td>
-                  <td className="px-3 py-2 text-gray-600 text-xs">
-                    {project ? <Link to={`/projects/${project.id}`} className="text-slate-700 hover:underline" onClick={e => e.stopPropagation()}>{project.name}</Link> : <span className="text-gray-400">—</span>}
-                  </td>
+                  <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{project ? project.name : '—'}</td>
                   <td className="px-3 py-2"><StatusBadge status={d.lifecycle} /></td>
                   <td className="px-3 py-2"><StatusBadge status={d.node} /></td>
-                  <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{d.productionPlanId ? <Link to={`/production-plans/${d.productionPlanId}`} className="text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{getPlanName(d.productionPlanId)}</Link> : '—'}</td>
-                  <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{dp ? <Link to={`/delivery-plans/${dp.id}`} className="text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{dp.batchNo || dp.name}</Link> : '—'}</td>
-                  <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{d.locationId ? getLocationName(d.locationId) : <span className="text-gray-400">—</span>}</td>
+                  <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{d.locationId ? getLocationName(d.locationId) : '—'}</td>
+                  <td className="px-3 py-2 text-xs whitespace-nowrap">{d.online ? <span className="text-emerald-600 font-medium">在线</span> : <span className="text-gray-400">离线</span>}</td>
+                  <td className="px-3 py-2 text-xs">{d.alertCount > 0 ? <span className="text-red-600 font-medium">{d.alertCount}</span> : <span className="text-gray-400">0</span>}</td>
+                  <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{d.productionPlanId ? getPlanName(d.productionPlanId) : '—'}</td>
+                  <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{d.dp ? (d.dp.batchNo || d.dp.name) : '—'}</td>
                   <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{d.updatedAt}</td>
-                  <td className="px-3 py-2">
-                    {days > 0 ? <span className={`text-xs font-medium ${isStuck ? 'text-amber-600' : 'text-gray-500'}`}>{isStuck && '⚠ '}{days}天</span> : <span className="text-xs text-gray-400">今天</span>}
-                  </td>
-                  <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                    <Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline text-xs whitespace-nowrap">查看详情</Link>
+                  <td className="px-3 py-2 text-xs whitespace-nowrap">
+                    <div className="flex items-center gap-x-3">
+                      <Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline">查看详情</Link>
+                      <button className="text-blue-600 hover:underline" onClick={() => goAlerts && goAlerts()}>查看告警</button>
+                      {project ? <Link to={`/projects/${project.id}`} className="text-slate-600 hover:underline">查看项目</Link> : <span className="text-gray-300">查看项目</span>}
+                      {d.dp ? <Link to={`/delivery-plans/${d.dp.id}`} className="text-emerald-600 hover:underline">查看交付记录</Link> : <span className="text-gray-300">查看交付记录</span>}
+                    </div>
                   </td>
                 </tr>
               );
             })}
-            {filtered.length === 0 && <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">暂无数据</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无数据</td></tr>}
           </tbody>
         </table>
         </div>
@@ -563,10 +603,22 @@ function LocationsTab() {
   const { locations = [], projects, devices, deviceTypes = [], deliveryPlans = [] } = state;
   const getProjectName = id => projects.find(p => p.id === id)?.name || '—';
   const deliveryPlanNames = (projectId) => deliveryPlans.filter(dp => dp.projectId === projectId).map(dp => dp.batchNo || dp.name);
-  const paged = usePaged(locations, 10);
   const [formTarget, setFormTarget] = useState(null); // 'new' | loc | null
   const [detailTarget, setDetailTarget] = useState(null);
+  const [lf, setLf] = useState({ project: '', status: '', q: '', hasDeliv: '' });
+  const lupd = (k, v) => setLf({ ...lf, [k]: v });
   const nowText = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const boundOf = (loc) => devices.filter(d => d.locationId === loc.id || (loc.deviceIds || []).includes(d.id));
+  const statusOf = (loc) => { const b = boundOf(loc); return locStatusOf(loc, b.length, b.filter(d => d.status === '在线运营').length, loc.plannedCount || (loc.deviceIds || []).length || 0); };
+  const filteredLocs = locations.filter(loc => {
+    const q = lf.q.trim().toLowerCase();
+    return (!lf.project || loc.projectId === lf.project)
+      && (!lf.status || statusOf(loc) === lf.status)
+      && (!q || (loc.name || '').toLowerCase().includes(q) || (loc.address || '').toLowerCase().includes(q))
+      && (!lf.hasDeliv || (lf.hasDeliv === '有' ? deliveryPlanNames(loc.projectId).length > 0 : deliveryPlanNames(loc.projectId).length === 0));
+  });
+  const paged = usePaged(filteredLocs, 10);
+  const lsel = 'border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600 focus:outline-none';
 
   const saveLocation = (form) => {
     if (formTarget && formTarget !== 'new') {
@@ -596,6 +648,13 @@ function LocationsTab() {
             <div className="text-sm text-gray-500 mt-1">{label}</div>
           </div>
         ))}
+      </div>
+      <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 flex flex-wrap gap-2 items-center">
+        <select className={lsel} value={lf.project} onChange={e => lupd('project', e.target.value)}><option value="">全部项目</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        <select className={lsel} value={lf.status} onChange={e => lupd('status', e.target.value)}><option value="">全部点位状态</option>{['待部署', '部署中', '已部署', '在线运营', '已停用'].map(s => <option key={s}>{s}</option>)}</select>
+        <input className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-52" placeholder="搜索点位名称 / 地址" value={lf.q} onChange={e => lupd('q', e.target.value)} />
+        <select className={lsel} value={lf.hasDeliv} onChange={e => lupd('hasDeliv', e.target.value)}><option value="">是否有关联交付计划</option><option value="有">有关联</option><option value="无">无关联</option></select>
+        <span className="ml-auto text-sm text-gray-400">共 {filteredLocs.length} 个</span>
       </div>
       <div className="bg-white rounded shadow-sm">
         <div className="overflow-x-auto">
@@ -640,7 +699,7 @@ function LocationsTab() {
                 </tr>
               );
             })}
-            {locations.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无点位</td></tr>}
+            {filteredLocs.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无匹配点位</td></tr>}
           </tbody>
         </table>
         </div>
@@ -676,7 +735,7 @@ function DevicesTab() {
         onChange={setSubTab}
         className="-mx-6 -mt-6 mb-6 px-6"
       />
-      {activeSubTab === 'all' && <AllDevicesSubTab state={state} />}
+      {activeSubTab === 'all' && <AllDevicesSubTab state={state} goAlerts={() => setSubTab('alerts')} />}
       {activeSubTab === 'alerts' && <AlertsSubTab state={state} dispatch={dispatch} currentRole={currentRole} />}
     </div>
   );

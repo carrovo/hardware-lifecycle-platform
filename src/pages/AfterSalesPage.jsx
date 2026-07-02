@@ -911,7 +911,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['工单ID', '工单类型', '所属阶段', '关联项目', '关联设备SN', '是否涉及换件', '需更换模块类型', '旧模块SN', '新模块SN', '问题描述', '严重程度', '状态', '负责人', '创建时间', '操作'].map(h => (
+                {['工单ID', '工单类型', '所属阶段', '关联项目', '关联设备SN', '是否涉及换件', '需更换模块类型', '旧模块SN', '新模块SN', '新模块库存状态', '问题描述', '严重程度', '状态', '负责人', '创建时间', '操作'].map(h => (
                   <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -925,6 +925,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
                 const needType = isSwap ? (wo.needReplaceModuleType || wo.needModuleType || '待确认') : '不涉及';
                 const oldSN = isSwap ? (wo.oldModuleSN || '待确认') : '不涉及';
                 const newSN = isSwap ? (wo.newModuleSN || '待选择') : '不涉及';
+                const newStock = isSwap ? (wo.newModuleStockStatus || (wo.newModuleSN ? '在库可用' : '待选择')) : '不涉及';
                 const swapCls = isSwap ? 'text-gray-600' : 'text-gray-300';
                 return (
                   <React.Fragment key={wo.id}>
@@ -938,6 +939,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
                       <td className={`px-3 py-2.5 text-xs whitespace-nowrap ${swapCls}`}>{needType}</td>
                       <td className={`px-3 py-2.5 font-mono text-xs whitespace-nowrap ${isSwap ? 'text-gray-500' : 'text-gray-300'}`}>{oldSN}</td>
                       <td className={`px-3 py-2.5 font-mono text-xs whitespace-nowrap ${isSwap ? 'text-gray-500' : 'text-gray-300'}`}>{newSN}</td>
+                      <td className={`px-3 py-2.5 text-xs whitespace-nowrap ${swapCls}`}>{newStock}</td>
                       <td className="px-3 py-2.5 text-gray-700 max-w-[180px]"><div className="truncate" title={wo.description}>{wo.description}</div></td>
                       <td className="px-3 py-2.5"><StatusBadge status={wo.severity} /></td>
                       <td className="px-3 py-2.5"><StatusBadge status={wo.status} /></td>
@@ -956,7 +958,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
                     </tr>
                     {isExpanded && !isVoided && (
                       <tr>
-                        <td colSpan={15} className="p-0">
+                        <td colSpan={16} className="p-0">
                           <div className="px-6 pt-4 bg-slate-50 text-xs text-gray-600 flex flex-wrap gap-x-6 gap-y-1">
                             <span>关联项目：{getProjectName(wo.projectId)}</span>
                             <span>关联交付计划：{wo.deliveryPlanId || '—'}</span>
@@ -972,7 +974,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
                   </React.Fragment>
                 );
               })}
-              {filtered.length === 0 && <tr><td colSpan={15} className="px-4 py-8 text-center text-gray-400">暂无工单</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={16} className="px-4 py-8 text-center text-gray-400">暂无工单</td></tr>}
             </tbody>
           </table>
         </div>

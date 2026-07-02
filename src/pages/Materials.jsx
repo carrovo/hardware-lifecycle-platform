@@ -312,6 +312,116 @@ function ModuleInstanceTab({ materials, devices, moduleTypes, batches = [], batc
   );
 }
 
+const M_INP = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+function batchStats(b) {
+  const pass = (b.items || []).filter((it) => ['合格', '特批使用'].includes(it.result)).length;
+  const fail = (b.items || []).filter((it) => it.result === '不合格').length;
+  const used = (b.items || []).filter((it) => it.status === '已占用').length;
+  const avail = (b.items || []).filter((it) => it.status === '待装配').length;
+  return { pass, fail, used, avail, total: (b.items || []).length };
+}
+
+function BatchDetailModal({ isOpen, batch, plan, onClose, onViewInstances }) {
+  if (!batch) return null;
+  const s = batchStats(batch);
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`批次详情 · ${batch.batchNo}`} size="lg">
+      <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-3 text-sm bg-gray-50 border border-gray-200 rounded p-3">
+          <div><span className="text-gray-400 text-xs">批次号：</span><span className="font-mono text-gray-700">{batch.batchNo}</span></div>
+          <div><span className="text-gray-400 text-xs">模块类型：</span><span className="text-gray-700">{batch.category}</span></div>
+          <div><span className="text-gray-400 text-xs">型号：</span><span className="text-gray-700">{batch.model || '—'}</span></div>
+          <div><span className="text-gray-400 text-xs">供应商：</span><span className="text-gray-700">{batch.supplier || '—'}</span></div>
+          <div><span className="text-gray-400 text-xs">ERP采购单号：</span><span className="font-mono text-gray-700">{batch.erpPurchaseOrderNo || '—'}</span></div>
+          <div><span className="text-gray-400 text-xs">ERP到货通知单号：</span><span className="font-mono text-gray-700">{batch.erpArrivalNo || '—'}</span></div>
+          <div><span className="text-gray-400 text-xs">到货 / 合格 / 不合格：</span><span className="text-gray-700">{s.total} / {s.pass} / {s.fail}</span></div>
+          <div><span className="text-gray-400 text-xs">可用 / 已锁定：</span><span className="text-gray-700">{s.avail} / {s.used}</span></div>
+          <div><span className="text-gray-400 text-xs">检验时间：</span><span className="text-gray-700">{batch.inspectionTime || '—'}</span></div>
+          <div className="col-span-3"><span className="text-gray-400 text-xs">关联生产计划：</span><span className="text-gray-700">{plan ? (plan.name || plan.id) : '—'}</span></div>
+        </div>
+        <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">ERP 批次 / 出库 / 库存以 ERP 为准，此处为平台关联展示；模块 SN 明细请查看模块实例追踪。</div>
+        <div className="flex justify-between">
+          <button onClick={() => { onViewInstances(batch.batchNo); onClose(); }} className="px-4 py-2 text-sm text-blue-600 border border-blue-300 rounded hover:bg-blue-50">查看模块实例</button>
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">关闭</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function BatchInspectModal({ isOpen, batch, onClose, onSave }) {
+  const s = batchStats(batch || {});
+  const [form, setForm] = useState({ pass: s.pass, fail: s.fail, result: s.fail > 0 && s.pass > 0 ? '部分合格' : s.fail > 0 ? '不合格' : '合格', inspector: batch?.inspector || '', notes: batch?.notes || '' });
+  if (!batch) return null;
+  const submit = (e) => { e.preventDefault(); onSave({ inspector: form.inspector, inspectionTime: new Date().toISOString().slice(0, 16).replace('T', ' '), inspectResult: form.result, inspectPass: Number(form.pass), inspectFail: Number(form.fail), notes: form.notes }); };
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="录入检验结果" size="lg">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div><label className="block text-xs text-gray-600 mb-1">批次号</label><input className={`${M_INP} bg-gray-50`} readOnly value={batch.batchNo} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">模块类型</label><input className={`${M_INP} bg-gray-50`} readOnly value={batch.category} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">型号</label><input className={`${M_INP} bg-gray-50`} readOnly value={batch.model || '—'} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">供应商</label><input className={`${M_INP} bg-gray-50`} readOnly value={batch.supplier || '—'} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">到货数量</label><input className={`${M_INP} bg-gray-50`} readOnly value={s.total} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">检验结果</label><select className={M_INP} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}>{['合格', '部分合格', '不合格', '特批使用'].map((r) => <option key={r}>{r}</option>)}</select></div>
+          <div><label className="block text-xs text-gray-600 mb-1">合格数量 *</label><input type="number" min="0" required className={M_INP} value={form.pass} onChange={(e) => setForm({ ...form, pass: e.target.value })} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">不合格数量 *</label><input type="number" min="0" required className={M_INP} value={form.fail} onChange={(e) => setForm({ ...form, fail: e.target.value })} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">检验人</label><input className={M_INP} value={form.inspector} onChange={(e) => setForm({ ...form, inspector: e.target.value })} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">检验时间</label><input className={`${M_INP} bg-gray-50`} readOnly value={new Date().toISOString().slice(0, 16).replace('T', ' ')} /></div>
+          <div className="col-span-2"><label className="block text-xs text-gray-600 mb-1">附件 / 检验报告</label><input className={`${M_INP} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）上传检验报告" /></div>
+          <div className="col-span-2"><label className="block text-xs text-gray-600 mb-1">备注</label><textarea rows={2} className={M_INP} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+        </div>
+        <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button><button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+function BatchLinkPlanModal({ isOpen, batch, plans, onClose, onSave }) {
+  const s = batchStats(batch || {});
+  const [form, setForm] = useState({ planId: '', qty: s.avail, note: '', trackOnly: true });
+  if (!batch) return null;
+  const submit = (e) => { e.preventDefault(); if (!form.planId) return; onSave(form.planId, { qty: Number(form.qty), note: form.note, trackOnly: form.trackOnly }); };
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="关联生产计划" size="lg">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div><label className="block text-xs text-gray-600 mb-1">批次号</label><input className={`${M_INP} bg-gray-50`} readOnly value={batch.batchNo} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">模块类型</label><input className={`${M_INP} bg-gray-50`} readOnly value={batch.category} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">可用数量</label><input className={`${M_INP} bg-gray-50`} readOnly value={s.avail} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">生产计划 *</label><select className={M_INP} required value={form.planId} onChange={(e) => setForm({ ...form, planId: e.target.value })}><option value="">-- 选择生产计划 --</option>{plans.map((p) => <option key={p.id} value={p.id}>{p.name || p.id}</option>)}</select></div>
+          <div><label className="block text-xs text-gray-600 mb-1">关联数量</label><input type="number" min="0" max={s.avail} className={M_INP} value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} /></div>
+          <div className="flex items-center gap-2 pt-6"><input id="trackOnly" type="checkbox" checked={form.trackOnly} onChange={(e) => setForm({ ...form, trackOnly: e.target.checked })} /><label htmlFor="trackOnly" className="text-sm text-gray-700">仅作为平台追踪，不写回 ERP</label></div>
+          <div className="col-span-2"><label className="block text-xs text-gray-600 mb-1">关联说明</label><textarea rows={2} className={M_INP} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></div>
+        </div>
+        <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">领料 / 出库以 ERP 为准；此关联仅用于平台侧生产计划齐套追踪。</div>
+        <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button><button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存关联</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+function BatchEditModal({ isOpen, batch, onClose, onSave }) {
+  const [form, setForm] = useState({ model: batch?.model || '', supplier: batch?.supplier || '', erpPurchaseOrderNo: batch?.erpPurchaseOrderNo || '', erpArrivalNo: batch?.erpArrivalNo || '', warehouse: batch?.warehouse || '', notes: batch?.notes || '' });
+  if (!batch) return null;
+  const submit = (e) => { e.preventDefault(); onSave(form); };
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`编辑批次 · ${batch.batchNo}`} size="lg">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div><label className="block text-xs text-gray-600 mb-1">型号</label><input className={M_INP} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">供应商</label><input className={M_INP} value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">ERP采购单号</label><input className={M_INP} value={form.erpPurchaseOrderNo} onChange={(e) => setForm({ ...form, erpPurchaseOrderNo: e.target.value })} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">ERP到货通知单号</label><input className={M_INP} value={form.erpArrivalNo} onChange={(e) => setForm({ ...form, erpArrivalNo: e.target.value })} /></div>
+          <div><label className="block text-xs text-gray-600 mb-1">仓库</label><input className={M_INP} value={form.warehouse} onChange={(e) => setForm({ ...form, warehouse: e.target.value })} /></div>
+          <div className="col-span-2"><label className="block text-xs text-gray-600 mb-1">备注</label><textarea rows={2} className={M_INP} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+        </div>
+        <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button><button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">保存</button></div>
+      </form>
+    </Modal>
+  );
+}
+
 export default function Materials() {
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
@@ -326,6 +436,17 @@ export default function Materials() {
   const [search, setSearch] = useState('');
   const [instanceBatchFilter, setInstanceBatchFilter] = useState('');
   const [instanceCategoryFilter, setInstanceCategoryFilter] = useState('');
+  const [batchModal, setBatchModal] = useState(null); // { type, batch }
+  const openBatch = (type, batch) => setBatchModal({ type, batch });
+  const closeBatch = () => setBatchModal(null);
+  const saveBatch = (patch) => { if (batchModal) dispatch({ type: 'UPDATE_MATERIAL_BATCH', payload: { id: batchModal.batch.id, ...patch } }); closeBatch(); };
+  const linkBatchPlan = (planId) => {
+    if (!batchModal) return;
+    dispatch({ type: 'UPDATE_MATERIAL_BATCH', payload: { id: batchModal.batch.id, planId } });
+    const plan = (state.workflowProductionPlans || []).find((p) => p.id === planId);
+    if (plan) dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: planId, materialBatchIds: [...new Set([...(plan.materialBatchIds || []), batchModal.batch.id])] } });
+    closeBatch();
+  };
 
   useEffect(() => {
     const r = searchParams.get('result');
@@ -535,12 +656,25 @@ export default function Materials() {
                       </td>
                       <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{b.inspectionTime}</td>
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap">
-                        <div className="flex items-center gap-x-3">
-                          <button className="text-slate-600 hover:underline">录入检验结果</button>
-                          <button className="text-emerald-600 hover:underline">关联生产计划</button>
-                          <button className="text-blue-600 hover:underline" onClick={() => viewInstancesByBatch(b.batchNo)}>查看模块实例</button>
-                          <button className="text-indigo-600 hover:underline">锁定</button>
-                        </div>
+                        {(() => {
+                          const usedCount = b.items.filter((it) => it.status === '已占用').length;
+                          const used = usedCount > 0;
+                          const noEdit = !!plan && used;
+                          return (
+                            <div className="flex items-center gap-x-3">
+                              <button className="text-slate-600 hover:underline" onClick={() => openBatch('detail', b)}>查看详情</button>
+                              <button className="text-slate-600 hover:underline" onClick={() => openBatch('inspect', b)}>录入检验结果</button>
+                              <button className="text-emerald-600 hover:underline" onClick={() => openBatch('link', b)}>关联生产计划</button>
+                              <button className="text-blue-600 hover:underline" onClick={() => viewInstancesByBatch(b.batchNo)}>查看模块实例</button>
+                              {noEdit
+                                ? <span className="text-gray-300 cursor-not-allowed" title="已关联生产计划且已被装配使用，不可编辑">编辑</span>
+                                : <button className="text-slate-600 hover:underline" onClick={() => openBatch('edit', b)}>编辑</button>}
+                              {used
+                                ? <span className="text-red-300 cursor-not-allowed" title="批次已被装配使用，不可停用/作废">停用/作废</span>
+                                : <button className="text-red-400 hover:text-red-600 hover:underline" onClick={() => openBatch('void', b)}>停用/作废</button>}
+                            </div>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );
@@ -557,6 +691,22 @@ export default function Materials() {
       )}
 
       <AddBatchModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleAdd} />
+      {batchModal?.type === 'detail' && <BatchDetailModal isOpen batch={batchModal.batch} plan={workflowProductionPlans.find((p) => p.id === batchModal.batch.planId || (p.materialBatchIds || []).includes(batchModal.batch.id))} onClose={closeBatch} onViewInstances={viewInstancesByBatch} />}
+      {batchModal?.type === 'inspect' && <BatchInspectModal isOpen batch={batchModal.batch} onClose={closeBatch} onSave={saveBatch} />}
+      {batchModal?.type === 'link' && <BatchLinkPlanModal isOpen batch={batchModal.batch} plans={workflowProductionPlans} onClose={closeBatch} onSave={linkBatchPlan} />}
+      {batchModal?.type === 'edit' && <BatchEditModal isOpen batch={batchModal.batch} onClose={closeBatch} onSave={saveBatch} />}
+      {batchModal?.type === 'void' && (
+        <Modal isOpen onClose={closeBatch} title="停用 / 作废批次">
+          <div className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">作废后批次不参与齐套统计，记录保留可查。ERP 批次库存以 ERP 为准。</div>
+            <div className="text-sm text-gray-600">批次号：<span className="font-mono font-medium">{batchModal.batch.batchNo}</span></div>
+            <div className="flex justify-end gap-2">
+              <button onClick={closeBatch} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+              <button onClick={() => saveBatch({ voided: true })} className="px-4 py-2 text-sm text-white bg-red-600 rounded hover:bg-red-700">确认作废</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
