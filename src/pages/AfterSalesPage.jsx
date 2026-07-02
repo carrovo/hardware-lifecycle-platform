@@ -5,7 +5,7 @@ import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import { Pagination, usePaged } from '../components/Pagination';
-import { FEISHU_USERS } from '../data/mockData';
+import { FEISHU_USERS, moduleInstances as MODULE_INSTANCES } from '../data/mockData';
 
 const TABS = [
   { key: 'orders',  label: '工单中心' },
@@ -603,24 +603,289 @@ function DLogs({ logs }) {
   );
 }
 
-// 工单详情抽屉（只读；操作仍在表格行内）。
-function OrderDetailDrawer({ wo, state, onClose }) {
-  if (!wo) return null;
+/* ─────── 工单处理动作弹窗（工单中心处理台）─────── */
+const WOINP = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+const WO_MODULE_CATS = ['底盘', '机械臂', '电机', '末端', '全身相机', '预控'];
+const catOfNeed = (need) => WO_MODULE_CATS.find((c) => (need || '').includes(c)) || '';
+const woField = (label, val) => (
+  <div><span className="text-gray-400 text-xs">{label}：</span><span className="text-gray-700">{val ?? '—'}</span></div>
+);
+function WOFooter({ onClose, onConfirm, disabled, confirmLabel = '确认', color = 'bg-blue-600 hover:bg-blue-700' }) {
+  return (
+    <div className="flex justify-end gap-2 pt-2">
+      <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+      <button onClick={onConfirm} disabled={disabled} className={`px-4 py-2 text-sm text-white rounded disabled:opacity-40 ${color}`}>{confirmLabel}</button>
+    </div>
+  );
+}
+
+function StartProcessModal({ wo, currentUser, onClose, onConfirm }) {
+  const [assignee, setAssignee] = useState(wo.assignedTo || currentUser);
+  const [method, setMethod] = useState('');
+  const [note, setNote] = useState('');
+  return (
+    <Modal isOpen onClose={onClose} title="开始处理">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3 text-sm">{woField('工单ID', wo.id)}<div><span className="text-gray-400 text-xs">当前状态：</span><StatusBadge status={wo.status} /></div></div>
+        <div><label className="block text-xs text-gray-600 mb-1">处理人 *</label><select className={WOINP} value={assignee} onChange={e => setAssignee(e.target.value)}>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}（{u.dept}）</option>)}</select></div>
+        <div><label className="block text-xs text-gray-600 mb-1">预计处理方式</label><input className={WOINP} value={method} onChange={e => setMethod(e.target.value)} placeholder="如：现场检修 / 更换模块 / 远程处理" /></div>
+        <div><label className="block text-xs text-gray-600 mb-1">备注</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        <WOFooter onClose={onClose} disabled={!assignee} confirmLabel="确认开始处理" onConfirm={() => onConfirm({ assignee, method, note })} />
+      </div>
+    </Modal>
+  );
+}
+function AssignModal({ wo, onClose, onConfirm }) {
+  const [assignee, setAssignee] = useState('');
+  const [note, setNote] = useState('');
+  return (
+    <Modal isOpen onClose={onClose} title="分配负责人">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3 text-sm">{woField('工单ID', wo.id)}{woField('当前负责人', wo.assignedTo || '待指派')}</div>
+        <div><label className="block text-xs text-gray-600 mb-1">新负责人 *</label><select className={WOINP} value={assignee} onChange={e => setAssignee(e.target.value)}><option value="">-- 选择负责人 --</option>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}（{u.dept}）</option>)}</select></div>
+        <div><label className="block text-xs text-gray-600 mb-1">分配说明</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        <WOFooter onClose={onClose} disabled={!assignee} confirmLabel="确认分配" onConfirm={() => onConfirm({ assignee, note })} />
+      </div>
+    </Modal>
+  );
+}
+function VoidModal({ wo, onClose, onConfirm }) {
+  const [reason, setReason] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+  return (
+    <Modal isOpen onClose={onClose} title="作废工单">
+      <div className="space-y-3">
+        <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">作废后工单不可恢复，也不参与统计，记录保留可查。</div>
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3 text-sm">{woField('工单ID', wo.id)}<div><span className="text-gray-400 text-xs">当前状态：</span><StatusBadge status={wo.status} /></div></div>
+        <div><label className="block text-xs text-gray-600 mb-1">作废原因 *</label><textarea rows={3} className={WOINP} value={reason} onChange={e => setReason(e.target.value)} placeholder="请填写作废原因（必填）" /></div>
+        <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />我已确认作废该工单（二次确认）。</label>
+        <WOFooter onClose={onClose} disabled={!reason.trim() || !confirmed} confirmLabel="确认作废" color="bg-red-600 hover:bg-red-700" onConfirm={() => onConfirm({ reason: reason.trim() })} />
+      </div>
+    </Modal>
+  );
+}
+function RecordRepairModal({ wo, currentUser, onClose, onConfirm }) {
+  const [action, setAction] = useState(wo.repairActions || '');
+  const [person, setPerson] = useState(wo.assignedTo || currentUser);
+  const [note, setNote] = useState('');
+  const t = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  return (
+    <Modal isOpen onClose={onClose} title="记录处理措施">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3 text-sm">{woField('工单ID', wo.id)}{woField('设备SN', wo.deviceSN)}</div>
+        <div><label className="block text-xs text-gray-600 mb-1">处理措施 *</label><textarea rows={3} className={WOINP} value={action} onChange={e => setAction(e.target.value)} placeholder="记录本次维修 / 处理措施" /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="block text-xs text-gray-600 mb-1">处理人</label><select className={WOINP} value={person} onChange={e => setPerson(e.target.value)}>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+          <div><label className="block text-xs text-gray-600 mb-1">处理时间</label><input className={`${WOINP} bg-gray-50`} readOnly value={t} /></div>
+        </div>
+        <div><label className="block text-xs text-gray-600 mb-1">附件 / 图片 / 日志</label><input className={`${WOINP} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）支持上传附件" /></div>
+        <div><label className="block text-xs text-gray-600 mb-1">备注</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        <WOFooter onClose={onClose} disabled={!action.trim()} confirmLabel="保存处理措施" onConfirm={() => onConfirm({ action: action.trim(), person, note })} />
+      </div>
+    </Modal>
+  );
+}
+function SubmitRecheckModal2({ wo, onClose, onConfirm }) {
+  const [person, setPerson] = useState('');
+  const [note, setNote] = useState('');
+  return (
+    <Modal isOpen onClose={onClose} title="提交复检">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3 text-sm">{woField('工单ID', wo.id)}{woField('当前处理措施', wo.repairActions || '暂无')}</div>
+        <div><label className="block text-xs text-gray-600 mb-1">复检人 *</label><select className={WOINP} value={person} onChange={e => setPerson(e.target.value)}><option value="">-- 选择复检人 --</option>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}（{u.dept}）</option>)}</select></div>
+        <div><label className="block text-xs text-gray-600 mb-1">复检说明</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        <WOFooter onClose={onClose} disabled={!person} confirmLabel="提交复检" color="bg-purple-600 hover:bg-purple-700" onConfirm={() => onConfirm({ person, note })} />
+      </div>
+    </Modal>
+  );
+}
+function RecheckPassModal({ wo, currentUser, onClose, onConfirm }) {
+  const [person, setPerson] = useState(wo.recheckPerson || currentUser);
+  const [note, setNote] = useState('');
+  return (
+    <Modal isOpen onClose={onClose} title="复检通过并关闭">
+      <div className="space-y-3">
+        {woField('工单ID', wo.id)}
+        <div><label className="block text-xs text-gray-600 mb-1">复检人 *</label><select className={WOINP} value={person} onChange={e => setPerson(e.target.value)}>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+        <div><label className="block text-xs text-gray-600 mb-1">复检结果</label><input className={`${WOINP} bg-gray-50`} readOnly value="合格" /></div>
+        <div><label className="block text-xs text-gray-600 mb-1">关闭说明</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        <WOFooter onClose={onClose} disabled={!person} confirmLabel="复检通过并关闭" color="bg-green-600 hover:bg-green-700" onConfirm={() => onConfirm({ person, result: '合格', note })} />
+      </div>
+    </Modal>
+  );
+}
+function RecheckRejectModal({ wo, currentUser, onClose, onConfirm }) {
+  const [person, setPerson] = useState(wo.recheckPerson || currentUser);
+  const [reason, setReason] = useState('');
+  const [suggestion, setSuggestion] = useState('');
+  return (
+    <Modal isOpen onClose={onClose} title="复检不通过，打回处理">
+      <div className="space-y-3">
+        {woField('工单ID', wo.id)}
+        <div><label className="block text-xs text-gray-600 mb-1">复检人 *</label><select className={WOINP} value={person} onChange={e => setPerson(e.target.value)}>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+        <div><label className="block text-xs text-gray-600 mb-1">不通过原因 *</label><textarea rows={2} className={WOINP} value={reason} onChange={e => setReason(e.target.value)} /></div>
+        <div><label className="block text-xs text-gray-600 mb-1">下一步处理建议</label><textarea rows={2} className={WOINP} value={suggestion} onChange={e => setSuggestion(e.target.value)} /></div>
+        <WOFooter onClose={onClose} disabled={!person || !reason.trim()} confirmLabel="打回处理" color="bg-orange-600 hover:bg-orange-700" onConfirm={() => onConfirm({ person, reason: reason.trim(), suggestion })} />
+      </div>
+    </Modal>
+  );
+}
+function ConfirmOldModuleModal({ wo, moduleInstances, onClose, onConfirm }) {
+  const cat = catOfNeed(wo.needReplaceModuleType || wo.needModuleType);
+  const bound = (moduleInstances || []).filter(mi => mi.boundDeviceId === wo.deviceId && (!cat || mi.category === cat));
+  const [sel, setSel] = useState(bound[0]?.sn || '__manual__');
+  const [manual, setManual] = useState('');
+  const [note, setNote] = useState('');
+  const oldSN = sel === '__manual__' ? manual.trim() : sel;
+  return (
+    <Modal isOpen onClose={onClose} title="确认旧模块">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3 text-sm">{woField('工单ID', wo.id)}{woField('设备SN', wo.deviceSN)}<div className="col-span-2">{woField('需更换模块类型', wo.needReplaceModuleType || wo.needModuleType || '待确认')}</div></div>
+        <div>
+          <label className="block text-xs text-gray-600 mb-1">当前设备已绑定模块（选择旧模块SN）</label>
+          <select className={WOINP} value={sel} onChange={e => setSel(e.target.value)}>
+            {bound.map(mi => <option key={mi.id} value={mi.sn}>{mi.sn}（{mi.category}·{mi.status}）</option>)}
+            <option value="__manual__">手动填写旧模块SN…</option>
+          </select>
+          {bound.length === 0 && <div className="text-xs text-gray-400 mt-1">该设备暂无平台登记的已装配模块，可手动填写。</div>}
+        </div>
+        {sel === '__manual__' && <input className={WOINP} value={manual} onChange={e => setManual(e.target.value)} placeholder="输入旧模块SN" />}
+        <div><label className="block text-xs text-gray-600 mb-1">确认说明</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        <WOFooter onClose={onClose} disabled={!oldSN} confirmLabel="确认旧模块" onConfirm={() => onConfirm({ oldSN, note })} />
+      </div>
+    </Modal>
+  );
+}
+function SelectNewModuleModal({ wo, moduleInstances, batches, onClose, onConfirm }) {
+  const cat = catOfNeed(wo.needReplaceModuleType || wo.needModuleType);
+  const avail = (moduleInstances || []).filter(mi => mi.status === '在库可用' && (!cat || mi.category === cat));
+  const batchNoOf = (id) => (batches || []).find(b => b.id === id)?.batchNo || id;
+  const [sel, setSel] = useState(avail[0]?.sn || '');
+  const [note, setNote] = useState('');
+  const chosen = avail.find(mi => mi.sn === sel);
+  return (
+    <Modal isOpen onClose={onClose} title="选择新模块">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3 text-sm">{woField('工单ID', wo.id)}{woField('需更换模块类型', wo.needReplaceModuleType || wo.needModuleType || '待确认')}</div>
+        <div>
+          <label className="block text-xs text-gray-600 mb-1">可用模块SN列表（仅在库可用可选）</label>
+          <select className={WOINP} value={sel} onChange={e => setSel(e.target.value)}>
+            <option value="">-- 选择新模块SN --</option>
+            {avail.map(mi => <option key={mi.id} value={mi.sn}>{mi.sn}（来源批次 {batchNoOf(mi.sourceBatchId)}）</option>)}
+          </select>
+          {avail.length === 0 && <div className="text-xs text-amber-600 mt-1">暂无在库可用的该类模块，无法选择。</div>}
+        </div>
+        <div className="grid grid-cols-2 gap-3 text-sm">{woField('来源批次', chosen ? batchNoOf(chosen.sourceBatchId) : '—')}{woField('当前状态', chosen ? '在库可用' : '—')}</div>
+        <div><label className="block text-xs text-gray-600 mb-1">选择说明</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        <WOFooter onClose={onClose} disabled={!chosen} confirmLabel="确认选择" onConfirm={() => onConfirm({ newSN: sel, stock: '在库可用', batchNo: batchNoOf(chosen.sourceBatchId), note })} />
+      </div>
+    </Modal>
+  );
+}
+function RecordSwapModal({ wo, currentUser, onClose, onConfirm }) {
+  const [person, setPerson] = useState(wo.assignedTo || currentUser);
+  const [note, setNote] = useState('');
+  const t = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  return (
+    <Modal isOpen onClose={onClose} title="记录换件">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3 text-sm">{woField('工单ID', wo.id)}{woField('设备SN', wo.deviceSN)}{woField('旧模块SN', wo.oldModuleSN)}{woField('新模块SN', wo.newModuleSN)}</div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="block text-xs text-gray-600 mb-1">换件人</label><select className={WOINP} value={person} onChange={e => setPerson(e.target.value)}>{FEISHU_USERS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+          <div><label className="block text-xs text-gray-600 mb-1">换件时间</label><input className={`${WOINP} bg-gray-50`} readOnly value={t} /></div>
+        </div>
+        <div><label className="block text-xs text-gray-600 mb-1">换件说明</label><textarea rows={2} className={WOINP} value={note} onChange={e => setNote(e.target.value)} /></div>
+        <div><label className="block text-xs text-gray-600 mb-1">附件</label><input className={`${WOINP} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）支持上传附件" /></div>
+        <WOFooter onClose={onClose} confirmLabel="记录换件" color="bg-slate-700 hover:bg-slate-800" onConfirm={() => onConfirm({ person, note })} />
+      </div>
+    </Modal>
+  );
+}
+
+const NEXT_SUGGESTION = {
+  待处理: '建议先开始处理，或先分配负责人。',
+  处理中: '建议记录处理措施，完成后提交复检。',
+  复检中: '等待复检结果：复检通过则关闭，不通过则打回处理。',
+  已关闭: '工单已关闭，不可编辑。',
+  已作废: '工单已作废，不可处理。',
+};
+
+// 工单详情抽屉 = 处理台：展示信息 + 当前可执行操作区 + 换件处理区 + 下一步建议。
+function OrderDetailDrawer({ wo: snapshot, state, dispatch, currentUser, onClose }) {
+  const [modal, setModal] = useState(null);
+  if (!snapshot) return null;
+  const kind = snapshot._kind;
+  const source = kind === 'delivery' ? (state.deliveryWorkOrders || []) : (state.workOrders || []);
+  const fresh = source.find(w => w.id === snapshot.id) || snapshot;
+  const wo = { ...fresh, _kind: kind, _class: woClassOf({ ...fresh, _kind: kind }), _stage: woStageOf({ ...fresh, _kind: kind }) };
+  const updType = kind === 'delivery' ? 'UPDATE_DELIVERY_WORK_ORDER' : 'UPDATE_WORK_ORDER';
+  const now = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
   const projectName = state.projects.find(p => p.id === wo.projectId)?.name || '—';
   const isSwap = wo._class === '换件工单';
-  const nextAction = wo.status === '待处理' ? '开始处理 / 分配负责人'
-    : wo.status === '处理中' ? '提交复检'
-    : wo.status === '复检中' ? '复检并关闭'
-    : '无（已关闭 / 已作废）';
+  const closed = ['已关闭', '已作废'].includes(wo.status);
   const linkedQI = wo.linkedQualityIssueId || wo.sourceQualityIssueId;
+  const close = () => setModal(null);
+
+  const patch = (p, note, toStatus) => {
+    const t = now();
+    dispatch({ type: updType, payload: { id: wo.id, updatedAt: t, ...p, processLogs: [...(wo.processLogs || []), { time: t, operator: currentUser, fromStatus: wo.status, toStatus: toStatus ?? p.status ?? wo.status, notes: note }] } });
+    close();
+  };
+  const startProcessing = ({ assignee, method, note }) => patch({ status: '处理中', assignedTo: assignee }, `开始处理${method ? `，方式：${method}` : ''}${note ? `（${note}）` : ''}`, '处理中');
+  const assignOwner = ({ assignee, note }) => patch({ assignedTo: assignee }, `分配负责人：${assignee}${note ? `（${note}）` : ''}`);
+  const voidWO = ({ reason }) => patch({ status: '已作废', voidReason: reason, closedAt: now() }, `工单作废：${reason}`, '已作废');
+  const recordRepair = ({ action, person, note }) => patch({ repairActions: action, assignedTo: wo.assignedTo || person }, `记录处理措施（${person}）：${action}${note ? `（${note}）` : ''}`);
+  const submitRecheck = ({ person, note }) => patch({ status: '复检中', recheckPerson: person }, `提交复检，复检人：${person}${note ? `（${note}）` : ''}`, '复检中');
+  const recheckClose = ({ person, result, note }) => patch({ status: '已关闭', recheckPerson: person, recheckResult: result, closedAt: now() }, `复检${result}，关闭工单${note ? `（${note}）` : ''}`, '已关闭');
+  const recheckReject = ({ person, reason, suggestion }) => patch({ status: '处理中', recheckResult: null, recheckPerson: person }, `复检不通过（${reason}）打回处理${suggestion ? `，建议：${suggestion}` : ''}`, '处理中');
+  const genQuality = () => {
+    if (wo.linkedQualityIssueId) return;
+    const t = now();
+    const qiId = `QI-${Date.now().toString().slice(-6)}`;
+    dispatch({ type: 'ADD_QUALITY_ISSUE', payload: { id: qiId, deviceId: wo.deviceId, deviceSN: wo.deviceSN, projectId: wo.projectId, sourceStage: wo._stage, issueType: '工单转质量问题', severity: wo.severity || '中', issueDesc: wo.description, reporterName: currentUser, owner: currentUser, reportTime: t, status: '待处理', source: '工单转入', linkedWorkOrder: true, linkedWorkOrderId: wo.id, processLogs: [] } });
+    patch({ linkedQualityIssueId: qiId }, `生成质量问题 ${qiId}`);
+  };
+  const confirmOld = ({ oldSN, note }) => patch({ oldModuleSN: oldSN }, `确认旧模块：${oldSN}${note ? `（${note}）` : ''}`);
+  const selectNew = ({ newSN, stock, batchNo, note }) => patch({ newModuleSN: newSN, newModuleStockStatus: stock }, `选择新模块：${newSN}（来源批次 ${batchNo}）${note ? `（${note}）` : ''}`);
+  const recordSwap = ({ person, note }) => patch({ newModuleStockStatus: '已换件', replacedAt: now() }, `完成换件：${wo.oldModuleSN} → ${wo.newModuleSN}，换件人 ${person}${note ? `（${note}）` : ''}`);
+
+  const oldConfirmed = isSwap && wo.oldModuleSN && !['待确认', ''].includes(wo.oldModuleSN);
+  const newSelected = isSwap && wo.newModuleSN && !['待选择', ''].includes(wo.newModuleSN);
+  const swapDone = wo.newModuleStockStatus === '已换件';
+
+  const abtn = (label, key, color = 'bg-blue-600 hover:bg-blue-700', extra = {}) => (
+    <button onClick={() => setModal(key)} className={`px-3 py-1.5 text-sm text-white rounded ${color} ${extra.disabled ? 'opacity-40 cursor-not-allowed' : ''}`} disabled={extra.disabled} title={extra.title || ''}>{label}</button>
+  );
+  const gbtn = (label, key, extra = {}) => (
+    <button onClick={() => setModal(key)} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded hover:bg-gray-50 disabled:opacity-40" disabled={extra.disabled} title={extra.title || ''}>{label}</button>
+  );
+  const dbtn = (label, onClick, extra = {}) => (
+    <button onClick={onClick} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded hover:bg-gray-50 disabled:opacity-40" disabled={extra.disabled} title={extra.title || ''}>{label}</button>
+  );
+
   return (
-    <Drawer open={!!wo} onClose={onClose}
+    <Drawer open={!!snapshot} onClose={onClose}
       title={<span className="font-mono">{wo.id}</span>}
       chips={<>
         <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${WO_CLASS_STYLE[wo._class]}`}>{wo._class}</span>
         <StatusBadge status={wo.status} />
         <span className="text-xs text-gray-500 whitespace-nowrap">负责人：{wo.assignedTo || '待指派'}</span>
       </>}>
+      {/* 当前可执行操作区 */}
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+        <div className="text-xs font-semibold text-gray-500 mb-2">当前可执行操作</div>
+        {closed ? (
+          <div className="text-sm text-gray-400">{wo.status === '已作废' ? '工单已作废，仅可查看详情与操作日志。' : '工单已关闭，仅可查看详情与操作日志。'}</div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {wo.status === '待处理' && <>{abtn('开始处理', 'start')}{gbtn('分配负责人', 'assign')}{abtn('作废', 'void', 'bg-red-600 hover:bg-red-700')}</>}
+            {wo.status === '处理中' && <>{gbtn('记录处理措施', 'repair')}{abtn('提交复检', 'recheck', 'bg-purple-600 hover:bg-purple-700')}{dbtn('生成质量问题', genQuality, { disabled: !!linkedQI, title: linkedQI ? `已生成 ${linkedQI}` : '' })}{abtn('作废', 'void', 'bg-red-600 hover:bg-red-700')}</>}
+            {wo.status === '复检中' && <>{abtn('复检通过并关闭', 'pass', 'bg-green-600 hover:bg-green-700')}{abtn('复检不通过，打回处理', 'reject', 'bg-orange-600 hover:bg-orange-700')}</>}
+          </div>
+        )}
+        <div className="mt-2 text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded px-2 py-1">下一步建议：{NEXT_SUGGESTION[wo.status] || '—'}</div>
+      </div>
+
       <DSection title="基础信息">
         <DGrid items={[
           ['工单ID', wo.id], ['工单类型', wo._class], ['所属阶段', wo._stage], ['关联项目', projectName],
@@ -632,21 +897,30 @@ function OrderDetailDrawer({ wo, state, onClose }) {
         <div className="text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded p-3 leading-relaxed">{wo.description || '—'}</div>
       </DSection>
       <DSection title="换件信息">
-        {isSwap
-          ? <DGrid items={[
-              ['是否涉及换件', '是'],
+        {isSwap ? (
+          <div className="space-y-3">
+            <DGrid items={[
               ['需更换模块类型', wo.needReplaceModuleType || wo.needModuleType || '待确认'],
+              ['新模块库存状态', wo.newModuleStockStatus || (wo.newModuleSN ? '在库可用' : '待选择')],
               ['旧模块SN', wo.oldModuleSN || '待确认'],
               ['新模块SN', wo.newModuleSN || '待选择'],
-              ['新模块库存状态', wo.newModuleStockStatus || (wo.newModuleSN ? '在库可用' : '待选择'), true],
             ]} />
-          : <div className="text-sm text-gray-400">不涉及换件</div>}
+            {!closed && (
+              <div className="flex flex-wrap gap-2">
+                {gbtn('确认旧模块', 'oldMod', { disabled: swapDone })}
+                {gbtn('选择新模块', 'newMod', { disabled: swapDone })}
+                {abtn('记录换件', 'swap', 'bg-slate-700 hover:bg-slate-800', { disabled: swapDone || !oldConfirmed || !newSelected, title: swapDone ? '换件已记录' : (!oldConfirmed ? '请先确认旧模块' : !newSelected ? '请先选择新模块' : '') })}
+                {swapDone && <span className="text-xs text-green-600 self-center">✓ 换件已记录</span>}
+              </div>
+            )}
+          </div>
+        ) : <div className="text-sm text-gray-400">不涉及换件</div>}
       </DSection>
       <DSection title="处理记录">
         <DGrid items={[
           ['当前处理措施', wo.repairActions || '暂无记录', true],
           ['处理人', wo.assignedTo || '待指派'], ['最近处理时间', wo.updatedAt],
-          ['下一步动作', nextAction, true],
+          ['复检人', wo.recheckPerson || '—'], ['复检结果', wo.recheckResult || '—'],
         ]} />
       </DSection>
       <DSection title="关联质量问题">
@@ -656,6 +930,17 @@ function OrderDetailDrawer({ wo, state, onClose }) {
         ]} />
       </DSection>
       <DSection title="操作日志"><DLogs logs={wo.processLogs} /></DSection>
+
+      {modal === 'start' && <StartProcessModal wo={wo} currentUser={currentUser} onClose={close} onConfirm={startProcessing} />}
+      {modal === 'assign' && <AssignModal wo={wo} onClose={close} onConfirm={assignOwner} />}
+      {modal === 'void' && <VoidModal wo={wo} onClose={close} onConfirm={voidWO} />}
+      {modal === 'repair' && <RecordRepairModal wo={wo} currentUser={currentUser} onClose={close} onConfirm={recordRepair} />}
+      {modal === 'recheck' && <SubmitRecheckModal2 wo={wo} onClose={close} onConfirm={submitRecheck} />}
+      {modal === 'pass' && <RecheckPassModal wo={wo} currentUser={currentUser} onClose={close} onConfirm={recheckClose} />}
+      {modal === 'reject' && <RecheckRejectModal wo={wo} currentUser={currentUser} onClose={close} onConfirm={recheckReject} />}
+      {modal === 'oldMod' && <ConfirmOldModuleModal wo={wo} moduleInstances={MODULE_INSTANCES} onClose={close} onConfirm={confirmOld} />}
+      {modal === 'newMod' && <SelectNewModuleModal wo={wo} moduleInstances={MODULE_INSTANCES} batches={state.materialBatches} onClose={close} onConfirm={selectNew} />}
+      {modal === 'swap' && <RecordSwapModal wo={wo} currentUser={currentUser} onClose={close} onConfirm={recordSwap} />}
     </Drawer>
   );
 }
@@ -895,7 +1180,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
         <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </div>
 
-      <OrderDetailDrawer wo={detailWO} state={state} onClose={() => setDetailWO(null)} />
+      <OrderDetailDrawer wo={detailWO} state={state} dispatch={dispatch} currentUser={currentUser} onClose={() => setDetailWO(null)} />
       {showAddModal && (
         <OrderCenterAddModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onSave={handleAdd} state={state} />
       )}
