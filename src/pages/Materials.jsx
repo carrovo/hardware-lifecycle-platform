@@ -243,7 +243,8 @@ function ModuleInstanceTab({ materials, devices, moduleTypes, batches = [], batc
   return (
     <div>
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">
-        模块实例追踪用于追踪每个模块 SN 的当前状态。录入待测试设备时，需要从这里选择「在库可用」或已锁定当前生产计划的模块 SN 绑定到设备。
+        模块实例追踪用于追踪每个模块 SN 的当前状态。模块 SN 如不进入 ERP，由平台维护，用于装配、测试、返修、换件追溯。
+        <span className="block mt-1 text-blue-500">状态口径：在库可用 / 已锁定生产计划 / 已装配 / 维修中 / 已报废 / 退货换货。</span>
       </div>
       <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 flex flex-wrap gap-2 items-center">
         <label className="text-xs text-gray-500">实例状态</label>
@@ -292,11 +293,8 @@ function ModuleInstanceTab({ materials, devices, moduleTypes, batches = [], batc
                 <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{m.inspectionTime || '—'}</td>
                 <td className="px-4 py-2.5 text-xs whitespace-nowrap">
                   <div className="flex items-center gap-x-3">
-                    {m.owner ? <Link to={`/devices/${m.owner.id}`} className="text-slate-600 hover:underline">查看设备</Link> : <span className="text-gray-300">查看设备</span>}
+                    {assembled && m.owner ? <Link to={`/devices/${m.owner.id}`} className="text-slate-600 hover:underline">查看设备</Link> : <span className="text-gray-300" title="该模块尚未装配到设备">查看设备</span>}
                     {m.batchNo ? <button className="text-blue-600 hover:underline" onClick={() => onViewBatch(m.batchNo)}>查看批次</button> : <span className="text-gray-300">查看批次</span>}
-                    <button className="text-indigo-600 hover:underline">锁定生产计划</button>
-                    <button className="text-amber-600 hover:underline">标记维修</button>
-                    <button className={dangerBtn}>报废</button>
                   </div>
                 </td>
               </tr>
@@ -657,21 +655,24 @@ export default function Materials() {
                       <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{b.inspectionTime}</td>
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap">
                         {(() => {
-                          const usedCount = b.items.filter((it) => it.status === '已占用').length;
-                          const used = usedCount > 0;
-                          const noEdit = !!plan && used;
+                          const used = b.items.some((it) => it.status === '已占用');       // 已被装配使用
+                          const linked = !!plan;                                            // 已关联生产计划
+                          const retired = !!b.voided || (b.items.length > 0 && b.items.every((it) => ['已报废', '退货换货'].includes(it.status))); // 已停用 / 已报废
+                          const editDisabled = retired || used;
+                          const voidDisabled = retired || used || linked;
+                          const editTitle = retired ? '批次已停用/作废，仅可查看详情' : used ? '该批次已有模块装配使用，不允许编辑' : '';
+                          const voidTitle = retired ? '批次已停用/作废' : used ? '该批次已有模块装配使用，不允许作废' : linked ? '该批次已关联生产计划，请先解除关联' : '';
+                          const op = (label, cls, onClick, dis, title) => dis
+                            ? <span className="text-gray-300 cursor-not-allowed" title={title}>{label}</span>
+                            : <button className={cls} onClick={onClick}>{label}</button>;
                           return (
                             <div className="flex items-center gap-x-3">
                               <button className="text-slate-600 hover:underline" onClick={() => openBatch('detail', b)}>查看详情</button>
-                              <button className="text-slate-600 hover:underline" onClick={() => openBatch('inspect', b)}>录入检验结果</button>
-                              <button className="text-emerald-600 hover:underline" onClick={() => openBatch('link', b)}>关联生产计划</button>
-                              <button className="text-blue-600 hover:underline" onClick={() => viewInstancesByBatch(b.batchNo)}>查看模块实例</button>
-                              {noEdit
-                                ? <span className="text-gray-300 cursor-not-allowed" title="已关联生产计划且已被装配使用，不可编辑">编辑</span>
-                                : <button className="text-slate-600 hover:underline" onClick={() => openBatch('edit', b)}>编辑</button>}
-                              {used
-                                ? <span className="text-red-300 cursor-not-allowed" title="批次已被装配使用，不可停用/作废">停用/作废</span>
-                                : <button className="text-red-400 hover:text-red-600 hover:underline" onClick={() => openBatch('void', b)}>停用/作废</button>}
+                              {op('录入检验结果', 'text-slate-600 hover:underline', () => openBatch('inspect', b), retired, '批次已停用/作废，不可录入检验')}
+                              {op('关联生产计划', 'text-emerald-600 hover:underline', () => openBatch('link', b), retired, '批次已停用/作废，不可关联')}
+                              {op('查看模块实例', 'text-blue-600 hover:underline', () => viewInstancesByBatch(b.batchNo), retired, '批次已停用/作废')}
+                              {op('编辑', 'text-slate-600 hover:underline', () => openBatch('edit', b), editDisabled, editTitle)}
+                              {op('停用/作废', 'text-red-400 hover:text-red-600 hover:underline', () => openBatch('void', b), voidDisabled, voidTitle)}
                             </div>
                           );
                         })()}

@@ -539,6 +539,127 @@ function AssignOwnerModal({ isOpen, onClose, wo, onConfirm }) {
   );
 }
 
+/* ─────── 右侧抽屉 + 详情展示组件 ─────── */
+function Drawer({ open, onClose, title, chips, children }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute right-0 top-0 h-full w-full max-w-xl bg-white shadow-2xl flex flex-col">
+        <div className="px-5 py-4 border-b border-gray-200 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-gray-800">{title}</div>
+            {chips && <div className="mt-1.5 flex flex-wrap items-center gap-2">{chips}</div>}
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none flex-shrink-0">✕</button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function DSection({ title, children }) {
+  return (
+    <div>
+      <div className="text-xs font-semibold text-gray-500 mb-2">{title}</div>
+      {children}
+    </div>
+  );
+}
+function DGrid({ items }) {
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+      {items.map(([label, value, full]) => (
+        <div key={label} className={full ? 'col-span-2' : ''}>
+          <div className="text-xs text-gray-400 mb-0.5">{label}</div>
+          <div className="text-sm text-gray-800 break-all">{value === undefined || value === null || value === '' ? '—' : value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+function DLogs({ logs }) {
+  if (!logs || logs.length === 0) return <div className="text-sm text-gray-400">暂无操作日志</div>;
+  return (
+    <div className="space-y-2">
+      {logs.map((log, i) => (
+        <div key={i} className="flex gap-3 text-xs">
+          <div className="flex flex-col items-center">
+            <div className="w-2 h-2 rounded-full bg-blue-400 mt-0.5 flex-shrink-0" />
+            {i < logs.length - 1 && <div className="w-0.5 flex-1 bg-gray-200 mt-1" />}
+          </div>
+          <div className="pb-2">
+            <div className="flex items-center gap-2 text-gray-500 mb-0.5 flex-wrap">
+              <span>{log.time}</span>
+              <span className="font-medium text-gray-700">{log.operator}</span>
+              {log.fromStatus && <><span>·</span><StatusBadge status={log.fromStatus} /><span className="text-gray-400">→</span><StatusBadge status={log.toStatus} /></>}
+            </div>
+            <div className="text-gray-700">{log.notes}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// 工单详情抽屉（只读；操作仍在表格行内）。
+function OrderDetailDrawer({ wo, state, onClose }) {
+  if (!wo) return null;
+  const projectName = state.projects.find(p => p.id === wo.projectId)?.name || '—';
+  const isSwap = wo._class === '换件工单';
+  const nextAction = wo.status === '待处理' ? '开始处理 / 分配负责人'
+    : wo.status === '处理中' ? '提交复检'
+    : wo.status === '复检中' ? '复检并关闭'
+    : '无（已关闭 / 已作废）';
+  const linkedQI = wo.linkedQualityIssueId || wo.sourceQualityIssueId;
+  return (
+    <Drawer open={!!wo} onClose={onClose}
+      title={<span className="font-mono">{wo.id}</span>}
+      chips={<>
+        <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${WO_CLASS_STYLE[wo._class]}`}>{wo._class}</span>
+        <StatusBadge status={wo.status} />
+        <span className="text-xs text-gray-500 whitespace-nowrap">负责人：{wo.assignedTo || '待指派'}</span>
+      </>}>
+      <DSection title="基础信息">
+        <DGrid items={[
+          ['工单ID', wo.id], ['工单类型', wo._class], ['所属阶段', wo._stage], ['关联项目', projectName],
+          ['关联设备SN', wo.deviceSN], ['严重程度', <StatusBadge status={wo.severity} />], ['状态', <StatusBadge status={wo.status} />],
+          ['负责人', wo.assignedTo || '待指派'], ['创建时间', wo.createdAt],
+        ]} />
+      </DSection>
+      <DSection title="问题描述">
+        <div className="text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded p-3 leading-relaxed">{wo.description || '—'}</div>
+      </DSection>
+      <DSection title="换件信息">
+        {isSwap
+          ? <DGrid items={[
+              ['是否涉及换件', '是'],
+              ['需更换模块类型', wo.needReplaceModuleType || wo.needModuleType || '待确认'],
+              ['旧模块SN', wo.oldModuleSN || '待确认'],
+              ['新模块SN', wo.newModuleSN || '待选择'],
+              ['新模块库存状态', wo.newModuleStockStatus || (wo.newModuleSN ? '在库可用' : '待选择'), true],
+            ]} />
+          : <div className="text-sm text-gray-400">不涉及换件</div>}
+      </DSection>
+      <DSection title="处理记录">
+        <DGrid items={[
+          ['当前处理措施', wo.repairActions || '暂无记录', true],
+          ['处理人', wo.assignedTo || '待指派'], ['最近处理时间', wo.updatedAt],
+          ['下一步动作', nextAction, true],
+        ]} />
+      </DSection>
+      <DSection title="关联质量问题">
+        <DGrid items={[
+          ['是否已生成质量问题', linkedQI ? '是' : '否'],
+          ['关联质量问题ID', linkedQI || '—'],
+        ]} />
+      </DSection>
+      <DSection title="操作日志"><DLogs logs={wo.processLogs} /></DSection>
+    </Drawer>
+  );
+}
+
 /* ─────── 工单中心：交付工单 + 售后工单 ─────── */
 function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
   const [search, setSearch] = useState('');
@@ -551,7 +672,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
   const [filterProject, setFilterProject] = useState('全部');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [expandedId, setExpandedId] = useState(null);
+  const [detailWO, setDetailWO] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [assignWO, setAssignWO] = useState(null);
   const [voidTarget, setVoidTarget] = useState(null);
@@ -727,7 +848,6 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {paged.pageItems.map(wo => {
-                const isExpanded = expandedId === wo.id;
                 const isVoided = wo.status === '已作废';
                 const closed = ['已关闭', '已作废'].includes(wo.status);
                 const isSwap = wo._class === '换件工单';
@@ -738,7 +858,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
                 const swapCls = isSwap ? 'text-gray-600' : 'text-gray-300';
                 return (
                   <React.Fragment key={wo.id}>
-                    <tr className={`hover:bg-blue-50 ${isExpanded ? 'bg-slate-50' : ''} ${isVoided ? 'opacity-50' : ''}`}>
+                    <tr className={`hover:bg-blue-50 ${isVoided ? 'opacity-50' : ''}`}>
                       <td className="px-3 py-2.5 font-mono text-xs text-gray-600 whitespace-nowrap">{wo.id}</td>
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap"><span className={`px-2 py-0.5 rounded-full border ${WO_CLASS_STYLE[wo._class]}`}>{wo._class}</span></td>
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap"><StatusBadge status={wo._stage} /></td>
@@ -756,7 +876,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
                       <td className="px-3 py-2.5 text-gray-400 text-xs whitespace-nowrap">{wo.createdAt}</td>
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap">
                         <div className="flex items-center gap-x-3">
-                          <button className="text-slate-600 hover:underline" onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : wo.id); }}>查看详情</button>
+                          <button className="text-slate-600 hover:underline" onClick={(e) => { e.stopPropagation(); setDetailWO(wo); }}>查看详情</button>
                           {opBtn('推进状态', () => advance(wo), { disabled: closed, title: closed ? '已关闭/已作废工单不可推进' : '' })}
                           {opBtn('分配负责人', () => setAssignWO(wo), { disabled: closed, title: closed ? '已关闭/已作废工单不可分配' : '' })}
                           {opBtn('生成质量问题', () => genQuality(wo), { disabled: closed || !!wo.linkedQualityIssueId, title: wo.linkedQualityIssueId ? `已生成质量问题 ${wo.linkedQualityIssueId}` : closed ? '已关闭/已作废工单不可生成' : '' })}
@@ -765,21 +885,6 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
                         </div>
                       </td>
                     </tr>
-                    {isExpanded && !isVoided && (
-                      <tr>
-                        <td colSpan={16} className="p-0">
-                          <div className="px-6 pt-4 bg-slate-50 text-xs text-gray-600 flex flex-wrap gap-x-6 gap-y-1">
-                            <span>关联项目：{getProjectName(wo.projectId)}</span>
-                            <span>关联交付计划：{wo.deliveryPlanId || '—'}</span>
-                            <span>关联质量问题：<span className="font-mono">{wo.linkedQualityIssueId || wo.sourceQualityIssueId || '—'}</span></span>
-                            {isSwap
-                              ? <span>换件记录：{needType} · 旧 <span className="font-mono">{oldSN}</span> · 新 <span className="font-mono">{newSN}</span> · 新模块库存 {wo.newModuleStockStatus || (wo.newModuleSN ? '在库可用' : '待选择')}</span>
-                              : <span>换件记录：不涉及</span>}
-                          </div>
-                          <WorkOrderDetail wo={wo} state={state} dispatch={dispatch} currentUser={currentUser} canDo={canDo} actionType={wo._kind} />
-                        </td>
-                      </tr>
-                    )}
                   </React.Fragment>
                 );
               })}
@@ -790,6 +895,7 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
         <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </div>
 
+      <OrderDetailDrawer wo={detailWO} state={state} onClose={() => setDetailWO(null)} />
       {showAddModal && (
         <OrderCenterAddModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onSave={handleAdd} state={state} />
       )}
@@ -1080,6 +1186,62 @@ function QualityIssueDetail({ qi, state, dispatch, canDo }) {
 const QI_SOURCE_STAGES = ['生产测试', '出厂检验', '现场安装调试', '客户验收', '在线运营'];
 const QI_ISSUE_TYPES = ['功能异常', '外观缺陷', '性能不达标', '通信异常', '工单转质量问题', '其他'];
 
+// 质量问题详情抽屉（只读；生成工单 / 关闭等操作仍在表格行内）。
+function QIDetailDrawer({ qi, state, onClose }) {
+  if (!qi) return null;
+  const project = state.projects.find(p => p.id === qi.projectId);
+  const location = (state.locations || []).find(l => l.id === qi.locationId);
+  const dev = (state.devices || []).find(d => d.id === qi.deviceId || d.sn === qi.deviceSN);
+  const deviceType = qi.deviceName || (state.deviceTypes || []).find(dt => dt.id === dev?.deviceTypeId)?.name || '—';
+  const linked = !!(qi.linkedWorkOrder || qi.linkedWorkOrderId);
+  const isSoftIssue = /软件|算法|固件|版本|系统|程序/.test(qi.issueType || '');
+  const genTypes = linked ? '已生成，不可重复生成' : isSoftIssue ? '软件问题工单' : '换件工单 / 软件问题工单';
+  const suggestion = qi.status === '已关闭' ? '问题已关闭，归档留存'
+    : qi.status === '处理中' ? '跟进处理进度，必要时生成工单，处理完成后关闭'
+    : '尽快分配负责人并判断是否生成工单';
+  return (
+    <Drawer open={!!qi} onClose={onClose}
+      title={<span className="font-mono">{qi.id}</span>}
+      chips={<>
+        <span className="text-xs px-2 py-0.5 rounded-full border whitespace-nowrap bg-slate-50 text-slate-600 border-slate-200">{qi.issueType || '—'}</span>
+        <StatusBadge status={qi.status} />
+        <span className="text-xs text-gray-500 whitespace-nowrap">负责人：{qi.owner || qi.reporterName || '—'}</span>
+      </>}>
+      <DSection title="基础信息">
+        <DGrid items={[
+          ['问题编号', qi.id], ['问题类型', qi.issueType || '—'], ['来源阶段', qi.sourceStage || '在线运营'],
+          ['严重程度', <StatusBadge status={qi.severity || '中'} />], ['状态', <StatusBadge status={qi.status} />],
+          ['上报方式', qi.source], ['上报时间', qi.reportTime], ['负责人', qi.owner || qi.reporterName || '—'],
+        ]} />
+      </DSection>
+      <DSection title="问题描述">
+        <div className="text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded p-3 leading-relaxed">{qi.issueDesc || '—'}</div>
+      </DSection>
+      <DSection title="关联设备 / 项目">
+        <DGrid items={[
+          ['设备SN', qi.deviceSN], ['设备类型', deviceType],
+          ['所属项目', project?.name || '—'], ['所属点位', location?.name || '—'],
+        ]} />
+      </DSection>
+      <DSection title="工单生成情况">
+        <DGrid items={[
+          ['是否已生成工单', linked ? '是' : '否'],
+          ['关联工单ID', qi.linkedWorkOrderId || '—'],
+          ['可生成工单类型', genTypes, true],
+        ]} />
+      </DSection>
+      <DSection title="处理记录">
+        <DGrid items={[
+          ['当前处理建议', suggestion, true],
+          ['处理人', qi.owner || qi.reporterName || '—'],
+          ['最近更新时间', (qi.processLogs && qi.processLogs.length ? qi.processLogs[qi.processLogs.length - 1].time : qi.reportTime)],
+        ]} />
+      </DSection>
+      <DSection title="操作日志"><DLogs logs={qi.processLogs} /></DSection>
+    </Drawer>
+  );
+}
+
 function QualityIssueTable({ state, dispatch, canDo }) {
   const { qualityIssues = [], projects, locations = [], devices = [], deviceTypes = [] } = state;
   const [filterStatus, setFilterStatus] = useState('全部');
@@ -1094,7 +1256,7 @@ function QualityIssueTable({ state, dispatch, canDo }) {
   const [filterOwner, setFilterOwner] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [expandedId, setExpandedId] = useState(null);
+  const [detailQI, setDetailQI] = useState(null);
   const [showScanModal, setShowScanModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
 
@@ -1221,7 +1383,6 @@ function QualityIssueTable({ state, dispatch, canDo }) {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {paged.pageItems.map(qi => {
-                const isExpanded = expandedId === qi.id;
                 const linked = hasWO(qi);
                 const closed = qi.status === '已关闭';
                 const isSoftIssue = /软件|算法|固件|版本|系统|程序/.test(qi.issueType || '');
@@ -1229,7 +1390,7 @@ function QualityIssueTable({ state, dispatch, canDo }) {
                 const softDisabled = linked || closed;
                 return (
                   <React.Fragment key={qi.id}>
-                    <tr className={`hover:bg-blue-50 transition-colors ${isExpanded ? 'bg-slate-50' : ''}`}>
+                    <tr className="hover:bg-blue-50 transition-colors">
                       <td className="px-3 py-2.5 font-mono text-xs text-gray-600 whitespace-nowrap">{qi.id}</td>
                       <td className="px-3 py-2.5 font-mono text-xs text-gray-800 font-medium whitespace-nowrap">{qi.deviceSN}</td>
                       <td className="px-3 py-2.5 text-gray-700 text-xs whitespace-nowrap">{deviceTypeOf(qi)}</td>
@@ -1239,7 +1400,7 @@ function QualityIssueTable({ state, dispatch, canDo }) {
                       <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{qi.issueType || '—'}</td>
                       <td className="px-3 py-2.5 text-gray-700 max-w-[160px]"><div className="truncate text-xs">{qi.issueDesc}</div></td>
                       <td className="px-3 py-2.5"><StatusBadge status={qi.severity || '中'} /></td>
-                      <td className="px-3 py-2.5"><span className={`text-xs px-2 py-0.5 rounded-full border ${qi.source === '扫码上报' ? 'bg-blue-50 text-blue-700 border-blue-200' : qi.source === '工单转入' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>{qi.source}</span></td>
+                      <td className="px-3 py-2.5 whitespace-nowrap"><span className={`inline-block text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${qi.source === '扫码上报' ? 'bg-blue-50 text-blue-700 border-blue-200' : qi.source === '工单转入' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>{qi.source}</span></td>
                       <td className="px-3 py-2.5 text-xs">{linked ? <span className="text-emerald-600 font-medium">是</span> : <span className="text-gray-400">否</span>}</td>
                       <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{qi.linkedWorkOrderId || '—'}</td>
                       <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{qi.owner || qi.reporterName || '—'}</td>
@@ -1247,20 +1408,13 @@ function QualityIssueTable({ state, dispatch, canDo }) {
                       <td className="px-3 py-2.5"><StatusBadge status={qi.status} /></td>
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap">
                         <div className="flex items-center gap-x-3">
-                          <button className="text-slate-600 hover:underline" onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : qi.id); }}>查看详情</button>
+                          <button className="text-slate-600 hover:underline" onClick={(e) => { e.stopPropagation(); setDetailQI(qi); }}>查看详情</button>
                           {opBtn('生成换件工单', () => genWorkOrder(qi, '换件工单'), { disabled: swapDisabled, title: linked ? `已生成工单 ${qi.linkedWorkOrderId || ''}` : closed ? '已关闭问题不可生成' : isSoftIssue ? '软件问题请生成软件问题工单' : '' })}
                           {opBtn('生成软件问题工单', () => genWorkOrder(qi, '软件问题工单'), { disabled: softDisabled, title: linked ? `已生成工单 ${qi.linkedWorkOrderId || ''}` : closed ? '已关闭问题不可生成' : '' })}
                           {opBtn('关闭问题', () => closeQI(qi), { disabled: closed, title: closed ? '问题已关闭' : '', danger: true })}
                         </div>
                       </td>
                     </tr>
-                    {isExpanded && (
-                      <tr>
-                        <td colSpan={16} className="p-0">
-                          <QualityIssueDetail qi={qi} state={state} dispatch={dispatch} canDo={canDo} />
-                        </td>
-                      </tr>
-                    )}
                   </React.Fragment>
                 );
               })}
@@ -1271,6 +1425,7 @@ function QualityIssueTable({ state, dispatch, canDo }) {
         <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
       </div>
 
+      <QIDetailDrawer qi={detailQI} state={state} onClose={() => setDetailQI(null)} />
       <ScanQRModal isOpen={showScanModal} onClose={() => setShowScanModal(false)} />
       {showManualModal && <ManualEntryModal isOpen={showManualModal} onClose={() => setShowManualModal(false)} onSave={handleSave} state={state} />}
     </div>

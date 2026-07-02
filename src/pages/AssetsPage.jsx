@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
@@ -247,11 +247,14 @@ function AddAlertModal({ isOpen, onClose, onSave, devices, projects = [], locati
   );
 }
 
-function AlertsSubTab({ state, dispatch, currentRole }) {
+function AlertsSubTab({ state, dispatch, currentRole, initialSN = '', onClearSN }) {
   const [filterSeverity, setFilterSeverity] = useState('全部');
   const [filterStatus, setFilterStatus] = useState('全部');
+  const [snQuery, setSnQuery] = useState(initialSN);
   const [expandedId, setExpandedId] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  // 从设备台账「查看告警」跳转时带入设备 SN，自动过滤到该设备的告警。
+  useEffect(() => { setSnQuery(initialSN); }, [initialSN]);
 
   const { alerts, devices, projects, locations = [] } = state;
   const currentUser = state.currentUser;
@@ -259,13 +262,16 @@ function AlertsSubTab({ state, dispatch, currentRole }) {
   const canAdd = ['运维工程师', '维修工程师', '厂长', '管理员'].includes(currentRole);
   const getProjectName = id => projects.find(p => p.id === id)?.name || '—';
 
+  const snq = snQuery.trim().toLowerCase();
   const filtered = [...alerts]
     .filter(a => {
       const matchSev = filterSeverity === '全部' || a.severity === filterSeverity;
       const matchSt = filterStatus === '全部' || a.status === filterStatus;
-      return matchSev && matchSt;
+      const matchSN = !snq || (a.deviceSN || '').toLowerCase().includes(snq);
+      return matchSev && matchSt && matchSN;
     })
     .sort((a, b) => b.alertTime.localeCompare(a.alertTime));
+  const clearSN = () => { setSnQuery(''); onClearSN && onClearSN(); };
 
   const paged = usePaged(filtered, 10);
   const pendingCount = alerts.filter(a => a.status === '待处理').length;
@@ -293,7 +299,19 @@ function AlertsSubTab({ state, dispatch, currentRole }) {
         )}
       </div>
 
+      {snq && (
+        <div className="mb-4 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded px-4 py-2 text-sm text-blue-800">
+          <span>当前仅展示设备 <span className="font-mono font-medium">{snQuery}</span> 的健康告警（共 {filtered.length} 条）</span>
+          <button onClick={clearSN} className="ml-auto px-2 py-0.5 text-xs border border-blue-300 text-blue-700 rounded hover:bg-blue-100">清除筛选</button>
+        </div>
+      )}
+
       <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 flex flex-wrap gap-3 items-center">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">设备SN：</span>
+          <input value={snQuery} onChange={e => setSnQuery(e.target.value)} placeholder="按设备SN筛选" className="border border-gray-300 rounded px-3 py-1 text-xs focus:outline-none w-40" />
+          {snQuery && <button onClick={clearSN} className="text-xs text-gray-400 hover:text-gray-600">清除</button>}
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">严重程度：</span>
           {['全部', '轻微', '严重'].map(opt => (
@@ -478,9 +496,11 @@ function AllDevicesSubTab({ state, goAlerts }) {
                   <td className="px-3 py-2 text-xs whitespace-nowrap">
                     <div className="flex items-center gap-x-3">
                       <Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline">查看详情</Link>
-                      <button className="text-blue-600 hover:underline" onClick={() => goAlerts && goAlerts()}>查看告警</button>
-                      {project ? <Link to={`/projects/${project.id}`} className="text-slate-600 hover:underline">查看项目</Link> : <span className="text-gray-300">查看项目</span>}
-                      {d.dp ? <Link to={`/delivery-plans/${d.dp.id}`} className="text-emerald-600 hover:underline">查看交付记录</Link> : <span className="text-gray-300">查看交付记录</span>}
+                      {alerts.some(a => a.deviceId === d.id)
+                        ? <button className="text-blue-600 hover:underline" onClick={() => goAlerts && goAlerts(d.sn)}>查看告警</button>
+                        : <span className="text-gray-300" title="该设备暂无健康告警">无告警</span>}
+                      {project && <Link to={`/projects/${project.id}`} className="text-slate-600 hover:underline">查看项目</Link>}
+                      {d.dp && <Link to={`/delivery-plans/${d.dp.id}`} className="text-emerald-600 hover:underline">查看交付</Link>}
                     </div>
                   </td>
                 </tr>
@@ -721,9 +741,10 @@ function DevicesTab() {
 
   const pendingAlerts = (state.alerts || []).filter(a => a.status === '待处理').length;
 
-  const setSubTab = (key) => {
+  const setSubTab = (key, sn) => {
     const next = new URLSearchParams(searchParams);
     next.set('subtab', key);
+    if (sn) next.set('alertSN', sn); else next.delete('alertSN');
     setSearchParams(next);
   };
 
@@ -735,8 +756,8 @@ function DevicesTab() {
         onChange={setSubTab}
         className="-mx-6 -mt-6 mb-6 px-6"
       />
-      {activeSubTab === 'all' && <AllDevicesSubTab state={state} goAlerts={() => setSubTab('alerts')} />}
-      {activeSubTab === 'alerts' && <AlertsSubTab state={state} dispatch={dispatch} currentRole={currentRole} />}
+      {activeSubTab === 'all' && <AllDevicesSubTab state={state} goAlerts={(sn) => setSubTab('alerts', sn)} />}
+      {activeSubTab === 'alerts' && <AlertsSubTab state={state} dispatch={dispatch} currentRole={currentRole} initialSN={searchParams.get('alertSN') || ''} onClearSN={() => setSubTab('alerts')} />}
     </div>
   );
 }

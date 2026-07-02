@@ -185,6 +185,11 @@ export const devices = [
   { id: 'DEV-024', sn: 'SN-DEV-024', locationId: 'LOC-006', deviceTypeId: 'DT-001', status: '在线运营', assembler: '李四', assemblyTime: '2026-05-10 09:00', photoName: 'assembly_dev024.jpg', usedMaterials: [], projectId: 'PROJ-003', productionPlanId: 'WPP-006', batteryPercent: 74, storagePercent: 55, lastHeartbeat: '2026-06-22 08:10', online: true, createdAt: '2026-05-10 09:00', updatedAt: '2026-06-22 08:10' },
   { id: 'DEV-025', sn: 'SN-DEV-025', deviceTypeId: 'DT-001', status: '中测中', assembler: '王五', assemblyTime: '2026-04-28 10:00', photoName: 'assembly_dev025.jpg', usedMaterials: [], projectId: 'PROJ-001', productionPlanId: 'WPP-001', createdAt: '2026-04-28 10:00', updatedAt: '2026-06-22 09:00' },
   { id: 'DEV-026', sn: 'SN-DEV-026', deviceTypeId: 'DT-001', status: '已分配项目', assembler: '赵六', assemblyTime: '2026-05-18 08:30', photoName: 'assembly_dev026.jpg', usedMaterials: [], projectId: 'PROJ-002', productionPlanId: 'WPP-004', createdAt: '2026-05-18 08:30', updatedAt: '2026-06-13 09:00' },
+  // 智魔方首批已交付在线运营设备（WPP-008 已完成计划）——用于交付计划 / 点位 / 健康告警 / 质量问题的在线示例，
+  // 与 WPP-001 在制设备（DEV-008/010/013/025）解耦，避免跨页面矛盾。
+  { id: 'DEV-027', sn: 'SN-DEV-027', locationId: 'LOC-001', deviceTypeId: 'DT-001', status: '在线运营', assembler: '李四', assemblyTime: '2026-04-20 09:00', photoName: 'assembly_dev027.jpg', usedMaterials: [], projectId: 'PROJ-001', productionPlanId: 'WPP-008', deliveryPlanId: 'DP-001', erpInboundNo: 'PI-2026-008', erpInspectionNo: 'QC-2026-008', erpInspectionStatus: '合格', erpStockStatus: '合格可用', erpSerialNo: 'SN-DEV-027', batteryPercent: 87, storagePercent: 42, lastHeartbeat: '2026-06-21 08:55', online: true, createdAt: '2026-04-20 09:00', updatedAt: '2026-06-21 08:55' },
+  { id: 'DEV-028', sn: 'SN-DEV-028', locationId: 'LOC-001', deviceTypeId: 'DT-001', status: '在线运营', assembler: '张三', assemblyTime: '2026-03-25 10:00', photoName: 'assembly_dev028.jpg', usedMaterials: [], projectId: 'PROJ-001', productionPlanId: 'WPP-008', deliveryPlanId: 'DP-001', erpInboundNo: 'PI-2026-008', erpInspectionNo: 'QC-2026-008', erpInspectionStatus: '合格', erpStockStatus: '合格可用', erpSerialNo: 'SN-DEV-028', batteryPercent: 93, storagePercent: 30, lastHeartbeat: '2026-06-21 09:02', online: true, createdAt: '2026-03-25 10:00', updatedAt: '2026-06-21 09:02' },
+  { id: 'DEV-029', sn: 'SN-DEV-029', locationId: 'LOC-002', deviceTypeId: 'DT-001', status: '在线运营', assembler: '王五', assemblyTime: '2026-04-28 10:00', photoName: 'assembly_dev029.jpg', usedMaterials: [], projectId: 'PROJ-001', productionPlanId: 'WPP-008', deliveryPlanId: 'DP-006', erpInboundNo: 'PI-2026-008', erpInspectionNo: 'QC-2026-008', erpInspectionStatus: '合格', erpStockStatus: '合格可用', erpSerialNo: 'SN-DEV-029', batteryPercent: 91, storagePercent: 18, lastHeartbeat: '2026-06-22 09:00', online: true, createdAt: '2026-04-28 10:00', updatedAt: '2026-06-22 09:00' },
 ];
 
 export const testRecords = [
@@ -204,14 +209,11 @@ export const testRecords = [
   { id: 'TEST-014', deviceId: 'DEV-007', testType: '功能测试', result: '合格', operator: '张三', testTime: '2026-05-22 10:00', reportFile: 'func_test_dev007.pdf', notes: '', status: '有效' },
   { id: 'TEST-015', deviceId: 'DEV-007', testType: '老化测试', result: '合格', operator: '李四', testTime: '2026-05-24 08:00', reportFile: 'burn_test_dev007.pdf', notes: '', duration: '72小时', peakTemp: '69°C', anomalyCount: 0, status: '有效' },
   { id: 'TEST-016', deviceId: 'DEV-007', testType: '终测', result: '合格', operator: '王五', testTime: '2026-05-26 09:00', reportFile: 'final_test_dev007.pdf', notes: '', status: '有效' },
-  { id: 'TEST-017', deviceId: 'DEV-008', testType: '功能测试', result: '合格', operator: '赵六', testTime: '2026-05-20 10:00', reportFile: 'func_test_dev008.pdf', notes: '', status: '有效' },
-  { id: 'TEST-018', deviceId: 'DEV-008', testType: '老化测试', result: '合格', operator: '张三', testTime: '2026-05-22 08:00', reportFile: 'burn_test_dev008.pdf', notes: '', duration: '72小时', peakTemp: '67°C', anomalyCount: 0, status: '有效' },
-  { id: 'TEST-019', deviceId: 'DEV-008', testType: '终测', result: '合格', operator: '李四', testTime: '2026-05-24 09:00', reportFile: 'final_test_dev008.pdf', notes: '', status: '有效' },
   { id: 'TEST-020', deviceId: 'DEV-009', testType: '功能测试', result: '合格', operator: '王五', testTime: '2026-05-17 10:00', reportFile: 'func_test_dev009.pdf', notes: '', status: '有效' },
   { id: 'TEST-021', deviceId: 'DEV-009', testType: '老化测试', result: '不合格', operator: '赵六', testTime: '2026-05-19 08:00', reportFile: 'burn_test_dev009_v1.pdf', notes: '电机过热', duration: '24小时', peakTemp: '91°C', anomalyCount: 5, status: '有效' },
   { id: 'TEST-022', deviceId: 'DEV-009', testType: '老化测试', result: '合格', operator: '赵六', testTime: '2026-05-21 08:00', reportFile: 'burn_test_dev009_v2.pdf', notes: '更换散热后通过', duration: '72小时', peakTemp: '71°C', anomalyCount: 0, status: '有效' },
   { id: 'TEST-023', deviceId: 'DEV-009', testType: '终测', result: '合格', operator: '张三', testTime: '2026-05-23 09:00', reportFile: 'final_test_dev009.pdf', notes: '', status: '有效' },
-  { id: 'TEST-024', deviceId: 'DEV-010', testType: '终测', result: '合格', operator: '李四', testTime: '2026-04-18 10:00', reportFile: 'final_test_dev010.pdf', notes: '', status: '有效' },
+  { id: 'TEST-024', deviceId: 'DEV-027', testType: '终测', result: '合格', operator: '李四', testTime: '2026-04-18 10:00', reportFile: 'final_test_dev010.pdf', notes: '', status: '有效' },
   { id: 'TEST-025', deviceId: 'DEV-011', testType: '终测', result: '合格', operator: '王五', testTime: '2026-04-13 10:00', reportFile: 'final_test_dev011.pdf', notes: '', status: '有效' },
   // Quality station records
   { id: 'TEST-S001', deviceId: 'DEV-001', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '张三', testTime: '2026-06-10 09:00', reportFile: 'semi_DEV001.pdf', reportLink: '', notes: '半成品检验通过', status: '有效' },
@@ -281,6 +283,13 @@ export const testRecords = [
   { id: 'TEST-I1-DEV-010', deviceId: 'DEV-010', stationKey: 'init', stationResult: 'NG', testType: '功能测试', result: '不合格', operator: '王五', testTime: '2026-05-12 11:00', reportFile: '', reportLink: '', notes: '初测NG', ngReason: '底盘驱动板通信异常', status: '有效' },
   { id: 'TEST-S1-DEV-025', deviceId: 'DEV-025', stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '张三', testTime: '2026-05-14 09:00', reportFile: 'semi_DEV025.pdf', reportLink: '', notes: '半成品检验通过', status: '有效' },
   { id: 'TEST-I1-DEV-025', deviceId: 'DEV-025', stationKey: 'init', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '王五', testTime: '2026-05-14 11:00', reportFile: 'init_DEV025.pdf', reportLink: '', notes: '初测通过', status: '有效' },
+  // WPP-008 已交付设备：全工站 Pass（历史生产记录）
+  ...['DEV-027', 'DEV-028', 'DEV-029'].flatMap((did) => [
+    { id: `TEST-S1-${did}`, deviceId: did, stationKey: 'semi', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '张三', testTime: '2026-04-01 09:00', reportFile: `semi_${did}.pdf`, reportLink: '', notes: '半成品检验通过', status: '有效' },
+    { id: `TEST-I1-${did}`, deviceId: did, stationKey: 'init', stationResult: 'Pass', testType: '功能测试', result: '合格', operator: '王五', testTime: '2026-04-01 11:00', reportFile: `init_${did}.pdf`, reportLink: '', notes: '初测通过', status: '有效' },
+    { id: `TEST-M1-${did}`, deviceId: did, stationKey: 'mid', stationResult: 'Pass', testType: '老化测试', result: '合格', operator: '王五', testTime: '2026-04-01 14:00', reportFile: `aging_${did}.pdf`, reportLink: '', notes: '中测通过', status: '有效' },
+    { id: `TEST-O1-${did}`, deviceId: did, stationKey: 'oqt', stationResult: 'Pass', testType: '其他', result: '合格', operator: '张三', testTime: '2026-04-01 16:00', reportFile: `oqt_${did}.pdf`, reportLink: '', notes: 'OQT终测通过', status: '有效' },
+  ]),
 ];
 
 export const operationLogs = [
@@ -293,7 +302,7 @@ export const operationLogs = [
   { id: 'LOG-007', deviceId: 'DEV-003', operator: '王五', timestamp: '2026-06-16 08:00', actionType: '老化测试不合格', fromStatus: '老化测试中', toStatus: '整机装配', notes: '温度异常，返修' },
   { id: 'LOG-008', deviceId: 'DEV-003', operator: '王五', timestamp: '2026-06-16 15:00', actionType: '老化测试通过', fromStatus: '整机装配', toStatus: '老化测试中', notes: '更换散热后重测通过' },
   { id: 'LOG-009', deviceId: 'DEV-007', operator: '王五', timestamp: '2026-06-10 09:00', actionType: '分配至项目', fromStatus: '待分配项目', toStatus: '已分配项目', notes: '分配至项目A' },
-  { id: 'LOG-010', deviceId: 'DEV-010', operator: '张三', timestamp: '2026-04-22 10:00', actionType: '上线运营', fromStatus: '已分配项目', toStatus: '在线运营', notes: '现场安装完成，上线运营' },
+  { id: 'LOG-010', deviceId: 'DEV-027', operator: '张三', timestamp: '2026-04-22 10:00', actionType: '上线运营', fromStatus: '已分配项目', toStatus: '在线运营', notes: '现场安装完成，上线运营' },
 ];
 
 export const productionPlans = [
@@ -365,6 +374,14 @@ export const workflowProductionPlans = [
     materialBatchIds: ['BATCH-019', 'BATCH-020'],
     notes: '追加T3航站楼部署',
   },
+  {
+    id: 'WPP-008', name: '智魔方首批已交付', projectId: 'PROJ-001', deviceTypeId: 'DT-001',
+    targetCount: 3, status: '已完成', endDate: '2026-04-20',
+    createdAt: '2026-03-20 09:00', erpProductionOrderNo: 'MO-2026-008',
+    erpInboundNo: 'PI-2026-008', erpInspectionNo: 'QC-2026-008', erpStockStatus: '合格可用', warehouse: '成品库',
+    materialBatchIds: [],
+    notes: '首批已交付上线设备（DEV-027/028/029）',
+  },
 ];
 
 export const materialBatches = [
@@ -417,11 +434,11 @@ export const deviceAllocations = [
 
 export const deliveryRecords = [
   { id: 'DELIV-001', deviceId: 'DEV-007', projectId: 'PROJ-001', stage: '出厂检验', result: '合格', operator: '张三', recordTime: '2026-06-10 14:00', notes: '各项指标正常', address: '' },
-  { id: 'DELIV-002', deviceId: 'DEV-008', projectId: 'PROJ-001', stage: '出厂检验', result: '合格', operator: '张三', recordTime: '2026-06-10 15:00', notes: '', address: '' },
+  { id: 'DELIV-002', deviceId: 'DEV-027', projectId: 'PROJ-001', stage: '出厂检验', result: '合格', operator: '张三', recordTime: '2026-06-10 15:00', notes: '', address: '' },
   { id: 'DELIV-003', deviceId: 'DEV-009', projectId: 'PROJ-002', stage: '出厂检验', result: '合格', operator: '李四', recordTime: '2026-06-12 11:00', notes: '医疗EMC认证通过', address: '' },
   { id: 'DELIV-004', deviceId: 'DEV-007', projectId: 'PROJ-001', stage: '现场安装调试', result: '通过', operator: '王五', recordTime: '2026-06-15 10:00', notes: '安装顺利，调试完成', address: '北京市朝阳区智魔方科技园A厂房' },
-  { id: 'DELIV-005', deviceId: 'DEV-008', projectId: 'PROJ-001', stage: '现场安装调试', result: '未通过', operator: '王五', recordTime: '2026-06-15 14:00', notes: '网络配置异常，需重新配置', address: '北京市朝阳区智魔方科技园A厂房' },
-  { id: 'DELIV-006', deviceId: 'DEV-008', projectId: 'PROJ-001', stage: '现场安装调试', result: '通过', operator: '王五', recordTime: '2026-06-16 09:00', notes: '重新配置后通过', address: '北京市朝阳区智魔方科技园A厂房' },
+  { id: 'DELIV-005', deviceId: 'DEV-027', projectId: 'PROJ-001', stage: '现场安装调试', result: '未通过', operator: '王五', recordTime: '2026-06-15 14:00', notes: '网络配置异常，需重新配置', address: '北京市朝阳区智魔方科技园A厂房' },
+  { id: 'DELIV-006', deviceId: 'DEV-027', projectId: 'PROJ-001', stage: '现场安装调试', result: '通过', operator: '王五', recordTime: '2026-06-16 09:00', notes: '重新配置后通过', address: '北京市朝阳区智魔方科技园A厂房' },
   { id: 'DELIV-007', deviceId: 'DEV-009', projectId: 'PROJ-002', stage: '现场安装调试', result: '通过', operator: '赵六', recordTime: '2026-06-17 11:00', notes: '医院环境调试完成', address: '北京市通州区华熙生物园区实验楼' },
   { id: 'DELIV-008', deviceId: 'DEV-007', projectId: 'PROJ-001', stage: '客户验收', result: '通过', operator: '张三', recordTime: '2026-06-18 15:00', notes: '客户满意，签署验收单', address: '北京市朝阳区智魔方科技园A厂房' },
   { id: 'DELIV-009', deviceId: 'DEV-012', projectId: 'PROJ-003', stage: '出厂检验', result: '合格', operator: '王五', recordTime: '2026-04-09 11:00', notes: '防护等级IP65验证通过', address: '' },
@@ -429,7 +446,7 @@ export const deliveryRecords = [
 
 export const alerts = [
   {
-    id: 'ALERT-001', deviceId: 'DEV-010', projectId: 'PROJ-001', deviceSN: 'SN-DEV-010',
+    id: 'ALERT-001', deviceId: 'DEV-027', projectId: 'PROJ-001', deviceSN: 'SN-DEV-027',
     alertTime: '2026-06-19 03:22', source: '系统自动', severity: '轻微',
     description: '电池电量低于20%，建议及时充电',
     status: '已解决', workOrderId: null,
@@ -458,7 +475,7 @@ export const alerts = [
     processLogs: [],
   },
   {
-    id: 'ALERT-004', deviceId: 'DEV-013', projectId: 'PROJ-001', deviceSN: 'SN-DEV-013',
+    id: 'ALERT-004', deviceId: 'DEV-028', projectId: 'PROJ-001', deviceSN: 'SN-DEV-028',
     alertTime: '2026-06-21 01:05', source: '系统自动', severity: '严重',
     description: '预控模组通信中断超过5分钟',
     status: '已生成工单', workOrderId: 'WO-002',
@@ -468,7 +485,7 @@ export const alerts = [
     ],
   },
   {
-    id: 'ALERT-005', deviceId: 'DEV-010', projectId: 'PROJ-001', deviceSN: 'SN-DEV-010',
+    id: 'ALERT-005', deviceId: 'DEV-027', projectId: 'PROJ-001', deviceSN: 'SN-DEV-027',
     alertTime: '2026-06-18 11:30', source: '人工上报', severity: '轻微',
     description: '末端执行器抓取精度下降，误差约±2mm',
     status: '已解决', workOrderId: null,
@@ -499,7 +516,7 @@ export const alerts = [
     ],
   },
   {
-    id: 'ALERT-008', deviceId: 'DEV-013', projectId: 'PROJ-001', deviceSN: 'SN-DEV-013',
+    id: 'ALERT-008', deviceId: 'DEV-028', projectId: 'PROJ-001', deviceSN: 'SN-DEV-028',
     alertTime: '2026-06-20 18:30', source: '系统自动', severity: '轻微',
     description: 'CPU使用率持续超过85%，任务响应延迟',
     status: '处理中', workOrderId: null,
@@ -509,7 +526,7 @@ export const alerts = [
     ],
   },
   {
-    id: 'ALERT-009', deviceId: 'DEV-010', projectId: 'PROJ-001', deviceSN: 'SN-DEV-010',
+    id: 'ALERT-009', deviceId: 'DEV-027', projectId: 'PROJ-001', deviceSN: 'SN-DEV-027',
     alertTime: '2026-06-22 02:05', source: '系统自动', severity: '轻微',
     description: '机械臂关节润滑度不足，运行摩擦力增大',
     status: '待处理', workOrderId: null,
@@ -525,7 +542,7 @@ export const alerts = [
     processLogs: [],
   },
   {
-    id: 'ALERT-011', deviceId: 'DEV-010', projectId: 'PROJ-001', deviceSN: 'SN-DEV-010',
+    id: 'ALERT-011', deviceId: 'DEV-027', projectId: 'PROJ-001', deviceSN: 'SN-DEV-027',
     alertTime: '2026-06-10 14:20', source: '系统自动', severity: '严重',
     description: '关节2位置反馈异常，编码器读数跳变',
     status: '已关闭', workOrderId: 'WO-004',
@@ -550,11 +567,11 @@ export const alerts = [
 
 export const workOrders = [
   { id: 'WO-001', woClass: '换件工单', involvesReplacement: true, needReplaceModuleType: '电机模块', oldModuleSN: '待确认', newModuleSN: '待选择', newModuleStockStatus: '待选择', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', projectId: 'PROJ-003', description: '关节3电机过热，温度达92°C，需检查散热系统及电机状态', severity: '高', status: '处理中', assignedTo: '王五', createdAt: '2026-06-20 14:30', updatedAt: '2026-06-20 16:00', closedAt: null, repairActions: '已到现场，正在拆除散热模组检查', replacedModules: [], recheckResult: null, notes: '散热风扇异物堵塞' },
-  { id: 'WO-002', woClass: '换件工单', involvesReplacement: true, needReplaceModuleType: '预控模块', oldModuleSN: '待确认', newModuleSN: '待选择', newModuleStockStatus: '待选择', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', projectId: 'PROJ-001', description: '预控模组通信中断，设备无法接收指令', severity: '高', status: '待处理', assignedTo: '赵六', createdAt: '2026-06-21 01:10', updatedAt: '2026-06-21 01:10', closedAt: null, repairActions: '', replacedModules: [], recheckResult: null, notes: '' },
+  { id: 'WO-002', woClass: '换件工单', involvesReplacement: true, needReplaceModuleType: '预控模块', oldModuleSN: '待确认', newModuleSN: '待选择', newModuleStockStatus: '待选择', deviceId: 'DEV-028', deviceSN: 'SN-DEV-028', projectId: 'PROJ-001', description: '预控模组通信中断，设备无法接收指令', severity: '高', status: '待处理', assignedTo: '赵六', createdAt: '2026-06-21 01:10', updatedAt: '2026-06-21 01:10', closedAt: null, repairActions: '', replacedModules: [], recheckResult: null, notes: '' },
   { id: 'WO-003', woClass: '换件工单', involvesReplacement: true, needReplaceModuleType: '预控模块', oldModuleSN: 'MOD-YK-2026-013', newModuleSN: 'MOD-YK-2026-014', newModuleStockStatus: '已选择（在库可用）', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', projectId: 'PROJ-003', description: '设备离线，网络模块故障，需更换', severity: '高', status: '处理中', assignedTo: '李四', createdAt: '2026-06-21 08:00', updatedAt: '2026-06-21 09:00', closedAt: null, repairActions: '已确认网络模块损坏，准备更换', replacedModules: [{ removedMaterialId: 'MAT-013', addedMaterialId: 'MAT-014', moduleTypeId: 'MT-006' }], recheckResult: null, notes: '网口物理损坏，可能为进水导致' },
-  { id: 'WO-004', woClass: '其他问题工单', involvesReplacement: false, deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', projectId: 'PROJ-001', description: '末端执行器抓取精度异常，超出允许误差范围', severity: '中', status: '已关闭', assignedTo: '李四', createdAt: '2026-06-18 12:00', updatedAt: '2026-06-18 17:00', closedAt: '2026-06-18 17:00', repairActions: '重新标定末端执行器，精度恢复正常', replacedModules: [], recheckResult: '合格', notes: '标定参数偏移，已重置' },
+  { id: 'WO-004', woClass: '其他问题工单', involvesReplacement: false, deviceId: 'DEV-027', deviceSN: 'SN-DEV-027', projectId: 'PROJ-001', description: '末端执行器抓取精度异常，超出允许误差范围', severity: '中', status: '已关闭', assignedTo: '李四', createdAt: '2026-06-18 12:00', updatedAt: '2026-06-18 17:00', closedAt: '2026-06-18 17:00', repairActions: '重新标定末端执行器，精度恢复正常', replacedModules: [], recheckResult: '合格', notes: '标定参数偏移，已重置' },
   { id: 'WO-005', woClass: '软件问题工单', involvesReplacement: false, softwareVersion: 'v2.3.1', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', projectId: 'PROJ-002', description: '导航地图更新失败，设备反复回到原点', severity: '低', status: '已关闭', assignedTo: '张三', createdAt: '2026-06-15 09:00', updatedAt: '2026-06-15 14:00', closedAt: '2026-06-15 14:00', repairActions: '远程推送新地图固件，重新建图完成', replacedModules: [], recheckResult: '合格', recheckPerson: '李四', notes: '固件版本不兼容导致' },
-  { id: 'WO-006', woClass: '换件工单', involvesReplacement: true, needReplaceModuleType: '机械臂模块', oldModuleSN: '待确认', newModuleSN: '待选择', newModuleStockStatus: '待选择', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', projectId: 'PROJ-001', description: '机械臂关节2抖动明显，定位精度异常，误差超出允许范围±3mm', severity: '中', status: '复检中', assignedTo: '王五', recheckPerson: '李四', createdAt: '2026-06-21 10:00', updatedAt: '2026-06-21 14:30', closedAt: null, repairActions: '重新校准关节电机编码器，调整PID参数，更换磨损轴承衬套', replacedModules: [], recheckResult: null, notes: '关节2齿轮轻微磨损，已调整间隙' },
+  { id: 'WO-006', woClass: '换件工单', involvesReplacement: true, needReplaceModuleType: '机械臂模块', oldModuleSN: '待确认', newModuleSN: '待选择', newModuleStockStatus: '待选择', deviceId: 'DEV-028', deviceSN: 'SN-DEV-028', projectId: 'PROJ-001', description: '机械臂关节2抖动明显，定位精度异常，误差超出允许范围±3mm', severity: '中', status: '复检中', assignedTo: '王五', recheckPerson: '李四', createdAt: '2026-06-21 10:00', updatedAt: '2026-06-21 14:30', closedAt: null, repairActions: '重新校准关节电机编码器，调整PID参数，更换磨损轴承衬套', replacedModules: [], recheckResult: null, notes: '关节2齿轮轻微磨损，已调整间隙' },
 ];
 
 export const retirements = [];
@@ -670,7 +687,7 @@ export const productionWorkOrders = [
 
 export const deliveryWorkOrders = [
   {
-    id: 'DWO-001', woClass: '其他问题工单', involvesReplacement: false, type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010',
+    id: 'DWO-001', woClass: '其他问题工单', involvesReplacement: false, type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-027', deviceSN: 'SN-DEV-027',
     description: '现场安装时发现底盘运动偏差大', severity: '中',
     status: '已关闭', assignedTo: '赵六', createdAt: '2026-06-12 14:00', updatedAt: '2026-06-14 16:00',
     repairActions: '重新校准底盘里程计和陀螺仪参数', recheckPerson: '张三', recheckResult: '通过',
@@ -742,7 +759,7 @@ export const deliveryWorkOrders = [
     ],
   },
   {
-    id: 'DWO-007', woClass: '软件问题工单', involvesReplacement: false, softwareVersion: 'v2.1.5', type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013',
+    id: 'DWO-007', woClass: '软件问题工单', involvesReplacement: false, softwareVersion: 'v2.1.5', type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-028', deviceSN: 'SN-DEV-028',
     description: '现场安装后客户反馈设备启动时间过长，超过30秒', severity: '低',
     status: '待处理', assignedTo: '', createdAt: '2026-06-22 08:00', updatedAt: '2026-06-22 08:00',
     repairActions: '', recheckPerson: '', recheckResult: '',
@@ -768,24 +785,24 @@ export const deliveryPlans = [
     targetCount: 5, status: '交付中', owner: '张三', currentNode: '客户验收',
     factoryDate: '2026-06-10', siteInstallDate: '2026-06-14', acceptanceDate: '2026-07-31', dueDate: '2026-07-31',
     erpOutboundNo: 'SO-2026-018', erpAcceptanceNo: 'AC-2026-018',
-    boundDeviceIds: ['DEV-010', 'DEV-011', 'DEV-013'],
+    boundDeviceIds: ['DEV-027', 'DEV-011', 'DEV-028'],
     records: {
       binding: [
-        { id: 'BIND-010', deviceId: 'DEV-010', preAssignedLocationId: 'LOC-001', operator: '张三', time: '2026-06-07 09:00' },
+        { id: 'BIND-010', deviceId: 'DEV-027', preAssignedLocationId: 'LOC-001', operator: '张三', time: '2026-06-07 09:00' },
         { id: 'BIND-011', deviceId: 'DEV-011', preAssignedLocationId: 'LOC-001', operator: '张三', time: '2026-06-07 09:10' },
-        { id: 'BIND-013', deviceId: 'DEV-013', preAssignedLocationId: 'LOC-001', operator: '张三', time: '2026-06-07 09:20' },
+        { id: 'BIND-013', deviceId: 'DEV-028', preAssignedLocationId: 'LOC-001', operator: '张三', time: '2026-06-07 09:20' },
       ],
       factoryInspection: [
-        { id: 'FI-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', operator: '赵六', time: '2026-06-08 10:00', result: 'Pass', reportFile: 'fi_DEV010.pdf', reportLink: '' },
+        { id: 'FI-001', deviceId: 'DEV-027', deviceSN: 'SN-DEV-027', operator: '赵六', time: '2026-06-08 10:00', result: 'Pass', reportFile: 'fi_DEV010.pdf', reportLink: '' },
         { id: 'FI-002', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', operator: '赵六', time: '2026-06-08 11:00', result: 'Pass', reportFile: '', reportLink: 'http://report.example.com/fi002' },
-        { id: 'FI-003', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', operator: '张三', time: '2026-06-09 09:00', result: 'Pass', reportFile: 'fi_DEV013.pdf', reportLink: '' },
+        { id: 'FI-003', deviceId: 'DEV-028', deviceSN: 'SN-DEV-028', operator: '张三', time: '2026-06-09 09:00', result: 'Pass', reportFile: 'fi_DEV013.pdf', reportLink: '' },
       ],
       siteInstall: [
-        { id: 'SI-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', operator: '赵六', locationId: 'LOC-001', time: '2026-06-12 14:00', result: 'Pass', notes: '' },
+        { id: 'SI-001', deviceId: 'DEV-027', deviceSN: 'SN-DEV-027', operator: '赵六', locationId: 'LOC-001', time: '2026-06-12 14:00', result: 'Pass', notes: '' },
         { id: 'SI-002', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', operator: '赵六', locationId: 'LOC-002', time: '2026-06-13 10:00', result: 'Pass', notes: '' },
       ],
       customerAccept: [
-        { id: 'CA-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', operator: '蔡八', locationId: 'LOC-001', time: '2026-06-15 15:00', result: 'Pass', erpOutboundNo: 'SO-2026-018', voucherDesc: '验收单照片.jpg' },
+        { id: 'CA-001', deviceId: 'DEV-027', deviceSN: 'SN-DEV-027', operator: '蔡八', locationId: 'LOC-001', time: '2026-06-15 15:00', result: 'Pass', erpOutboundNo: 'SO-2026-018', voucherDesc: '验收单照片.jpg' },
       ],
     },
   },
@@ -864,13 +881,13 @@ export const deliveryPlans = [
     targetCount: 3, status: '交付中', owner: '张三', currentNode: '现场安装调试',
     factoryDate: '2026-06-01', siteInstallDate: '2026-06-08', acceptanceDate: '2026-06-20', dueDate: '2026-06-20',
     erpOutboundNo: '', erpAcceptanceNo: '',
-    boundDeviceIds: ['DEV-025'],
+    boundDeviceIds: ['DEV-029'],
     records: {
       binding: [
-        { id: 'BIND-025', deviceId: 'DEV-025', preAssignedLocationId: 'LOC-002', operator: '张三', time: '2026-05-30 09:00' },
+        { id: 'BIND-025', deviceId: 'DEV-029', preAssignedLocationId: 'LOC-002', operator: '张三', time: '2026-05-30 09:00' },
       ],
       factoryInspection: [
-        { id: 'FI-009', deviceId: 'DEV-025', deviceSN: 'SN-DEV-025', operator: '赵六', time: '2026-06-02 10:00', result: 'Pass', reportFile: 'fi_DEV025.pdf', reportLink: '' },
+        { id: 'FI-009', deviceId: 'DEV-029', deviceSN: 'SN-DEV-029', operator: '赵六', time: '2026-06-02 10:00', result: 'Pass', reportFile: 'fi_DEV025.pdf', reportLink: '' },
       ],
       siteInstall: [],
       customerAccept: [],
@@ -945,8 +962,8 @@ export const ROLE_ACTION_PERMISSIONS = {
 };
 
 export const locations = [
-  { id: 'LOC-001', projectId: 'PROJ-001', name: '深圳海岸城店', address: '深圳市南山区海岸城', deviceIds: ['DEV-010', 'DEV-013'] },
-  { id: 'LOC-002', projectId: 'PROJ-001', name: '深圳万象城店', address: '深圳市罗湖区万象城', deviceIds: ['DEV-025'] },
+  { id: 'LOC-001', projectId: 'PROJ-001', name: '深圳海岸城店', address: '深圳市南山区海岸城', deviceIds: ['DEV-027', 'DEV-028'] },
+  { id: 'LOC-002', projectId: 'PROJ-001', name: '深圳万象城店', address: '深圳市罗湖区万象城', deviceIds: ['DEV-029'] },
   { id: 'LOC-003', projectId: 'PROJ-002', name: '北京三里屯店', address: '北京市朝阳区三里屯', deviceIds: ['DEV-011'] },
   { id: 'LOC-004', projectId: 'PROJ-002', name: '北京王府井店', address: '北京市东城区王府井', deviceIds: ['DEV-009'] },
   { id: 'LOC-005', projectId: 'PROJ-003', name: 'T3航站楼A区', address: '首都国际机场T3航站楼A区', deviceIds: ['DEV-012'] },
@@ -954,15 +971,15 @@ export const locations = [
 ];
 
 export const qualityIssues = [
-  { id: 'QI-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', deviceName: 'AlphaBot 1', locationId: 'LOC-001', projectId: 'PROJ-001', issueDesc: '机器人在货架转角处导航异常，频繁停止等待', reporterId: 'user-zhaoliu', reporterName: '赵六', reportTime: '2026-06-22 14:30', status: '待处理', source: '扫码上报', sourceStage: '在线运营', issueType: '功能异常', severity: '中', owner: '赵六', linkedWorkOrder: false, processLogs: [] },
-  { id: 'QI-002', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', deviceName: 'AlphaBot 1', locationId: 'LOC-001', projectId: 'PROJ-001', issueDesc: '设备运行时发出异常响声，疑似关节松动', reporterId: 'user-zhangsan', reporterName: '张三', reportTime: '2026-06-21 09:15', status: '处理中', source: '手动录入', sourceStage: '在线运营', issueType: '功能异常', severity: '中', owner: '张三', linkedWorkOrder: false, processLogs: [{ time: '2026-06-21 11:00', operator: '李四', fromStatus: '待处理', toStatus: '处理中', notes: '已到场确认，关节螺丝松动，正在紧固' }] },
-  { id: 'QI-003', deviceId: 'DEV-025', deviceSN: 'SN-DEV-025', deviceName: 'AlphaBot 1', locationId: 'LOC-002', projectId: 'PROJ-001', issueDesc: '屏幕显示异常，出现竖条纹花屏', reporterId: 'user-wangwu', reporterName: '王五', reportTime: '2026-06-20 16:45', status: '已关闭', source: '扫码上报', sourceStage: '在线运营', issueType: '外观缺陷', severity: '高', owner: '王五', linkedWorkOrder: false, processLogs: [{ time: '2026-06-20 17:30', operator: '赵六', fromStatus: '待处理', toStatus: '处理中', notes: '远程重启后恢复' }, { time: '2026-06-21 09:00', operator: '赵六', fromStatus: '处理中', toStatus: '已关闭', notes: '确认为软件渲染问题，已推送更新包' }] },
+  { id: 'QI-001', deviceId: 'DEV-027', deviceSN: 'SN-DEV-027', deviceName: 'AlphaBot 1', locationId: 'LOC-001', projectId: 'PROJ-001', issueDesc: '机器人在货架转角处导航异常，频繁停止等待', reporterId: 'user-zhaoliu', reporterName: '赵六', reportTime: '2026-06-22 14:30', status: '待处理', source: '扫码上报', sourceStage: '在线运营', issueType: '功能异常', severity: '中', owner: '赵六', linkedWorkOrder: false, processLogs: [] },
+  { id: 'QI-002', deviceId: 'DEV-028', deviceSN: 'SN-DEV-028', deviceName: 'AlphaBot 1', locationId: 'LOC-001', projectId: 'PROJ-001', issueDesc: '设备运行时发出异常响声，疑似关节松动', reporterId: 'user-zhangsan', reporterName: '张三', reportTime: '2026-06-21 09:15', status: '处理中', source: '手动录入', sourceStage: '在线运营', issueType: '功能异常', severity: '中', owner: '张三', linkedWorkOrder: false, processLogs: [{ time: '2026-06-21 11:00', operator: '李四', fromStatus: '待处理', toStatus: '处理中', notes: '已到场确认，关节螺丝松动，正在紧固' }] },
+  { id: 'QI-003', deviceId: 'DEV-029', deviceSN: 'SN-DEV-029', deviceName: 'AlphaBot 1', locationId: 'LOC-002', projectId: 'PROJ-001', issueDesc: '屏幕显示异常，出现竖条纹花屏', reporterId: 'user-wangwu', reporterName: '王五', reportTime: '2026-06-20 16:45', status: '已关闭', source: '扫码上报', sourceStage: '在线运营', issueType: '外观缺陷', severity: '高', owner: '王五', linkedWorkOrder: false, processLogs: [{ time: '2026-06-20 17:30', operator: '赵六', fromStatus: '待处理', toStatus: '处理中', notes: '远程重启后恢复' }, { time: '2026-06-21 09:00', operator: '赵六', fromStatus: '处理中', toStatus: '已关闭', notes: '确认为软件渲染问题，已推送更新包' }] },
   { id: 'QI-004', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', deviceName: 'AlphaBot 1', locationId: 'LOC-003', projectId: 'PROJ-002', issueDesc: '充电桩对接不稳定，充电过程多次中断', reporterId: 'user-lisi', reporterName: '李四', reportTime: '2026-06-22 08:20', status: '待处理', source: '手动录入', sourceStage: '在线运营', issueType: '通信异常', severity: '高', owner: '李四', linkedWorkOrder: false, processLogs: [] },
   { id: 'QI-005', deviceId: 'DEV-009', deviceSN: 'SN-DEV-009', deviceName: 'AlphaBot 1', locationId: 'LOC-004', projectId: 'PROJ-002', issueDesc: '设备在人群密集区域速度控制响应迟滞', reporterId: 'user-zhaoliu', reporterName: '赵六', reportTime: '2026-06-21 13:00', status: '处理中', source: '扫码上报', sourceStage: '在线运营', issueType: '性能不达标', severity: '中', owner: '赵六', linkedWorkOrder: false, processLogs: [{ time: '2026-06-21 15:00', operator: '王五', fromStatus: '待处理', toStatus: '处理中', notes: '已排查，系感知延迟导致，正在调整参数' }] },
   { id: 'QI-006', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', deviceName: 'AlphaBot 2', locationId: 'LOC-005', projectId: 'PROJ-003', issueDesc: '电量低于20%时自主返回充电桩功能失效', reporterId: 'user-zhangsan', reporterName: '张三', reportTime: '2026-06-20 11:30', status: '已关闭', source: '手动录入', sourceStage: '在线运营', issueType: '功能异常', severity: '高', owner: '张三', linkedWorkOrder: false, processLogs: [{ time: '2026-06-20 14:00', operator: '李四', fromStatus: '待处理', toStatus: '处理中', notes: '确认为固件bug，申请补丁' }, { time: '2026-06-22 10:00', operator: '李四', fromStatus: '处理中', toStatus: '已关闭', notes: '固件补丁已推送，功能验证通过' }] },
   { id: 'QI-007', deviceId: 'DEV-024', deviceSN: 'SN-DEV-024', deviceName: 'AlphaBot 1', locationId: 'LOC-006', projectId: 'PROJ-003', issueDesc: 'B区安检通道附近LIDAR点云数据丢失，影响避障', reporterId: 'user-wangwu', reporterName: '王五', reportTime: '2026-06-22 10:00', status: '待处理', source: '扫码上报', sourceStage: '在线运营', issueType: '通信异常', severity: '高', owner: '王五', linkedWorkOrder: false, processLogs: [] },
-  { id: 'QI-008', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', deviceName: 'AlphaBot 1', locationId: 'LOC-001', projectId: 'PROJ-001', issueDesc: '货架扫描识别率下降，特定条形码无法读取', reporterId: 'user-lisi', reporterName: '李四', reportTime: '2026-06-19 14:00', status: '处理中', source: '手动录入', sourceStage: '在线运营', issueType: '功能异常', severity: '高', owner: '李四', linkedWorkOrder: false, processLogs: [{ time: '2026-06-19 16:00', operator: '张三', fromStatus: '待处理', toStatus: '处理中', notes: '摄像头镜头有污染，清洁后部分改善，继续观察' }] },
-  { id: 'QI-009', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', deviceName: 'AlphaBot 1', locationId: 'LOC-001', projectId: 'PROJ-001', issueDesc: '设备在湿滑地面行进时偶发打滑，里程计偏差大', reporterId: 'user-zhaoliu', reporterName: '赵六', reportTime: '2026-06-18 09:30', status: '已关闭', source: '扫码上报', sourceStage: '在线运营', issueType: '功能异常', severity: '中', owner: '赵六', linkedWorkOrder: false, processLogs: [{ time: '2026-06-18 11:00', operator: '王五', fromStatus: '待处理', toStatus: '处理中', notes: '底盘轮胎磨损，已申请更换' }, { time: '2026-06-20 15:00', operator: '王五', fromStatus: '处理中', toStatus: '已关闭', notes: '轮胎更换完成，测试里程计误差在允许范围内' }] },
+  { id: 'QI-008', deviceId: 'DEV-027', deviceSN: 'SN-DEV-027', deviceName: 'AlphaBot 1', locationId: 'LOC-001', projectId: 'PROJ-001', issueDesc: '货架扫描识别率下降，特定条形码无法读取', reporterId: 'user-lisi', reporterName: '李四', reportTime: '2026-06-19 14:00', status: '处理中', source: '手动录入', sourceStage: '在线运营', issueType: '功能异常', severity: '高', owner: '李四', linkedWorkOrder: false, processLogs: [{ time: '2026-06-19 16:00', operator: '张三', fromStatus: '待处理', toStatus: '处理中', notes: '摄像头镜头有污染，清洁后部分改善，继续观察' }] },
+  { id: 'QI-009', deviceId: 'DEV-028', deviceSN: 'SN-DEV-028', deviceName: 'AlphaBot 1', locationId: 'LOC-001', projectId: 'PROJ-001', issueDesc: '设备在湿滑地面行进时偶发打滑，里程计偏差大', reporterId: 'user-zhaoliu', reporterName: '赵六', reportTime: '2026-06-18 09:30', status: '已关闭', source: '扫码上报', sourceStage: '在线运营', issueType: '功能异常', severity: '中', owner: '赵六', linkedWorkOrder: false, processLogs: [{ time: '2026-06-18 11:00', operator: '王五', fromStatus: '待处理', toStatus: '处理中', notes: '底盘轮胎磨损，已申请更换' }, { time: '2026-06-20 15:00', operator: '王五', fromStatus: '处理中', toStatus: '已关闭', notes: '轮胎更换完成，测试里程计误差在允许范围内' }] },
   { id: 'QI-010', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', deviceName: 'AlphaBot 1', locationId: 'LOC-003', projectId: 'PROJ-002', issueDesc: '机器人语音播报功能异常，提示音模糊', reporterId: 'user-zhangsan', reporterName: '张三', reportTime: '2026-06-17 15:20', status: '已关闭', source: '手动录入', sourceStage: '在线运营', issueType: '功能异常', severity: '中', owner: '张三', linkedWorkOrder: false, processLogs: [{ time: '2026-06-17 17:00', operator: '赵六', fromStatus: '待处理', toStatus: '处理中', notes: '扬声器积灰，清洁后恢复正常' }, { time: '2026-06-18 09:00', operator: '赵六', fromStatus: '处理中', toStatus: '已关闭', notes: '持续监测24小时，问题未复现' }] },
   { id: 'QI-011', deviceId: 'DEV-024', deviceSN: 'SN-DEV-024', deviceName: 'AlphaBot 1', locationId: 'LOC-006', projectId: 'PROJ-003', issueDesc: '设备在人流高峰期响应指令延迟超过3秒', reporterId: 'user-lisi', reporterName: '李四', reportTime: '2026-06-22 11:45', status: '待处理', source: '扫码上报', sourceStage: '在线运营', issueType: '性能不达标', severity: '中', owner: '李四', linkedWorkOrder: false, processLogs: [] },
   { id: 'QI-012', deviceId: 'DEV-009', deviceSN: 'SN-DEV-009', deviceName: 'AlphaBot 1', locationId: 'LOC-004', projectId: 'PROJ-002', issueDesc: '地图更新后设备在旧路径巡逻，需重新配置路线', reporterId: 'user-wangwu', reporterName: '王五', reportTime: '2026-06-16 10:00', status: '已关闭', source: '手动录入', sourceStage: '在线运营', issueType: '功能异常', severity: '中', owner: '王五', linkedWorkOrder: false, processLogs: [{ time: '2026-06-16 14:00', operator: '李四', fromStatus: '待处理', toStatus: '处理中', notes: '重新下发任务地图' }, { time: '2026-06-17 09:00', operator: '李四', fromStatus: '处理中', toStatus: '已关闭', notes: '路线配置完成，验证通过' }] },
