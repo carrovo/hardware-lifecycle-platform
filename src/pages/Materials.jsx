@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import { Pagination, usePaged } from '../components/Pagination';
-import { MATERIAL_CATEGORIES } from '../data/mockData';
+import { MATERIAL_CATEGORIES, moduleInstances as MODULE_INSTANCES } from '../data/mockData';
 
 const RESULT_BADGE = {
   '合格':    { bg: 'bg-green-100',  text: 'text-green-700',  border: 'border-green-300',  icon: '✓' },
@@ -160,21 +160,25 @@ function AddBatchModal({ isOpen, onClose, onSave }) {
   );
 }
 
-function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [], onViewInstances, onViewBatches }) {
+// 模块库存汇总：纯统计视图，全部数量从 moduleInstances 按 moduleTypeId 聚合，不做新增/编辑/作废。
+function ModuleInventoryTab({ moduleInstances = [], moduleTypes, deviceTypes = [], batches = [], onViewInstances, onViewBatches }) {
+  const modelSupplierOf = (mtId) => {
+    const inst = moduleInstances.find((m) => m.moduleTypeId === mtId);
+    const batch = inst ? batches.find((b) => b.id === inst.sourceBatchId) : null;
+    return { model: batch?.model || '—', supplier: batch?.supplier || '—' };
+  };
   const inventory = moduleTypes.map((mt) => {
-    const mats = materials.filter((m) => m.category === mt.category);
-    const total = mats.length;
-    const available = mats.filter((m) => m.status === '待装配').length;
-    const assembled = mats.filter((m) => m.status === '已占用').length;
-    const repairing = mats.filter((m) => m.status === '维修中').length;
-    const scrapped = mats.filter((m) => ['退货换货', '已报废'].includes(m.status)).length;
+    const insts = moduleInstances.filter((m) => m.moduleTypeId === mt.id);
+    const count = (s) => insts.filter((m) => m.status === s).length;
+    const available = count('在库可用');
     const relatedTypes = deviceTypes.filter((dt) => (dt.slots || []).some((s) => s.moduleTypeId === mt.id)).map((dt) => dt.name);
-    const risk = available === 0 ? '缺料' : available < 2 ? '偏低' : '正常';
-    const sample = mats[0] || {};
-    return { ...mt, model: sample.model || '—', supplier: sample.supplier || '—', total, available, assembled, locked: 0, repairing, scrapped, relatedTypes, risk };
-  });
+    const safeStock = mt.safeStock ?? 3;
+    const risk = available === 0 ? '缺货' : available < safeStock ? '偏低' : '正常';
+    const { model, supplier } = modelSupplierOf(mt.id);
+    return { ...mt, model, supplier, total: insts.length, available, locked: count('已锁定生产计划'), assembled: count('已装配'), repairing: count('维修中'), scrapped: count('已报废'), relatedTypes, risk, safeStock };
+  }).filter((r) => r.total > 0 || r.relatedTypes.length > 0); // 只展示 BOM 引用或有实例的模块类型
 
-  const riskBadge = (risk) => risk === '缺料'
+  const riskBadge = (risk) => risk === '缺货'
     ? 'bg-red-100 text-red-700 border-red-300'
     : risk === '偏低' ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-green-100 text-green-700 border-green-300';
   const paged = usePaged(inventory, 10);
@@ -197,8 +201,8 @@ function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [], onViewIn
               <td className="px-4 py-3 text-gray-600 text-xs">{mt.model}</td>
               <td className="px-4 py-3 text-gray-600 text-xs">{mt.supplier}</td>
               <td className="px-4 py-3 text-gray-700 font-medium">{mt.total}</td>
-              <td className="px-4 py-3"><span className={`font-semibold ${mt.available > 0 ? 'text-blue-700' : 'text-gray-400'}`}>{mt.available}</span></td>
-              <td className="px-4 py-3 text-gray-500">{mt.locked}</td>
+              <td className="px-4 py-3"><span className={`font-semibold ${mt.available > 0 ? 'text-blue-700' : 'text-gray-400'}`} title={`安全库存 ${mt.safeStock}`}>{mt.available}</span></td>
+              <td className="px-4 py-3 text-indigo-600">{mt.locked}</td>
               <td className="px-4 py-3 text-gray-600">{mt.assembled}</td>
               <td className="px-4 py-3 text-amber-600">{mt.repairing || 0}</td>
               <td className="px-4 py-3">{mt.scrapped > 0 ? <span className="text-red-600 font-medium">{mt.scrapped}</span> : <span className="text-gray-400">0</span>}</td>
@@ -206,12 +210,13 @@ function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [], onViewIn
               <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full border ${riskBadge(mt.risk)}`}>{mt.risk}</span></td>
               <td className="px-4 py-3 text-xs whitespace-nowrap">
                 <div className="flex items-center gap-x-3">
-                  <button className="text-blue-600 hover:underline" onClick={() => onViewInstances(mt.category)}>查看实例</button>
+                  <button className="text-blue-600 hover:underline" onClick={() => onViewInstances(mt.id)}>查看实例</button>
                   <button className="text-slate-600 hover:underline" onClick={() => onViewBatches(mt.category)}>查看批次</button>
                 </div>
               </td>
             </tr>
           ))}
+          {inventory.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无库存数据</td></tr>}
         </tbody>
       </table>
       </div>
@@ -221,30 +226,36 @@ function ModuleInventoryTab({ materials, moduleTypes, deviceTypes = [], onViewIn
 }
 
 /* ─────── 模块实例 ─────── */
-function ModuleInstanceTab({ materials, devices, moduleTypes, batches = [], batchFilter = '', categoryFilter = '', onClearBatch, onClearCategory, onViewBatch }) {
+// 数据源为 moduleInstances：状态、boundDeviceId、lockedPlanId 显式，避免“已装配但无设备”“未绑定却可查看设备”。
+function ModuleInstanceTab({ moduleInstances = [], devices, moduleTypes, batches = [], batchIdFilter = '', moduleTypeFilter = '', onClearBatch, onClearModuleType, onViewBatch, onMark }) {
   const [q, setQ] = useState('');
   const [statusFilter, setStatusFilter] = useState('全部');
-  const typeName = (category) => moduleTypes.find((m) => m.category === category)?.name || category;
-  const ownerOf = (matId) => devices.find((d) => (d.usedMaterials || []).some((um) => um.materialId === matId));
-  const erpOf = (batchNo) => batches.find((b) => b.batchNo === batchNo)?.erpPurchaseOrderNo || '—';
-  const lockedPlanOf = (m) => (m.status === '已占用' ? '—' : (m.lockedPlanId || (m.status === '已锁定生产计划' ? m.planId : '') || ''));
+  const typeName = (mtId) => moduleTypes.find((m) => m.id === mtId)?.name || mtId;
+  const batchOf = (id) => batches.find((b) => b.id === id);
+  const deviceById = (id) => devices.find((d) => d.id === id);
+  const batchNoLabel = batchIdFilter ? (batchOf(batchIdFilter)?.batchNo || batchIdFilter) : '';
+  const mtLabel = moduleTypeFilter ? typeName(moduleTypeFilter) : '';
+  const gray = 'text-gray-300 cursor-not-allowed';
 
-  const rows = (materials || []).map((m) => ({ ...m, instState: instanceStatus(m.status), owner: ownerOf(m.id) }));
+  const rows = moduleInstances.map((mi) => {
+    const batch = batchOf(mi.sourceBatchId);
+    const owner = mi.status === '已装配' && mi.boundDeviceId ? deviceById(mi.boundDeviceId) : null;
+    return { ...mi, catName: typeName(mi.moduleTypeId), model: batch?.model || '—', supplier: batch?.supplier || '—', batchNo: batch?.batchNo || '—', erp: batch?.erpPurchaseOrderNo || '—', owner };
+  });
   const filtered = rows.filter((m) => {
-    const okStatus = statusFilter === '全部' || m.instState === statusFilter;
-    const okBatch = !batchFilter || m.batchNo === batchFilter;
-    const okCat = !categoryFilter || m.category === categoryFilter;
+    const okStatus = statusFilter === '全部' || m.status === statusFilter;
+    const okBatch = !batchIdFilter || m.sourceBatchId === batchIdFilter;
+    const okMt = !moduleTypeFilter || m.moduleTypeId === moduleTypeFilter;
     const okQ = !q || m.sn.toLowerCase().includes(q.toLowerCase()) || (m.model || '').toLowerCase().includes(q.toLowerCase());
-    return okStatus && okBatch && okCat && okQ;
+    return okStatus && okBatch && okMt && okQ;
   });
   const paged = usePaged(filtered, 10);
-  const dangerBtn = 'text-red-400 hover:text-red-600 hover:underline';
 
   return (
     <div>
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">
-        模块实例追踪用于追踪每个模块 SN 的当前状态。模块 SN 如不进入 ERP，由平台维护，用于装配、测试、返修、换件追溯。
-        <span className="block mt-1 text-blue-500">状态口径：在库可用 / 已锁定生产计划 / 已装配 / 维修中 / 已报废 / 退货换货。</span>
+        模块实例追踪用于追踪每个模块 SN 的当前状态、装配设备与批次来源。模块 SN 如不进入 ERP，由平台维护，用于装配、测试、返修、换件追溯。
+        <span className="block mt-1 text-blue-500">状态口径：在库可用 / 已锁定生产计划 / 已装配 / 维修中 / 已报废 / 退货换货。已装配必有当前设备；在库可用 / 已锁定无绑定设备。</span>
       </div>
       <div className="bg-white rounded shadow-sm px-4 py-3 mb-4 flex flex-wrap gap-2 items-center">
         <label className="text-xs text-gray-500">实例状态</label>
@@ -252,16 +263,16 @@ function ModuleInstanceTab({ materials, devices, moduleTypes, batches = [], batc
           {['全部', '在库可用', '已锁定生产计划', '已装配', '维修中', '已报废', '退货换货'].map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索模块SN / 型号..." className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none w-52" />
-        {batchFilter && (
+        {batchIdFilter && (
           <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-full text-xs px-2.5 py-1">
-            来源批次：{batchFilter}
+            来源批次：{batchNoLabel}
             <button className="text-slate-400 hover:text-slate-700" onClick={onClearBatch}>✕</button>
           </span>
         )}
-        {categoryFilter && (
+        {moduleTypeFilter && (
           <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-full text-xs px-2.5 py-1">
-            模块类型：{categoryFilter}
-            <button className="text-slate-400 hover:text-slate-700" onClick={onClearCategory}>✕</button>
+            模块类型：{mtLabel}
+            <button className="text-slate-400 hover:text-slate-700" onClick={onClearModuleType}>✕</button>
           </span>
         )}
         <span className="ml-auto text-sm text-gray-400">共 {filtered.length} 个实例</span>
@@ -270,37 +281,40 @@ function ModuleInstanceTab({ materials, devices, moduleTypes, batches = [], batc
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
-            <tr>{['模块SN', '模块类型', '型号', '供应商', '来源批次', 'ERP采购单号', '当前状态', '锁定生产计划', '已装配设备SN', '当前所在设备', '最近更新', '操作'].map((h) => (
+            <tr>{['模块SN', '模块类型', '型号', '供应商', '来源批次', 'ERP采购单号', '当前状态', '锁定生产计划', '已装配设备SN', '当前所在设备', '操作'].map((h) => (
               <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
             ))}</tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {paged.pageItems.map((m) => {
-              const assembled = m.instState === '已装配';
-              const lockedPlan = lockedPlanOf(m);
+              const assembled = m.status === '已装配';
+              const canViewDevice = assembled && m.owner;
+              const canRepair = ['在库可用', '已装配'].includes(m.status);
+              const canScrap = ['维修中', '退货换货', '在库可用'].includes(m.status);
               return (
               <tr key={m.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5 font-mono text-xs text-gray-800 font-medium whitespace-nowrap">{m.sn}</td>
-                <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{typeName(m.category)}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{m.category}</span></td>
-                <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">{m.model || '—'}</td>
-                <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">{m.supplier || '—'}</td>
-                <td className="px-4 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{m.batchNo || '—'}</td>
-                <td className="px-4 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{erpOf(m.batchNo)}</td>
-                <td className="px-4 py-2.5"><Badge map={STATUS_BADGE} value={m.instState} /></td>
-                <td className="px-4 py-2.5 text-xs whitespace-nowrap">{lockedPlan ? <Link to={`/production-plans/${lockedPlan}`} className="text-indigo-600 hover:underline font-mono" onClick={(e) => e.stopPropagation()}>{lockedPlan}</Link> : <span className="text-gray-300">—</span>}</td>
-                <td className="px-4 py-2.5 font-mono text-xs whitespace-nowrap">{assembled && m.owner ? <Link to={`/devices/${m.owner.id}`} className="text-blue-600 hover:underline">{m.owner.sn}</Link> : <span className="text-gray-300">—</span>}</td>
-                <td className="px-4 py-2.5 text-gray-500 text-xs whitespace-nowrap">{assembled && m.owner ? m.owner.sn : '—'}</td>
-                <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{m.inspectionTime || '—'}</td>
+                <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{m.catName}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{m.category}</span></td>
+                <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">{m.model}</td>
+                <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">{m.supplier}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{m.batchNo}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{m.erp}</td>
+                <td className="px-4 py-2.5"><Badge map={STATUS_BADGE} value={m.status} /></td>
+                <td className="px-4 py-2.5 text-xs whitespace-nowrap">{m.lockedPlanId ? <Link to={`/production-plans/${m.lockedPlanId}`} className="text-indigo-600 hover:underline font-mono">{m.lockedPlanId}</Link> : <span className="text-gray-300">—</span>}</td>
+                <td className="px-4 py-2.5 font-mono text-xs whitespace-nowrap">{canViewDevice ? m.owner.sn : <span className="text-gray-300">—</span>}</td>
+                <td className="px-4 py-2.5 font-mono text-xs whitespace-nowrap">{canViewDevice ? <Link to={`/devices/${m.owner.id}`} className="text-blue-600 hover:underline">{m.owner.sn}</Link> : <span className="text-gray-300">—</span>}</td>
                 <td className="px-4 py-2.5 text-xs whitespace-nowrap">
                   <div className="flex items-center gap-x-3">
-                    {assembled && m.owner ? <Link to={`/devices/${m.owner.id}`} className="text-slate-600 hover:underline">查看设备</Link> : <span className="text-gray-300" title="该模块尚未装配到设备">查看设备</span>}
-                    {m.batchNo ? <button className="text-blue-600 hover:underline" onClick={() => onViewBatch(m.batchNo)}>查看批次</button> : <span className="text-gray-300">查看批次</span>}
+                    {canViewDevice ? <Link to={`/devices/${m.owner.id}`} className="text-slate-600 hover:underline">查看设备</Link> : <span className={gray} title="仅已装配（或曾装配）模块可查看设备">查看设备</span>}
+                    <button className="text-blue-600 hover:underline" onClick={() => onViewBatch(m.batchNo)}>查看批次</button>
+                    {canRepair ? <button className="text-amber-600 hover:underline" onClick={() => onMark(m.id, '维修中')}>标记维修</button> : <span className={gray}>标记维修</span>}
+                    {assembled ? <span className={gray} title="已装配模块请先走换件/拆卸流程">报废</span> : canScrap ? <button className="text-red-400 hover:text-red-600 hover:underline" onClick={() => onMark(m.id, '已报废')}>报废</button> : <span className={gray} title="当前状态不可直接报废">报废</span>}
                   </div>
                 </td>
               </tr>
               );
             })}
-            {filtered.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无模块实例</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">暂无模块实例</td></tr>}
           </tbody>
         </table>
         </div>
@@ -319,9 +333,24 @@ function batchStats(b) {
   return { pass, fail, used, avail, total: (b.items || []).length };
 }
 
+function batchStatusLabel(b) {
+  if (b.voided) return '已作废';
+  const items = b.items || [];
+  if (items.length && items.every((it) => ['已报废', '退货换货'].includes(it.status))) return '已停用';
+  const fail = items.some((it) => it.result === '不合格');
+  const pass = items.some((it) => ['合格', '特批使用'].includes(it.result));
+  if (fail && pass) return '部分合格';
+  if (fail) return '不合格';
+  return '合格';
+}
+
 function BatchDetailModal({ isOpen, batch, plan, onClose, onViewInstances }) {
   if (!batch) return null;
   const s = batchStats(batch);
+  const linked = !!plan;
+  const assembled = s.used;                 // 已装配（已占用）
+  const locked = linked ? s.avail : 0;      // 已关联生产计划 → 可用件被锁定到该计划
+  const available = linked ? 0 : s.avail;   // 未关联 → 自由可用
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`批次详情 · ${batch.batchNo}`} size="lg">
       <div className="space-y-4">
@@ -332,14 +361,18 @@ function BatchDetailModal({ isOpen, batch, plan, onClose, onViewInstances }) {
           <div><span className="text-gray-400 text-xs">供应商：</span><span className="text-gray-700">{batch.supplier || '—'}</span></div>
           <div><span className="text-gray-400 text-xs">ERP采购单号：</span><span className="font-mono text-gray-700">{batch.erpPurchaseOrderNo || '—'}</span></div>
           <div><span className="text-gray-400 text-xs">ERP到货通知单号：</span><span className="font-mono text-gray-700">{batch.erpArrivalNo || '—'}</span></div>
-          <div><span className="text-gray-400 text-xs">到货 / 合格 / 不合格：</span><span className="text-gray-700">{s.total} / {s.pass} / {s.fail}</span></div>
-          <div><span className="text-gray-400 text-xs">可用 / 已锁定：</span><span className="text-gray-700">{s.avail} / {s.used}</span></div>
-          <div><span className="text-gray-400 text-xs">检验时间：</span><span className="text-gray-700">{batch.inspectionTime || '—'}</span></div>
-          <div className="col-span-3"><span className="text-gray-400 text-xs">关联生产计划：</span><span className="text-gray-700">{plan ? (plan.name || plan.id) : '—'}</span></div>
+          <div><span className="text-gray-400 text-xs">到货数量：</span><span className="text-gray-700">{s.total}</span></div>
+          <div><span className="text-gray-400 text-xs">合格数量：</span><span className="text-green-700">{s.pass}</span></div>
+          <div><span className="text-gray-400 text-xs">不合格数量：</span><span className={s.fail > 0 ? 'text-red-600' : 'text-gray-700'}>{s.fail}</span></div>
+          <div><span className="text-gray-400 text-xs">可用数量：</span><span className="text-gray-700">{available}</span></div>
+          <div><span className="text-gray-400 text-xs">已锁定数量：</span><span className="text-gray-700">{locked}</span></div>
+          <div><span className="text-gray-400 text-xs">已装配数量：</span><span className="text-gray-700">{assembled}</span></div>
+          <div className="col-span-2"><span className="text-gray-400 text-xs">关联生产计划：</span><span className="text-gray-700">{plan ? (plan.name || plan.id) : '—'}</span></div>
+          <div><span className="text-gray-400 text-xs">当前状态：</span><span className="text-gray-700">{batchStatusLabel(batch)}</span></div>
         </div>
         <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">ERP 批次 / 出库 / 库存以 ERP 为准，此处为平台关联展示；模块 SN 明细请查看模块实例追踪。</div>
         <div className="flex justify-between">
-          <button onClick={() => { onViewInstances(batch.batchNo); onClose(); }} className="px-4 py-2 text-sm text-blue-600 border border-blue-300 rounded hover:bg-blue-50">查看模块实例</button>
+          <button onClick={() => { onViewInstances(batch.id); onClose(); }} className="px-4 py-2 text-sm text-blue-600 border border-blue-300 rounded hover:bg-blue-50">查看模块实例</button>
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">关闭</button>
         </div>
       </div>
@@ -375,7 +408,7 @@ function BatchInspectModal({ isOpen, batch, onClose, onSave }) {
   );
 }
 
-function BatchLinkPlanModal({ isOpen, batch, plans, onClose, onSave }) {
+function BatchLinkPlanModal({ isOpen, batch, plans, currentPlan, onClose, onSave }) {
   const s = batchStats(batch || {});
   const [form, setForm] = useState({ planId: '', qty: s.avail, note: '', trackOnly: true });
   if (!batch) return null;
@@ -383,6 +416,11 @@ function BatchLinkPlanModal({ isOpen, batch, plans, onClose, onSave }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="关联生产计划" size="lg">
       <form onSubmit={submit} className="space-y-4">
+        {currentPlan && (
+          <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-800">
+            该批次已关联生产计划「{currentPlan.name || currentPlan.id}」，此处可调整或追加关联。
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-4">
           <div><label className="block text-xs text-gray-600 mb-1">批次号</label><input className={`${M_INP} bg-gray-50`} readOnly value={batch.batchNo} /></div>
           <div><label className="block text-xs text-gray-600 mb-1">模块类型</label><input className={`${M_INP} bg-gray-50`} readOnly value={batch.category} /></div>
@@ -432,8 +470,11 @@ export default function Materials() {
   const [filterResult, setFilterResult] = useState('全部');
   const [filterItemStatus, setFilterItemStatus] = useState('全部');
   const [search, setSearch] = useState('');
-  const [instanceBatchFilter, setInstanceBatchFilter] = useState('');
-  const [instanceCategoryFilter, setInstanceCategoryFilter] = useState('');
+  const [instanceBatchId, setInstanceBatchId] = useState('');
+  const [instanceModuleTypeId, setInstanceModuleTypeId] = useState('');
+  const [instOverrides, setInstOverrides] = useState({}); // 模块实例会话内状态覆盖（标记维修 / 报废）
+  const markInstance = (id, status) => setInstOverrides((prev) => ({ ...prev, [id]: status }));
+  const moduleInstances = (MODULE_INSTANCES || []).map((mi) => (instOverrides[mi.id] ? { ...mi, status: instOverrides[mi.id], boundDeviceId: instOverrides[mi.id] === '已装配' ? mi.boundDeviceId : (mi.status === '已装配' ? mi.boundDeviceId : null) } : mi));
   const [batchModal, setBatchModal] = useState(null); // { type, batch }
   const openBatch = (type, batch) => setBatchModal({ type, batch });
   const closeBatch = () => setBatchModal(null);
@@ -456,8 +497,8 @@ export default function Materials() {
   const suppliers = ['全部', ...new Set(batches.map((b) => b.supplier).filter(Boolean))];
 
   // 跨 Tab 跳转：批次 → 实例（按来源批次筛选）、库存汇总 → 实例/批次（按模块类型筛选）。
-  const viewInstancesByBatch = (batchNo) => { setInstanceBatchFilter(batchNo); setInstanceCategoryFilter(''); setActiveTab('模块实例追踪'); };
-  const viewInstancesByCategory = (category) => { setInstanceCategoryFilter(category); setInstanceBatchFilter(''); setActiveTab('模块实例追踪'); };
+  const viewInstancesByBatchId = (batchId) => { setInstanceBatchId(batchId); setInstanceModuleTypeId(''); setActiveTab('模块实例追踪'); };
+  const viewInstancesByModuleType = (moduleTypeId) => { setInstanceModuleTypeId(moduleTypeId); setInstanceBatchId(''); setActiveTab('模块实例追踪'); };
   const viewBatchByNo = (batchNo) => { setSearch(batchNo); setFilterCategory('全部'); setActiveTab('模块批次管理'); };
   const viewBatchByCategory = (category) => { setSearch(''); setFilterCategory(category); setActiveTab('模块批次管理'); };
 
@@ -516,21 +557,22 @@ export default function Materials() {
       {activeTab === '模块库存汇总' && (
         <>
           <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">模块库存汇总按模块类型统计库存水位，用于判断生产齐套风险和模块库存不足风险。（这里只做库存聚合，不新增批次或实例；新增来料请在「模块批次管理」完成。）</div>
-          <ModuleInventoryTab materials={state.materials} moduleTypes={state.moduleTypes} deviceTypes={state.deviceTypes} onViewInstances={viewInstancesByCategory} onViewBatches={viewBatchByCategory} />
+          <ModuleInventoryTab moduleInstances={moduleInstances} moduleTypes={state.moduleTypes} deviceTypes={state.deviceTypes} batches={state.materialBatches} onViewInstances={viewInstancesByModuleType} onViewBatches={viewBatchByCategory} />
         </>
       )}
 
       {activeTab === '模块实例追踪' && (
         <ModuleInstanceTab
-          materials={state.materials}
+          moduleInstances={moduleInstances}
           devices={state.devices}
           moduleTypes={state.moduleTypes}
           batches={state.materialBatches}
-          batchFilter={instanceBatchFilter}
-          categoryFilter={instanceCategoryFilter}
-          onClearBatch={() => setInstanceBatchFilter('')}
-          onClearCategory={() => setInstanceCategoryFilter('')}
+          batchIdFilter={instanceBatchId}
+          moduleTypeFilter={instanceModuleTypeId}
+          onClearBatch={() => setInstanceBatchId('')}
+          onClearModuleType={() => setInstanceModuleTypeId('')}
           onViewBatch={viewBatchByNo}
+          onMark={markInstance}
         />
       )}
 
@@ -655,22 +697,35 @@ export default function Materials() {
                       <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{b.inspectionTime}</td>
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap">
                         {(() => {
-                          const used = b.items.some((it) => it.status === '已占用');       // 已被装配使用
-                          const linked = !!plan;                                            // 已关联生产计划
-                          const retired = !!b.voided || (b.items.length > 0 && b.items.every((it) => ['已报废', '退货换货'].includes(it.status))); // 已停用 / 已报废
+                          // 批次操作状态机（任务三 5 条规则）：
+                          //  1 未关联/未装配/未停用 → 全部可用
+                          //  2 已关联未装配        → 编辑(非关键)/录入/关联可用；停用作废置灰
+                          //  3 已装配使用          → 仅查看详情/查看实例；编辑/作废/录入/关联置灰
+                          //  4 检验不合格          → 不可关联(除非特批)；录入/停用作废/查看实例可用
+                          //  5 已停用/作废         → 仅查看详情/查看实例
+                          const items = b.items || [];
+                          const used = items.some((it) => it.status === '已占用');       // 已被装配使用
+                          const linked = !!plan;                                          // 已关联生产计划
+                          const retired = !!b.voided || (items.length > 0 && items.every((it) => ['已报废', '退货换货'].includes(it.status)));
+                          const hasFail = items.some((it) => it.result === '不合格');
+                          const hasSpecial = items.some((it) => it.result === '特批使用'); // 特批可用
+                          const inspectDisabled = retired || used;
+                          const linkDisabled = retired || used || (hasFail && !hasSpecial);
                           const editDisabled = retired || used;
                           const voidDisabled = retired || used || linked;
-                          const editTitle = retired ? '批次已停用/作废，仅可查看详情' : used ? '该批次已有模块装配使用，不允许编辑' : '';
-                          const voidTitle = retired ? '批次已停用/作废' : used ? '该批次已有模块装配使用，不允许作废' : linked ? '该批次已关联生产计划，请先解除关联' : '';
+                          const inspectTitle = retired ? '批次已停用/作废，不可录入检验' : used ? '该批次已装配使用，不可再录入检验' : '';
+                          const linkTitle = retired ? '批次已停用/作废，不可关联' : used ? '该批次已装配使用，不可再关联' : (hasFail && !hasSpecial) ? '批次存在不合格且无特批可用，不允许关联生产计划' : '';
+                          const editTitle = retired ? '批次已停用/作废，仅可查看详情' : used ? '该批次已有模块装配到整机，不允许修改关键字段' : '';
+                          const voidTitle = retired ? '批次已停用/作废' : used ? '该批次已有模块装配到整机，不允许作废' : linked ? '该批次已关联生产计划，请先解除关联或确认未使用' : '';
                           const op = (label, cls, onClick, dis, title) => dis
                             ? <span className="text-gray-300 cursor-not-allowed" title={title}>{label}</span>
                             : <button className={cls} onClick={onClick}>{label}</button>;
                           return (
                             <div className="flex items-center gap-x-3">
                               <button className="text-slate-600 hover:underline" onClick={() => openBatch('detail', b)}>查看详情</button>
-                              {op('录入检验结果', 'text-slate-600 hover:underline', () => openBatch('inspect', b), retired, '批次已停用/作废，不可录入检验')}
-                              {op('关联生产计划', 'text-emerald-600 hover:underline', () => openBatch('link', b), retired, '批次已停用/作废，不可关联')}
-                              {op('查看模块实例', 'text-blue-600 hover:underline', () => viewInstancesByBatch(b.batchNo), retired, '批次已停用/作废')}
+                              {op('录入检验结果', 'text-slate-600 hover:underline', () => openBatch('inspect', b), inspectDisabled, inspectTitle)}
+                              {op('关联生产计划', 'text-emerald-600 hover:underline', () => openBatch('link', b), linkDisabled, linkTitle)}
+                              <button className="text-blue-600 hover:underline" onClick={() => viewInstancesByBatchId(b.id)}>查看模块实例</button>
                               {op('编辑', 'text-slate-600 hover:underline', () => openBatch('edit', b), editDisabled, editTitle)}
                               {op('停用/作废', 'text-red-400 hover:text-red-600 hover:underline', () => openBatch('void', b), voidDisabled, voidTitle)}
                             </div>
@@ -692,9 +747,9 @@ export default function Materials() {
       )}
 
       <AddBatchModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleAdd} />
-      {batchModal?.type === 'detail' && <BatchDetailModal isOpen batch={batchModal.batch} plan={workflowProductionPlans.find((p) => p.id === batchModal.batch.planId || (p.materialBatchIds || []).includes(batchModal.batch.id))} onClose={closeBatch} onViewInstances={viewInstancesByBatch} />}
+      {batchModal?.type === 'detail' && <BatchDetailModal isOpen batch={batchModal.batch} plan={workflowProductionPlans.find((p) => p.id === batchModal.batch.planId || (p.materialBatchIds || []).includes(batchModal.batch.id))} onClose={closeBatch} onViewInstances={viewInstancesByBatchId} />}
       {batchModal?.type === 'inspect' && <BatchInspectModal isOpen batch={batchModal.batch} onClose={closeBatch} onSave={saveBatch} />}
-      {batchModal?.type === 'link' && <BatchLinkPlanModal isOpen batch={batchModal.batch} plans={workflowProductionPlans} onClose={closeBatch} onSave={linkBatchPlan} />}
+      {batchModal?.type === 'link' && <BatchLinkPlanModal isOpen batch={batchModal.batch} plans={workflowProductionPlans} currentPlan={workflowProductionPlans.find((p) => p.id === batchModal.batch.planId || (p.materialBatchIds || []).includes(batchModal.batch.id))} onClose={closeBatch} onSave={linkBatchPlan} />}
       {batchModal?.type === 'edit' && <BatchEditModal isOpen batch={batchModal.batch} onClose={closeBatch} onSave={saveBatch} />}
       {batchModal?.type === 'void' && (
         <Modal isOpen onClose={closeBatch} title="停用 / 作废批次">

@@ -159,10 +159,51 @@ devices.forEach((d) => {
   if (l === '在线运营' && d.status !== '在线运营') err('在线运营包含非在线设备', d.id, d.status, `devices.${d.id}`, '生命周期口径冲突');
 });
 
+// ---- 21. 告警 deviceSN 必须与设备一致；workOrderId 必须存在且同一设备 ----
+alerts.forEach((a) => {
+  const d = deviceById.get(a.deviceId);
+  if (d && a.deviceSN && a.deviceSN !== d.sn) err('告警设备SN与设备不一致', a.id, a.deviceSN, `alerts.${a.id}（设备 ${d.sn}）`, '修正 deviceSN');
+  if (a.workOrderId) {
+    const wo = [...workOrders, ...deliveryWorkOrders].find((w) => w.id === a.workOrderId);
+    if (!wo) err('告警关联工单不存在', a.id, a.status, `alerts.${a.id}.workOrderId=${a.workOrderId}`, '修正 workOrderId 或置空');
+    else if (wo.deviceId !== a.deviceId) err('告警与关联工单设备不一致', a.id, a.deviceSN, `alerts.${a.id}↔${a.workOrderId}`, '工单与告警应引用同一设备');
+  }
+});
+
+// ---- 22. 已装配 moduleInstance 必须能取到设备SN；在库可用/已锁定不得绑定设备 ----
+moduleInstances.forEach((mi) => {
+  if (mi.status === '已装配') {
+    const d = deviceById.get(mi.boundDeviceId);
+    if (!d || !d.sn) err('已装配模块缺少设备SN', mi.id, mi.status, `moduleInstances.${mi.id}`, '已装配模块必须绑定含 SN 的设备');
+  }
+  if (['在库可用', '已锁定生产计划'].includes(mi.status) && mi.boundDeviceId) err('非装配模块绑定了设备', mi.id, mi.status, `moduleInstances.${mi.id}.boundDeviceId=${mi.boundDeviceId}`, '在库可用/已锁定模块不得绑定设备');
+});
+
+// ---- 23. 已锁定 moduleInstance 必须有存在的锁定生产计划 ----
+moduleInstances.filter((mi) => mi.status === '已锁定生产计划').forEach((mi) => {
+  if (!mi.lockedPlanId) err('已锁定模块缺少生产计划', mi.id, mi.status, `moduleInstances.${mi.id}`, '补充 lockedPlanId');
+  else if (!prodPlanIds.has(mi.lockedPlanId)) err('已锁定模块生产计划不存在', mi.id, mi.status, `moduleInstances.${mi.id}.lockedPlanId=${mi.lockedPlanId}`, '修正 lockedPlanId');
+});
+
+// ---- 24. 已装配使用的批次（items 含已占用）不得作废 ----
+materialBatches.forEach((b) => {
+  const used = (b.items || []).some((it) => it.status === '已占用');
+  if (used && b.voided) err('已装配使用批次被作废', b.id, '已作废', `materialBatches.${b.id}`, '已装配使用批次不得作废');
+});
+
+// ---- 25. 模块实例状态词表合法（保证库存汇总可完整聚合）----
+const KNOWN_MI = new Set(['在库可用', '已锁定生产计划', '已装配', '维修中', '已报废', '退货换货']);
+moduleInstances.forEach((mi) => { if (!KNOWN_MI.has(mi.status)) err('模块实例状态非法', mi.id, mi.status, `moduleInstances.${mi.id}`, `状态须为 ${[...KNOWN_MI].join('/')}`); });
+
 // ---- 20. 未关闭工单/告警/质量问题统计（一致性打印，供看板核对）----
 const openWO = [...deliveryWorkOrders, ...workOrders].filter((w) => !['已关闭', '已作废'].includes(w.status)).length;
 const openAlerts = alerts.filter((a) => !['已解决', '已关闭'].includes(a.status)).length;
 const openQI = qualityIssues.filter((q) => q.status !== '已关闭').length;
+// 设备台账健康告警数（未关闭）按 deviceId 聚合，验证与 alerts 一致
+const unclosedByDevice = new Map();
+alerts.filter((a) => !['已解决', '已关闭'].includes(a.status)).forEach((a) => unclosedByDevice.set(a.deviceId, (unclosedByDevice.get(a.deviceId) || 0) + 1));
+const onlineDevs = devices.filter((d) => d.status === '在线运营');
+const onlineWithAlert = onlineDevs.filter((d) => (unclosedByDevice.get(d.id) || 0) > 0).length;
 
 // ============ 汇总输出 ============
 const lifeCount = (s) => devices.filter((d) => deviceLifecycleStatus(d) === s).length;
@@ -176,6 +217,7 @@ console.log(`模块批次 materialBatches  : ${materialBatches.length}`);
 console.log(`模块实例 moduleInstances  : ${moduleInstances.length}`);
 console.log(`工站测试 testRecords      : ${testRecords.length}`);
 console.log(`健康告警 alerts           : ${alerts.length}（未关闭 ${openAlerts}）`);
+console.log(`在线运营设备 有未关闭告警  : ${onlineWithAlert} / ${onlineDevs.length}（其余 ${onlineDevs.length - onlineWithAlert} 台无告警）`);
 console.log(`售后工单 workOrders       : ${workOrders.length}`);
 console.log(`交付工单 deliveryWorkOrders: ${deliveryWorkOrders.length}`);
 console.log(`生产工单 productionWO     : ${productionWorkOrders.length}`);

@@ -32,19 +32,34 @@ const DEVICE_SUB_TABS = [
   { key: 'alerts', label: '健康告警' },
 ];
 
-/* Alert detail panel with 4 fixed sections */
-function AlertDetail({ alert, state, dispatch, currentRole, currentUser }) {
-  const { devices, projects, workOrders } = state;
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
+/* 健康告警详情：右侧抽屉（与工单中心 / 质量问题台账体验一致，避免行内展开撑高列表） */
+function DrawerSection({ title, children }) {
+  return (
+    <div>
+      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{title}</div>
+      {children}
+    </div>
+  );
+}
+function AlertDrawer({ alert, state, dispatch, currentRole, currentUser, onClose }) {
+  const { devices, projects, workOrders, deviceTypes = [], locations = [] } = state;
+  const [showUpdate, setShowUpdate] = useState(false);
   const [notes, setNotes] = useState('');
 
   const device = devices.find(d => d.id === alert.deviceId);
+  const deviceType = device ? deviceTypes.find(t => t.id === device.deviceTypeId) : null;
   const project = projects.find(p => p.id === alert.projectId);
+  const location = device?.locationId ? locations.find(l => l.id === device.locationId) : null;
   const linkedWO = alert.workOrderId ? workOrders.find(w => w.id === alert.workOrderId) : null;
+  const online = device ? (device.online === true || device.status === '在线运营') : false;
 
   const now = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
-  const canUpdate = ['运维工程师', '维修工程师', '厂长', '管理员'].includes(currentRole) && alert.severity === '轻微' && ['待处理', '处理中'].includes(alert.status);
-  const canGenerateWO = ['运维工程师', '维修工程师', '厂长', '管理员'].includes(currentRole) && alert.severity === '严重' && alert.status === '待处理' && !alert.workOrderId;
+  const roleOK = ['运维工程师', '维修工程师', '厂长', '管理员'].includes(currentRole);
+  const closed = ['已解决', '已关闭'].includes(alert.status);
+  const canUpdate = roleOK && alert.severity === '轻微' && ['待处理', '处理中'].includes(alert.status);
+  const canGenerateWO = roleOK && alert.severity === '严重' && !alert.workOrderId && !closed;
+  const canGenerateQI = roleOK && !closed && device?.status === '在线运营';
+  const canClose = roleOK && !closed;
   const nextStatus = alert.status === '待处理' ? '处理中' : alert.status === '处理中' ? '已解决' : null;
 
   const handleUpdateStatus = () => {
@@ -52,134 +67,150 @@ function AlertDetail({ alert, state, dispatch, currentRole, currentUser }) {
     const t = now();
     const newLog = { operator: currentUser, time: t, fromStatus: alert.status, toStatus: nextStatus, notes };
     dispatch({ type: 'UPDATE_ALERT', payload: { id: alert.id, status: nextStatus, processLogs: [...(alert.processLogs || []), newLog] } });
-    setNotes('');
-    setShowUpdateModal(false);
+    setNotes(''); setShowUpdate(false);
   };
-
   const handleGenerateWorkOrder = () => {
     const t = now();
     const woId = `WO-${Date.now()}`;
-    dispatch({ type: 'ADD_WORK_ORDER', payload: { id: woId, deviceId: alert.deviceId, deviceSN: alert.deviceSN, projectId: alert.projectId, description: alert.description, severity: '高', status: '待处理', assignedTo: currentUser, createdAt: t, updatedAt: t, closedAt: null, repairActions: '', replacedModules: [], recheckResult: null, notes: `来自告警 #${alert.id}`, sourceAlertId: alert.id } });
+    dispatch({ type: 'ADD_WORK_ORDER', payload: { id: woId, woClass: '其他问题工单', involvesReplacement: false, deviceId: alert.deviceId, deviceSN: alert.deviceSN, projectId: alert.projectId, description: alert.description, severity: '高', status: '待处理', assignedTo: currentUser, createdAt: t, updatedAt: t, closedAt: null, repairActions: '', replacedModules: [], recheckResult: null, notes: `来自告警 ${alert.id}`, sourceAlertId: alert.id } });
     const newLog = { operator: currentUser, time: t, fromStatus: alert.status, toStatus: '已生成工单', notes: `严重告警，已生成维修工单 ${woId}` };
     dispatch({ type: 'UPDATE_ALERT', payload: { id: alert.id, status: '已生成工单', workOrderId: woId, processLogs: [...(alert.processLogs || []), newLog] } });
+    onClose();
+  };
+  const handleGenerateQualityIssue = () => {
+    const t = now();
+    const qiId = `QI-${Date.now()}`;
+    dispatch({ type: 'ADD_QUALITY_ISSUE', payload: { id: qiId, deviceId: alert.deviceId, deviceSN: alert.deviceSN, deviceName: deviceType?.name || '', locationId: device?.locationId || null, projectId: alert.projectId, issueDesc: alert.description, reporterId: state.currentUserId, reporterName: currentUser, reportTime: t, status: '待处理', source: '手动录入', sourceStage: '在线运营', issueType: '功能异常', severity: alert.severity === '严重' ? '高' : '中', owner: currentUser, linkedWorkOrder: false, sourceAlertId: alert.id, processLogs: [] } });
+    dispatch({ type: 'UPDATE_ALERT', payload: { id: alert.id, processLogs: [...(alert.processLogs || []), { operator: currentUser, time: t, fromStatus: alert.status, toStatus: alert.status, notes: `已生成质量问题 ${qiId}` }] } });
+    onClose();
+  };
+  const handleCloseAlert = () => {
+    const t = now();
+    dispatch({ type: 'UPDATE_ALERT', payload: { id: alert.id, status: '已关闭', processLogs: [...(alert.processLogs || []), { operator: currentUser, time: t, fromStatus: alert.status, toStatus: '已关闭', notes: '手动关闭告警' }] } });
+    onClose();
   };
 
   const inp = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500';
+  const field = (label, val) => (
+    <div><span className="text-gray-400 text-xs">{label}：</span><span className="text-gray-700">{val ?? '—'}</span></div>
+  );
 
   return (
-    <div className="px-6 py-5 space-y-5 bg-slate-50 border-b border-slate-200">
-      {/* Section 1: 告警摘要 */}
-      <div>
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">告警摘要</div>
-        <div className="flex items-start gap-3">
-          <span className={`w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0 ${alert.severity === '严重' ? 'bg-red-500' : 'bg-amber-400'}`} />
-          <div>
-            <div className="text-sm font-semibold text-gray-800 mb-1">{alert.description}</div>
-            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-500">
-              <span>告警时间：{alert.alertTime}</span>
-              <span>来源：{alert.source}</span>
-            </div>
-            <div className="flex gap-2 mt-2">
-              <StatusBadge status={alert.severity} />
-              <StatusBadge status={alert.status} />
-            </div>
-          </div>
+    <div className="fixed inset-0 z-40">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+          <div className="text-sm font-semibold text-gray-800">健康告警详情 · {alert.id}</div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-lg leading-none">✕</button>
         </div>
-      </div>
-
-      {/* Section 2: 关联设备 */}
-      <div>
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">关联设备</div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          {device && <span>设备：<Link to={`/devices/${device.id}`} className="text-blue-600 hover:underline">{device.sn}</Link></span>}
-          {project && <span>项目：<Link to={`/projects/${project.id}`} className="text-blue-600 hover:underline">{project.name}</Link></span>}
-          {!device && !project && <span className="text-gray-400">—</span>}
-        </div>
-        {alert.workOrderId && (
-          <div className="flex items-center gap-2 text-sm mt-2">
-            <span className="text-gray-500">关联工单：</span>
-            <span className="inline-flex items-center gap-1 bg-orange-50 text-orange-600 border border-orange-200 text-xs px-2 py-0.5 rounded-full font-medium">
-              {alert.workOrderId}
-              {linkedWO && <span className="ml-1 text-gray-400">({linkedWO.status})</span>}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Section 3: 飞书通知 */}
-      <div>
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">飞书通知</div>
-        {alert.notifiedUsers && alert.notifiedUsers.length > 0 ? (
-          <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
-            <div className="text-xs font-medium text-blue-700 mb-2">飞书通知已发送</div>
-            <div className="flex flex-wrap gap-2">
-              {alert.notifiedUsers.map((u, i) => (
-                <div key={i} className="flex items-center gap-1.5 bg-white border border-blue-200 rounded-full px-2 py-0.5">
-                  <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">{u.name[0]}</div>
-                  <span className="text-xs text-gray-700 font-medium">{u.name}</span>
-                  <span className="text-xs text-gray-400">（{u.role}）</span>
-                </div>
-              ))}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+          {/* 告警摘要 */}
+          <DrawerSection title="告警摘要">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {field('告警ID', alert.id)}
+              {field('告警时间', alert.alertTime)}
+              {field('告警类型', alert.alertType)}
+              {field('来源', alert.source)}
+              <div><span className="text-gray-400 text-xs">严重程度：</span><StatusBadge status={alert.severity} /></div>
+              <div><span className="text-gray-400 text-xs">当前状态：</span><StatusBadge status={alert.status} /></div>
             </div>
-          </div>
-        ) : (
-          <span className="text-sm text-gray-400">—</span>
-        )}
-      </div>
+            <div className="mt-2 text-sm text-gray-800">{alert.description}</div>
+          </DrawerSection>
 
-      {/* Section 4: 处理记录 */}
-      <div>
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">处理记录</div>
-        {alert.processLogs && alert.processLogs.length > 0 ? (
-          <div className="space-y-2">
-            {alert.processLogs.map((log, i) => (
-              <div key={i} className="flex gap-3 text-xs">
-                <div className="flex flex-col items-center">
-                  <div className="w-2 h-2 rounded-full bg-blue-400 mt-0.5 flex-shrink-0" />
-                  {i < alert.processLogs.length - 1 && <div className="w-0.5 flex-1 bg-gray-200 mt-1" />}
+          {/* 关联设备 */}
+          <DrawerSection title="关联设备">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div><span className="text-gray-400 text-xs">设备SN：</span>{device ? <Link to={`/devices/${device.id}`} className="text-blue-600 hover:underline">{device.sn}</Link> : (alert.deviceSN || '—')}</div>
+              {field('设备类型', deviceType?.name)}
+              <div><span className="text-gray-400 text-xs">所属项目：</span>{project ? <Link to={`/projects/${project.id}`} className="text-blue-600 hover:underline">{project.name}</Link> : '—'}</div>
+              {field('所属点位', location?.name)}
+              <div><span className="text-gray-400 text-xs">是否在线：</span>{online ? <span className="text-emerald-600 font-medium">在线</span> : <span className="text-gray-400">离线</span>}</div>
+            </div>
+            {alert.workOrderId && (
+              <div className="flex items-center gap-2 text-sm mt-2">
+                <span className="text-gray-500">关联工单：</span>
+                <span className="inline-flex items-center gap-1 bg-orange-50 text-orange-600 border border-orange-200 text-xs px-2 py-0.5 rounded-full font-medium">
+                  {alert.workOrderId}{linkedWO && <span className="ml-1 text-gray-400">({linkedWO.status})</span>}
+                </span>
+              </div>
+            )}
+          </DrawerSection>
+
+          {/* 飞书通知 */}
+          <DrawerSection title="飞书通知记录">
+            {alert.notifiedUsers && alert.notifiedUsers.length > 0 ? (
+              <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
+                <div className="flex items-center justify-between text-xs text-blue-700 mb-2">
+                  <span className="font-medium">飞书通知{alert.notifyStatus || '已送达'}</span>
+                  <span className="text-blue-400">{alert.notifiedAt || alert.alertTime}</span>
                 </div>
-                <div className="pb-2">
-                  <div className="flex items-center gap-2 text-gray-500 mb-0.5">
-                    <span>{log.time}</span>
-                    <span className="font-medium text-gray-700">{log.operator}</span>
-                    <span>·</span>
-                    <StatusBadge status={log.fromStatus} />
-                    <span className="text-gray-400">→</span>
-                    <StatusBadge status={log.toStatus} />
-                  </div>
-                  <div className="text-gray-700">{log.notes}</div>
+                <div className="flex flex-wrap gap-2">
+                  {alert.notifiedUsers.map((u, i) => (
+                    <div key={i} className="flex items-center gap-1.5 bg-white border border-blue-200 rounded-full px-2 py-0.5">
+                      <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">{u.name[0]}</div>
+                      <span className="text-xs text-gray-700 font-medium">{u.name}</span>
+                      <span className="text-xs text-gray-400">（{u.role}）</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <span className="text-sm text-gray-400">暂无处理记录</span>
-        )}
+            ) : <span className="text-sm text-gray-400">—</span>}
+          </DrawerSection>
 
-        {/* Action buttons */}
-        {(canUpdate || canGenerateWO) && (
-          <div className="flex gap-2 mt-3">
-            {canUpdate && !showUpdateModal && (
-              <button onClick={() => setShowUpdateModal(true)} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
-                更新状态 → {nextStatus}
-              </button>
-            )}
-            {canGenerateWO && (
-              <button onClick={handleGenerateWorkOrder} className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700">
-                生成维修工单
-              </button>
-            )}
-          </div>
-        )}
-        {showUpdateModal && canUpdate && (
-          <div className="mt-3 space-y-2">
-            <textarea rows={2} className={inp} value={notes} onChange={e => setNotes(e.target.value)} placeholder="请填写处理备注 *" />
-            <div className="flex gap-2">
-              <button onClick={handleUpdateStatus} disabled={!notes.trim()} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40">确认更新</button>
-              <button onClick={() => setShowUpdateModal(false)} className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          {/* 处理记录 */}
+          <DrawerSection title="处理记录">
+            {alert.processLogs && alert.processLogs.length > 0 ? (
+              <div className="space-y-2">
+                {alert.processLogs.map((log, i) => (
+                  <div key={i} className="flex gap-3 text-xs">
+                    <div className="flex flex-col items-center">
+                      <div className="w-2 h-2 rounded-full bg-blue-400 mt-0.5 flex-shrink-0" />
+                      {i < alert.processLogs.length - 1 && <div className="w-0.5 flex-1 bg-gray-200 mt-1" />}
+                    </div>
+                    <div className="pb-2">
+                      <div className="flex items-center gap-2 text-gray-500 mb-0.5 flex-wrap">
+                        <span>{log.time}</span>
+                        <span className="font-medium text-gray-700">{log.operator}</span>
+                        <span>·</span>
+                        <StatusBadge status={log.fromStatus} />
+                        <span className="text-gray-400">→</span>
+                        <StatusBadge status={log.toStatus} />
+                      </div>
+                      <div className="text-gray-700">{log.notes}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : <span className="text-sm text-gray-400">暂无处理记录</span>}
+          </DrawerSection>
+        </div>
+
+        {/* 操作区 */}
+        <div className="border-t border-gray-200 px-5 py-3 space-y-2 bg-gray-50">
+          {showUpdate && canUpdate && (
+            <div className="space-y-2">
+              <textarea rows={2} className={inp} value={notes} onChange={e => setNotes(e.target.value)} placeholder="请填写处理备注 *" />
+              <div className="flex gap-2">
+                <button onClick={handleUpdateStatus} disabled={!notes.trim()} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40">确认更新 → {nextStatus}</button>
+                <button onClick={() => setShowUpdate(false)} className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+              </div>
             </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {canUpdate && !showUpdate
+              ? <button onClick={() => setShowUpdate(true)} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">更新状态</button>
+              : !showUpdate && <span className="px-3 py-1.5 text-sm text-gray-300 border border-gray-200 rounded cursor-not-allowed" title={closed ? '告警已关闭' : '仅轻微告警可更新状态'}>更新状态</span>}
+            {canGenerateWO
+              ? <button onClick={handleGenerateWorkOrder} className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700">生成工单</button>
+              : <span className="px-3 py-1.5 text-sm text-gray-300 border border-gray-200 rounded cursor-not-allowed" title={alert.workOrderId ? `已生成工单 ${alert.workOrderId}` : closed ? '告警已关闭' : '仅严重告警可生成工单'}>生成工单</span>}
+            {canGenerateQI
+              ? <button onClick={handleGenerateQualityIssue} className="px-3 py-1.5 text-sm border border-slate-300 text-slate-700 rounded hover:bg-slate-100">生成质量问题</button>
+              : <span className="px-3 py-1.5 text-sm text-gray-300 border border-gray-200 rounded cursor-not-allowed" title={closed ? '告警已关闭' : '仅在线运营设备可生成质量问题'}>生成质量问题</span>}
+            {canClose
+              ? <button onClick={handleCloseAlert} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded hover:bg-gray-100">关闭告警</button>
+              : <span className="px-3 py-1.5 text-sm text-gray-300 border border-gray-200 rounded cursor-not-allowed" title="告警已关闭">关闭告警</span>}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -251,7 +282,7 @@ function AlertsSubTab({ state, dispatch, currentRole, initialSN = '', onClearSN 
   const [filterSeverity, setFilterSeverity] = useState('全部');
   const [filterStatus, setFilterStatus] = useState('全部');
   const [snQuery, setSnQuery] = useState(initialSN);
-  const [expandedId, setExpandedId] = useState(null);
+  const [drawerAlertId, setDrawerAlertId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   // 从设备台账「查看告警」跳转时带入设备 SN，自动过滤到该设备的告警。
   useEffect(() => { setSnQuery(initialSN); }, [initialSN]);
@@ -274,8 +305,10 @@ function AlertsSubTab({ state, dispatch, currentRole, initialSN = '', onClearSN 
   const clearSN = () => { setSnQuery(''); onClearSN && onClearSN(); };
 
   const paged = usePaged(filtered, 10);
-  const pendingCount = alerts.filter(a => a.status === '待处理').length;
-  const severeCount = alerts.filter(a => a.severity === '严重' && a.status === '待处理').length;
+  // 未关闭口径：与设备台账「健康告警数」及 Tab 徽标统一（!已解决/已关闭）。
+  const isOpenAlert = (a) => !['已解决', '已关闭'].includes(a.status);
+  const unclosedCount = alerts.filter(isOpenAlert).length;
+  const severeCount = alerts.filter(a => a.severity === '严重' && isOpenAlert(a)).length;
 
   const handleSave = (form) => {
     const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -291,8 +324,8 @@ function AlertsSubTab({ state, dispatch, currentRole, initialSN = '', onClearSN 
       </div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-3 text-sm">
-          {severeCount > 0 && <span className="text-red-600 font-medium">{severeCount} 条严重告警待处理</span>}
-          {pendingCount > 0 && <span className="text-amber-600">{pendingCount} 条告警待处理</span>}
+          {severeCount > 0 && <span className="text-red-600 font-medium">{severeCount} 条严重告警未关闭</span>}
+          <span className="text-amber-600">共 {unclosedCount} 条未关闭告警</span>
         </div>
         {canAdd && (
           <button onClick={() => setShowModal(true)} className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800">+ 新增告警</button>
@@ -321,7 +354,7 @@ function AlertsSubTab({ state, dispatch, currentRole, initialSN = '', onClearSN 
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs text-gray-500">状态：</span>
-          {['全部', '待处理', '处理中', '已解决', '已生成工单'].map(opt => (
+          {['全部', '待处理', '处理中', '工单处理中', '已生成工单', '已解决', '已关闭'].map(opt => (
             <button key={opt} onClick={() => setFilterStatus(opt)}
               className={`px-2.5 py-0.5 text-xs rounded-full border font-medium ${filterStatus === opt ? 'bg-slate-700 text-white border-slate-700' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>{opt}</button>
           ))}
@@ -339,46 +372,27 @@ function AlertsSubTab({ state, dispatch, currentRole, initialSN = '', onClearSN 
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-gray-100">
             {paged.pageItems.map(a => {
-              const isExpanded = expandedId === a.id;
-              const isUrgent = a.severity === '严重' && a.status === '待处理';
-              const cellCls = `px-4 py-2.5 border-t border-gray-100 cursor-pointer ${isUrgent ? 'bg-red-50' : 'hover:bg-gray-50'} transition-colors`;
+              const isUrgent = a.severity === '严重' && isOpenAlert(a);
               return (
-                <tr key={a.id} onClick={() => setExpandedId(isExpanded ? null : a.id)}>
-                  {isExpanded ? (
-                    <td colSpan={7} className="p-0">
-                      <div className={`border-t border-gray-100 cursor-pointer ${isUrgent ? 'bg-red-50' : 'bg-white'} px-4 py-2.5 flex items-center gap-3`} onClick={() => setExpandedId(null)}>
-                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${a.severity === '严重' ? 'bg-red-500' : 'bg-amber-400'}`} />
-                        <span className="text-xs text-gray-400">{a.alertTime}</span>
-                        <span className="font-mono text-xs font-medium text-gray-800">{a.deviceSN}</span>
-                        <span className="flex-1 text-gray-600 text-xs truncate">{a.description}</span>
-                        <StatusBadge status={a.severity} />
-                        <StatusBadge status={a.status} />
-                        <span className="text-gray-400 text-xs">▲ 收起</span>
-                      </div>
-                      <AlertDetail alert={a} state={state} dispatch={dispatch} currentRole={currentRole} currentUser={currentUser} />
-                    </td>
-                  ) : (
-                    <>
-                      <td className={`${cellCls} text-gray-400 text-xs`}>{a.alertTime}</td>
-                      <td className={cellCls}>
-                        <Link to={`/devices/${a.deviceId}`} className="font-mono text-xs text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{a.deviceSN}</Link>
-                      </td>
-                      <td className={`${cellCls} text-xs`}>
-                        {a.projectId ? <Link to={`/projects/${a.projectId}`} className="text-slate-700 hover:underline" onClick={e => e.stopPropagation()}>{getProjectName(a.projectId)}</Link> : <span className="text-gray-400">—</span>}
-                      </td>
-                      <td className={cellCls}><StatusBadge status={a.severity} /></td>
-                      <td className={`${cellCls} text-gray-700 max-w-xs`}>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${a.severity === '严重' ? 'bg-red-500' : 'bg-amber-400'}`} />
-                          <span className="truncate text-xs">{a.description}</span>
-                        </div>
-                      </td>
-                      <td className={cellCls}><StatusBadge status={a.status} /></td>
-                      <td className={`${cellCls} text-gray-400 text-xs`}>▼ 展开</td>
-                    </>
-                  )}
+                <tr key={a.id} className={`cursor-pointer ${isUrgent ? 'bg-red-50' : 'hover:bg-gray-50'} transition-colors`} onClick={() => setDrawerAlertId(a.id)}>
+                  <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{a.alertTime}</td>
+                  <td className="px-4 py-2.5">
+                    <Link to={`/devices/${a.deviceId}`} className="font-mono text-xs text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{a.deviceSN}</Link>
+                  </td>
+                  <td className="px-4 py-2.5 text-xs">
+                    {a.projectId ? <Link to={`/projects/${a.projectId}`} className="text-slate-700 hover:underline" onClick={e => e.stopPropagation()}>{getProjectName(a.projectId)}</Link> : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-4 py-2.5"><StatusBadge status={a.severity} /></td>
+                  <td className="px-4 py-2.5 text-gray-700 max-w-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${a.severity === '严重' ? 'bg-red-500' : 'bg-amber-400'}`} />
+                      <span className="truncate text-xs">{a.description}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5"><StatusBadge status={a.status} /></td>
+                  <td className="px-4 py-2.5 text-blue-600 text-xs whitespace-nowrap">查看详情 →</td>
                 </tr>
               );
             })}
@@ -390,6 +404,10 @@ function AlertsSubTab({ state, dispatch, currentRole, initialSN = '', onClearSN 
       </div>
 
       {showModal && <AddAlertModal isOpen={showModal} onClose={() => setShowModal(false)} onSave={handleSave} devices={onlineDevices} projects={projects} locations={locations} />}
+      {drawerAlertId && (() => {
+        const a = alerts.find(x => x.id === drawerAlertId);
+        return a ? <AlertDrawer alert={a} state={state} dispatch={dispatch} currentRole={currentRole} currentUser={currentUser} onClose={() => setDrawerAlertId(null)} /> : null;
+      })()}
     </div>
   );
 }
@@ -430,7 +448,7 @@ function AllDevicesSubTab({ state, goAlerts }) {
       && (!f.delivPlan || d.dp?.id === f.delivPlan)
       && (!f.from || (d.updatedAt || '') >= f.from)
       && (!f.to || (d.updatedAt || '') <= `${f.to} 23:59`);
-  });
+  }).sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || '')); // 最近更新在前：首页即可看到在线/交付/生产多种状态设备
   const paged = usePaged(filtered, 10);
   const sel = 'border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-600 focus:outline-none';
 
@@ -496,9 +514,9 @@ function AllDevicesSubTab({ state, goAlerts }) {
                   <td className="px-3 py-2 text-xs whitespace-nowrap">
                     <div className="flex items-center gap-x-3">
                       <Link to={`/devices/${d.id}`} className="text-slate-600 hover:underline">查看详情</Link>
-                      {alerts.some(a => a.deviceId === d.id)
+                      {d.alertCount > 0
                         ? <button className="text-blue-600 hover:underline" onClick={() => goAlerts && goAlerts(d.sn)}>查看告警</button>
-                        : <span className="text-gray-300" title="该设备暂无健康告警">无告警</span>}
+                        : <span className="text-gray-300" title="该设备暂无未关闭健康告警">无告警</span>}
                       {project && <Link to={`/projects/${project.id}`} className="text-slate-600 hover:underline">查看项目</Link>}
                       {d.dp && <Link to={`/delivery-plans/${d.dp.id}`} className="text-emerald-600 hover:underline">查看交付</Link>}
                     </div>
@@ -739,7 +757,7 @@ function DevicesTab() {
   const subtab = searchParams.get('subtab') || 'all';
   const activeSubTab = DEVICE_SUB_TABS.some(t => t.key === subtab) ? subtab : 'all';
 
-  const pendingAlerts = (state.alerts || []).filter(a => a.status === '待处理').length;
+  const pendingAlerts = (state.alerts || []).filter(a => !['已解决', '已关闭'].includes(a.status)).length;
 
   const setSubTab = (key, sn) => {
     const next = new URLSearchParams(searchParams);
