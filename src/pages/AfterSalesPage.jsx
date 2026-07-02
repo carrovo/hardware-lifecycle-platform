@@ -921,6 +921,11 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
                 const isExpanded = expandedId === wo.id;
                 const isVoided = wo.status === '已作废';
                 const closed = ['已关闭', '已作废'].includes(wo.status);
+                const isSwap = wo._class === '换件工单';
+                const needType = isSwap ? (wo.needReplaceModuleType || wo.needModuleType || '待确认') : '不涉及';
+                const oldSN = isSwap ? (wo.oldModuleSN || '待确认') : '不涉及';
+                const newSN = isSwap ? (wo.newModuleSN || '待选择') : '不涉及';
+                const swapCls = isSwap ? 'text-gray-600' : 'text-gray-300';
                 return (
                   <React.Fragment key={wo.id}>
                     <tr className={`hover:bg-blue-50 ${isExpanded ? 'bg-slate-50' : ''} ${isVoided ? 'opacity-50' : ''}`}>
@@ -929,11 +934,11 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap"><StatusBadge status={wo._stage} /></td>
                       <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{getProjectName(wo.projectId)}</td>
                       <td className="px-3 py-2.5 font-mono text-xs text-gray-800 font-medium whitespace-nowrap">{wo.deviceSN}</td>
-                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">{wo._class === '换件工单' ? <span className="text-orange-600 font-medium">是</span> : <span className="text-gray-400">否</span>}</td>
-                      <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{wo.needModuleType || '—'}</td>
-                      <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{wo.oldModuleSN || '—'}</td>
-                      <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{wo.newModuleSN || '—'}</td>
-                      <td className="px-3 py-2.5 text-gray-700 max-w-[180px]"><div className="truncate">{wo.description}</div></td>
+                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">{isSwap ? <span className="text-orange-600 font-medium">是</span> : <span className="text-gray-400">否</span>}</td>
+                      <td className={`px-3 py-2.5 text-xs whitespace-nowrap ${swapCls}`}>{needType}</td>
+                      <td className={`px-3 py-2.5 font-mono text-xs whitespace-nowrap ${isSwap ? 'text-gray-500' : 'text-gray-300'}`}>{oldSN}</td>
+                      <td className={`px-3 py-2.5 font-mono text-xs whitespace-nowrap ${isSwap ? 'text-gray-500' : 'text-gray-300'}`}>{newSN}</td>
+                      <td className="px-3 py-2.5 text-gray-700 max-w-[180px]"><div className="truncate" title={wo.description}>{wo.description}</div></td>
                       <td className="px-3 py-2.5"><StatusBadge status={wo.severity} /></td>
                       <td className="px-3 py-2.5"><StatusBadge status={wo.status} /></td>
                       <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{wo.assignedTo || '—'}</td>
@@ -956,7 +961,9 @@ function OrderCenterTable({ state, dispatch, currentUser, canDo }) {
                             <span>关联项目：{getProjectName(wo.projectId)}</span>
                             <span>关联交付计划：{wo.deliveryPlanId || '—'}</span>
                             <span>关联质量问题：<span className="font-mono">{wo.linkedQualityIssueId || wo.sourceQualityIssueId || '—'}</span></span>
-                            {wo._class === '换件工单' && <span>换件记录：旧 <span className="font-mono">{wo.oldModuleSN || '—'}</span><span className="px-1">至新</span><span className="font-mono">{wo.newModuleSN || '—'}</span></span>}
+                            {isSwap
+                              ? <span>换件记录：{needType} · 旧 <span className="font-mono">{oldSN}</span> · 新 <span className="font-mono">{newSN}</span> · 新模块库存 {wo.newModuleStockStatus || (wo.newModuleSN ? '在库可用' : '待选择')}</span>
+                              : <span>换件记录：不涉及</span>}
                           </div>
                           <WorkOrderDetail wo={wo} state={state} dispatch={dispatch} currentUser={currentUser} canDo={canDo} actionType={wo._kind} />
                         </td>
@@ -1325,7 +1332,7 @@ function QualityIssueTable({ state, dispatch, canDo }) {
   return (
     <div>
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">
-        扫码上报和手动录入仅作为质量问题创建入口；提交后进入质量问题台账。需要处理的问题可进一步生成工单。质量问题台账用于质量沉淀、追溯和统计，不替代工单处理。
+        质量问题台账用于质量问题沉淀、追溯和统计，不替代工单中心。扫码上报和手动录入仅作为创建入口，提交后进入台账；需要处理的问题可从台账生成换件工单或软件问题工单。
       </div>
       <div className="flex items-center justify-end mb-3 gap-2">
         <button onClick={() => setShowScanModal(true)} className="px-4 py-2 border border-slate-600 text-slate-700 text-sm rounded hover:bg-slate-50">扫码上报</button>
@@ -1399,6 +1406,9 @@ function QualityIssueTable({ state, dispatch, canDo }) {
                 const isExpanded = expandedId === qi.id;
                 const linked = hasWO(qi);
                 const closed = qi.status === '已关闭';
+                const isSoftIssue = /软件|算法|固件|版本|系统|程序/.test(qi.issueType || '');
+                const swapDisabled = linked || closed || isSoftIssue;
+                const softDisabled = linked || closed;
                 return (
                   <React.Fragment key={qi.id}>
                     <tr className={`hover:bg-blue-50 transition-colors ${isExpanded ? 'bg-slate-50' : ''}`}>
@@ -1420,8 +1430,8 @@ function QualityIssueTable({ state, dispatch, canDo }) {
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap">
                         <div className="flex items-center gap-x-3">
                           <button className="text-slate-600 hover:underline" onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : qi.id); }}>查看详情</button>
-                          {opBtn('生成换件工单', () => genWorkOrder(qi, '换件工单'), { disabled: linked || closed, title: linked ? `已生成工单 ${qi.linkedWorkOrderId || ''}` : closed ? '已关闭问题不可生成' : '' })}
-                          {opBtn('生成软件问题工单', () => genWorkOrder(qi, '软件问题工单'), { disabled: linked || closed, title: linked ? `已生成工单 ${qi.linkedWorkOrderId || ''}` : closed ? '已关闭问题不可生成' : '' })}
+                          {opBtn('生成换件工单', () => genWorkOrder(qi, '换件工单'), { disabled: swapDisabled, title: linked ? `已生成工单 ${qi.linkedWorkOrderId || ''}` : closed ? '已关闭问题不可生成' : isSoftIssue ? '软件问题请生成软件问题工单' : '' })}
+                          {opBtn('生成软件问题工单', () => genWorkOrder(qi, '软件问题工单'), { disabled: softDisabled, title: linked ? `已生成工单 ${qi.linkedWorkOrderId || ''}` : closed ? '已关闭问题不可生成' : '' })}
                           {opBtn('关闭问题', () => closeQI(qi), { disabled: closed, title: closed ? '问题已关闭' : '', danger: true })}
                         </div>
                       </td>

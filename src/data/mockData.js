@@ -536,12 +536,12 @@ export const alerts = [
 ];
 
 export const workOrders = [
-  { id: 'WO-001', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', projectId: 'PROJ-003', description: '关节3电机过热，温度达92°C，需检查散热系统及电机状态', severity: '高', status: '处理中', assignedTo: '王五', createdAt: '2026-06-20 14:30', updatedAt: '2026-06-20 16:00', closedAt: null, repairActions: '已到现场，正在拆除散热模组检查', replacedModules: [], recheckResult: null, notes: '散热风扇异物堵塞' },
-  { id: 'WO-002', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', projectId: 'PROJ-001', description: '预控模组通信中断，设备无法接收指令', severity: '高', status: '待处理', assignedTo: '赵六', createdAt: '2026-06-21 01:10', updatedAt: '2026-06-21 01:10', closedAt: null, repairActions: '', replacedModules: [], recheckResult: null, notes: '' },
-  { id: 'WO-003', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', projectId: 'PROJ-003', description: '设备离线，网络模块故障，需更换', severity: '高', status: '处理中', assignedTo: '李四', createdAt: '2026-06-21 08:00', updatedAt: '2026-06-21 09:00', closedAt: null, repairActions: '已确认网络模块损坏，准备更换', replacedModules: [{ removedMaterialId: 'MAT-013', addedMaterialId: 'MAT-014', moduleTypeId: 'MT-006' }], recheckResult: null, notes: '网口物理损坏，可能为进水导致' },
-  { id: 'WO-004', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', projectId: 'PROJ-001', description: '末端执行器抓取精度异常，超出允许误差范围', severity: '中', status: '已关闭', assignedTo: '李四', createdAt: '2026-06-18 12:00', updatedAt: '2026-06-18 17:00', closedAt: '2026-06-18 17:00', repairActions: '重新标定末端执行器，精度恢复正常', replacedModules: [], recheckResult: '合格', notes: '标定参数偏移，已重置' },
-  { id: 'WO-005', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', projectId: 'PROJ-002', description: '导航地图更新失败，设备反复回到原点', severity: '低', status: '已关闭', assignedTo: '张三', createdAt: '2026-06-15 09:00', updatedAt: '2026-06-15 14:00', closedAt: '2026-06-15 14:00', repairActions: '远程推送新地图固件，重新建图完成', replacedModules: [], recheckResult: '合格', recheckPerson: '李四', notes: '固件版本不兼容导致' },
-  { id: 'WO-006', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', projectId: 'PROJ-001', description: '机械臂关节2抖动明显，定位精度异常，误差超出允许范围±3mm', severity: '中', status: '复检中', assignedTo: '王五', recheckPerson: '李四', createdAt: '2026-06-21 10:00', updatedAt: '2026-06-21 14:30', closedAt: null, repairActions: '重新校准关节电机编码器，调整PID参数，更换磨损轴承衬套', replacedModules: [], recheckResult: null, notes: '关节2齿轮轻微磨损，已调整间隙' },
+  { id: 'WO-001', woClass: '换件工单', involvesReplacement: true, needReplaceModuleType: '电机模块', oldModuleSN: '待确认', newModuleSN: '待选择', newModuleStockStatus: '待选择', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', projectId: 'PROJ-003', description: '关节3电机过热，温度达92°C，需检查散热系统及电机状态', severity: '高', status: '处理中', assignedTo: '王五', createdAt: '2026-06-20 14:30', updatedAt: '2026-06-20 16:00', closedAt: null, repairActions: '已到现场，正在拆除散热模组检查', replacedModules: [], recheckResult: null, notes: '散热风扇异物堵塞' },
+  { id: 'WO-002', woClass: '换件工单', involvesReplacement: true, needReplaceModuleType: '预控模块', oldModuleSN: '待确认', newModuleSN: '待选择', newModuleStockStatus: '待选择', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', projectId: 'PROJ-001', description: '预控模组通信中断，设备无法接收指令', severity: '高', status: '待处理', assignedTo: '赵六', createdAt: '2026-06-21 01:10', updatedAt: '2026-06-21 01:10', closedAt: null, repairActions: '', replacedModules: [], recheckResult: null, notes: '' },
+  { id: 'WO-003', woClass: '换件工单', involvesReplacement: true, needReplaceModuleType: '预控模块', oldModuleSN: 'MOD-YK-2026-013', newModuleSN: 'MOD-YK-2026-014', newModuleStockStatus: '已选择（在库可用）', deviceId: 'DEV-012', deviceSN: 'SN-DEV-012', projectId: 'PROJ-003', description: '设备离线，网络模块故障，需更换', severity: '高', status: '处理中', assignedTo: '李四', createdAt: '2026-06-21 08:00', updatedAt: '2026-06-21 09:00', closedAt: null, repairActions: '已确认网络模块损坏，准备更换', replacedModules: [{ removedMaterialId: 'MAT-013', addedMaterialId: 'MAT-014', moduleTypeId: 'MT-006' }], recheckResult: null, notes: '网口物理损坏，可能为进水导致' },
+  { id: 'WO-004', woClass: '其他问题工单', involvesReplacement: false, deviceId: 'DEV-010', deviceSN: 'SN-DEV-010', projectId: 'PROJ-001', description: '末端执行器抓取精度异常，超出允许误差范围', severity: '中', status: '已关闭', assignedTo: '李四', createdAt: '2026-06-18 12:00', updatedAt: '2026-06-18 17:00', closedAt: '2026-06-18 17:00', repairActions: '重新标定末端执行器，精度恢复正常', replacedModules: [], recheckResult: '合格', notes: '标定参数偏移，已重置' },
+  { id: 'WO-005', woClass: '软件问题工单', involvesReplacement: false, softwareVersion: 'v2.3.1', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011', projectId: 'PROJ-002', description: '导航地图更新失败，设备反复回到原点', severity: '低', status: '已关闭', assignedTo: '张三', createdAt: '2026-06-15 09:00', updatedAt: '2026-06-15 14:00', closedAt: '2026-06-15 14:00', repairActions: '远程推送新地图固件，重新建图完成', replacedModules: [], recheckResult: '合格', recheckPerson: '李四', notes: '固件版本不兼容导致' },
+  { id: 'WO-006', woClass: '换件工单', involvesReplacement: true, needReplaceModuleType: '机械臂模块', oldModuleSN: '待确认', newModuleSN: '待选择', newModuleStockStatus: '待选择', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013', projectId: 'PROJ-001', description: '机械臂关节2抖动明显，定位精度异常，误差超出允许范围±3mm', severity: '中', status: '复检中', assignedTo: '王五', recheckPerson: '李四', createdAt: '2026-06-21 10:00', updatedAt: '2026-06-21 14:30', closedAt: null, repairActions: '重新校准关节电机编码器，调整PID参数，更换磨损轴承衬套', replacedModules: [], recheckResult: null, notes: '关节2齿轮轻微磨损，已调整间隙' },
 ];
 
 export const retirements = [];
@@ -657,7 +657,7 @@ export const productionWorkOrders = [
 
 export const deliveryWorkOrders = [
   {
-    id: 'DWO-001', type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010',
+    id: 'DWO-001', woClass: '其他问题工单', involvesReplacement: false, type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-010', deviceSN: 'SN-DEV-010',
     description: '现场安装时发现底盘运动偏差大', severity: '中',
     status: '已关闭', assignedTo: '赵六', createdAt: '2026-06-12 14:00', updatedAt: '2026-06-14 16:00',
     repairActions: '重新校准底盘里程计和陀螺仪参数', recheckPerson: '张三', recheckResult: '通过',
@@ -670,7 +670,7 @@ export const deliveryWorkOrders = [
     ],
   },
   {
-    id: 'DWO-002', type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011',
+    id: 'DWO-002', woClass: '软件问题工单', involvesReplacement: false, softwareVersion: 'v2.2.0', type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011',
     description: '客户反映设备在低电量时异常重启', severity: '高',
     status: '待处理', assignedTo: '', createdAt: '2026-06-20 09:00', updatedAt: '2026-06-20 09:00',
     repairActions: '', recheckPerson: '', recheckResult: '',
@@ -679,7 +679,7 @@ export const deliveryWorkOrders = [
     processLogs: [],
   },
   {
-    id: 'DWO-003', type: 'delivery', deliveryPlanId: 'DP-002', deviceId: 'DEV-009', deviceSN: 'SN-DEV-009',
+    id: 'DWO-003', woClass: '其他问题工单', involvesReplacement: false, type: 'delivery', deliveryPlanId: 'DP-002', deviceId: 'DEV-009', deviceSN: 'SN-DEV-009',
     description: '出厂检验发现EMC测试部分指标临界，需补测', severity: '低',
     status: '已关闭', assignedTo: '张三', createdAt: '2026-06-18 10:30', updatedAt: '2026-06-19 17:00',
     repairActions: '增加屏蔽贴片，重新进行EMC测试', recheckPerson: '李四', recheckResult: '通过',
@@ -692,7 +692,7 @@ export const deliveryWorkOrders = [
     ],
   },
   {
-    id: 'DWO-004', type: 'delivery', deliveryPlanId: 'DP-002', deviceId: 'DEV-026', deviceSN: 'SN-DEV-026',
+    id: 'DWO-004', woClass: '软件问题工单', involvesReplacement: false, softwareVersion: 'v2.3.0', type: 'delivery', deliveryPlanId: 'DP-002', deviceId: 'DEV-026', deviceSN: 'SN-DEV-026',
     description: '现场安装调试时发现网络连接不稳定，丢包率高', severity: '中',
     status: '处理中', assignedTo: '王五', createdAt: '2026-06-21 14:00', updatedAt: '2026-06-22 09:00',
     repairActions: '排查网络模块固件版本，尝试更新至最新版本',
@@ -704,7 +704,7 @@ export const deliveryWorkOrders = [
     ],
   },
   {
-    id: 'DWO-005', type: 'delivery', deliveryPlanId: 'DP-003', deviceId: 'DEV-023', deviceSN: 'SN-DEV-023',
+    id: 'DWO-005', woClass: '其他问题工单', involvesReplacement: false, type: 'delivery', deliveryPlanId: 'DP-003', deviceId: 'DEV-023', deviceSN: 'SN-DEV-023',
     description: '客户验收时发现设备外观有划伤，不影响功能但客户要求处理', severity: '低',
     status: '处理中', assignedTo: '赵六', createdAt: '2026-06-20 16:00', updatedAt: '2026-06-21 10:00',
     repairActions: '安排外观修复，局部喷漆后重新验收',
@@ -716,7 +716,7 @@ export const deliveryWorkOrders = [
     ],
   },
   {
-    id: 'DWO-006', type: 'delivery', deliveryPlanId: 'DP-003', deviceId: 'DEV-024', deviceSN: 'SN-DEV-024',
+    id: 'DWO-006', woClass: '换件工单', involvesReplacement: true, needReplaceModuleType: '底盘密封件', oldModuleSN: '待确认', newModuleSN: '待选择', newModuleStockStatus: '待选择', type: 'delivery', deliveryPlanId: 'DP-003', deviceId: 'DEV-024', deviceSN: 'SN-DEV-024',
     description: '出厂检验防护等级测试不通过，IP65密封性不足', severity: '高',
     status: '复检中', assignedTo: '张三', recheckPerson: '王五', createdAt: '2026-06-19 10:00', updatedAt: '2026-06-22 14:00',
     repairActions: '重新检查密封圈，更换防护等级不足部位的密封件',
@@ -729,7 +729,7 @@ export const deliveryWorkOrders = [
     ],
   },
   {
-    id: 'DWO-007', type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013',
+    id: 'DWO-007', woClass: '软件问题工单', involvesReplacement: false, softwareVersion: 'v2.1.5', type: 'delivery', deliveryPlanId: 'DP-001', deviceId: 'DEV-013', deviceSN: 'SN-DEV-013',
     description: '现场安装后客户反馈设备启动时间过长，超过30秒', severity: '低',
     status: '待处理', assignedTo: '', createdAt: '2026-06-22 08:00', updatedAt: '2026-06-22 08:00',
     repairActions: '', recheckPerson: '', recheckResult: '',
@@ -738,7 +738,7 @@ export const deliveryWorkOrders = [
     processLogs: [],
   },
   {
-    id: 'DWO-008', type: 'delivery', deliveryPlanId: 'DP-002', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011',
+    id: 'DWO-008', woClass: '软件问题工单', involvesReplacement: false, softwareVersion: 'v2.3.1', type: 'delivery', deliveryPlanId: 'DP-002', deviceId: 'DEV-011', deviceSN: 'SN-DEV-011',
     description: '客户验收阶段发现机器人在特定场景下避障失灵', severity: '高',
     status: '待处理', assignedTo: '', createdAt: '2026-06-22 11:00', updatedAt: '2026-06-22 11:00',
     repairActions: '', recheckPerson: '', recheckResult: '',

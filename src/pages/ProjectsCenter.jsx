@@ -578,7 +578,7 @@ function ProductionPlanTab() {
 function DeliveryPlanTab() {
   const { state } = useApp();
   const navigate = useNavigate();
-  const [filters, setFilters] = useState({ keyword: '', projectId: '', status: '', node: '', owner: '', bound: '' });
+  const [filters, setFilters] = useState({ keyword: '', projectId: '', status: '', node: '', owner: '', delayed: '' });
   const [placeholder, setPlaceholder] = useState(null);
   const projects = state.projects || [];
 
@@ -606,7 +606,7 @@ function DeliveryPlanTab() {
       && (!filters.status || plan.status === filters.status)
       && (!filters.node || plan.currentNode === filters.node)
       && (!filters.owner || plan.owner === filters.owner)
-      && (!filters.bound || (filters.bound === 'yes' ? plan.bindingCount > 0 : plan.bindingCount === 0));
+      && (!filters.delayed || (filters.delayed === 'yes' ? plan.status === '已延期' : plan.status !== '已延期'));
   });
   const paged = usePaged(filtered, 10);
 
@@ -615,14 +615,13 @@ function DeliveryPlanTab() {
 
   return (
     <div>
-      <MetricCards cols={5} items={[
-        { label: '交付计划总数', value: enriched.length, color: 'border-slate-500' },
-        { label: '交付中计划数', value: enriched.filter((p) => p.status === '交付中').length, color: 'border-blue-500' },
-        { label: '已验收计划数', value: enriched.filter((p) => p.status === '已验收').length, color: 'border-green-500' },
-        { label: '未绑定设备计划数', value: enriched.filter((p) => p.bindingCount === 0).length, color: 'border-amber-500' },
-        { label: '已延期计划数', value: enriched.filter((p) => p.status === '已延期').length, color: 'border-red-500' },
+      <MetricCards items={[
+        { label: '计划总数', value: enriched.length, color: 'border-slate-500' },
+        { label: '交付中', value: enriched.filter((p) => p.status === '交付中').length, color: 'border-blue-500' },
+        { label: '已验收', value: enriched.filter((p) => p.status === '已验收').length, color: 'border-green-500' },
+        { label: '延期计划', value: enriched.filter((p) => p.status === '已延期').length, color: 'border-red-500' },
       ]} />
-      <div className="bg-white rounded shadow-sm p-4 mb-4 grid grid-cols-6 gap-3">
+      <div className="bg-white rounded shadow-sm p-4 mb-4 grid grid-cols-7 gap-3">
         <input className={`${INPUT} col-span-2`} placeholder="交付计划ID / 项目名称" value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })} />
         <select className={INPUT} value={filters.projectId} onChange={(e) => setFilters({ ...filters, projectId: e.target.value })}>
           <option value="">所属项目</option>
@@ -639,6 +638,11 @@ function DeliveryPlanTab() {
         <select className={INPUT} value={filters.owner} onChange={(e) => setFilters({ ...filters, owner: e.target.value })}>
           <option value="">全部负责人</option>
           {owners.map((o) => <option key={o}>{o}</option>)}
+        </select>
+        <select className={INPUT} value={filters.delayed} onChange={(e) => setFilters({ ...filters, delayed: e.target.value })}>
+          <option value="">是否延期</option>
+          <option value="yes">已延期</option>
+          <option value="no">未延期</option>
         </select>
       </div>
       <div className="bg-white rounded shadow-sm">
