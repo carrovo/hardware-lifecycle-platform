@@ -174,7 +174,7 @@ function MaterialPrepNode({ plan, state, openAction, goMaterials }) {
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
         领料与齐套确认：本节点关联 ERP 生产订单，查看该订单的 BOM 需求与 ERP 材料出库 / 超额出库记录（仓库、批号、领用数量），对比后由平台侧给出齐套状态与缺口提示。
-        <span className="text-blue-500">平台不创建 ERP 出库单、不锁定 ERP 库存，也不依赖 MRP/LRP 计算结果。</span>
+        <span className="text-blue-500">ERP 库存、材料出库、仓库、批号以 ERP 为准；平台仅做关联展示和齐套判断，不创建 ERP 出库单、不锁定 ERP 库存，也不依赖 MRP/LRP。</span>
       </div>
       <MetricCards items={[
         { label: '齐套进度', value: `${readyCount}/${rows.length}`, color: 'border-cyan-500' },
@@ -183,13 +183,13 @@ function MaterialPrepNode({ plan, state, openAction, goMaterials }) {
         { label: '计划数量', value: plan.targetCount || 0, color: 'border-slate-500' },
       ]} />
       <div className={`rounded p-3 text-xs border ${canConfirm ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-amber-50 border-amber-100 text-amber-700'}`}>
-        当前结论：共 {rows.length} 类模块，{waitLink} 类未见出库/待关联，{gapCount} 类存在缺口，{overCount} 类存在超额出库，{canConfirm ? '已满足齐套条件，可标记齐套确认。' : '暂不可标记齐套确认。'}
+        当前结论：共 {rows.length} 类关键物料，{waitLink} 类未出库/待关联，{gapCount} 类存在缺口，{canConfirm ? '已满足齐套条件，可标记齐套确认。' : '暂不可标记齐套。'}
       </div>
       <Section title="BOM 需求 vs 实际出库" action={
         <div className="flex gap-2 flex-wrap">
           <button className={BTN_GHOST} onClick={() => openAction('关联ERP生产订单')}>关联ERP生产订单</button>
           <button className={BTN_GHOST} onClick={() => openAction('查看ERP材料出库')}>查看ERP材料出库</button>
-          <button className={`${BTN_PRIMARY} disabled:opacity-40`} disabled={!canConfirm} title={!canConfirm ? '仍有模块未见出库或存在缺口，暂不可标记齐套确认。' : ''} onClick={() => openAction('确认来料齐套')}>确认齐套（平台判断）</button>
+          <button className={`${BTN_PRIMARY} disabled:opacity-40`} disabled={!canConfirm} title={!canConfirm ? `仍有 ${gapCount + waitLink} 类物料未出库/存在缺口，暂不可标记齐套。` : ''} onClick={() => openAction('确认来料齐套')}>标记齐套确认</button>
         </div>
       }>
         <div className="text-xs text-gray-400 mb-2">
@@ -199,7 +199,7 @@ function MaterialPrepNode({ plan, state, openAction, goMaterials }) {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['模块类型', '型号', '供应商', 'BOM需求数量', '已出库数量', '可用库存', '缺口数量', '是否超额出库', 'ERP采购单号', 'ERP到货通知单号', '齐套状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
+            <thead className="bg-gray-50"><tr>{['模块类型', '型号', '供应商', 'BOM需求数量', '已出库数量', '参考库存', '缺口数量', '是否超额出库', 'ERP采购单号', 'ERP到货通知单号', '齐套状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-100">{rowsPaged.pageItems.map((r) => (
               <tr key={r.category}>
                 <td className="px-3 py-2 whitespace-nowrap">{r.category}</td>
@@ -406,6 +406,7 @@ function AssemblyNode({ planDevices, state, openRecord, openAction }) {
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
         整机装配按生产计划绑定的设备类型 / 配置版本生成装配模板。录入待测试设备时需填写整机 SN，并将每个必填模块位置绑定到具体模块 SN（只能从模块实例库存选择）。必填模块与必填标签全部完成，状态才会显示「已录入待测试」。
+        <span className="text-blue-500">整机 SN 需与 ERP 产品序列号保持一致；模块 SN 如不进入 ERP，由平台记录整机-模块绑定关系，用于测试、返修、换件追溯。</span>
       </div>
       <MetricCards items={[
         { label: '装配设备', value: rows.length, color: 'border-blue-500' },
@@ -685,21 +686,33 @@ function QualityNode({ planDevices, testRecords, workOrders, openTest, openActio
 function WarehouseNode({ plan, planDevices, testRecords, state, dispatch, openAction }) {
   const deviceIds = new Set(planDevices.map((d) => d.id));
   const records = testRecords.filter((r) => deviceIds.has(r.deviceId));
-  const allPass = (device) => STATIONS.every((_, idx) => stationPassed(records, device.id, idx)) || device.status === '待入库';
-  const stored = planDevices.filter((device) => ['已入库', '待分配项目', '已分配项目', '在线运营'].includes(device.status));
-  const pending = planDevices.filter((device) => !stored.includes(device) && allPass(device));
+  // 只有工站四站全部 Pass 的设备才进入整机入库范围（测试中/返修中/待测一律排除）。
+  const passedAll = (device) => STATIONS.every((_, idx) => stationPassed(records, device.id, idx));
+  const erpInboundNoOf = (d) => d.erpInboundNo || '';
+  const erpInspectNoOf = (d) => d.erpInspectionNo || '';
+  const erpLinked = (d) => !!erpInboundNoOf(d) && !!erpInspectNoOf(d);
+  const erpPass = (d) => d.erpInspectionStatus === '合格';
+  const candidates = planDevices.filter(passedAll);
+  // 已入库：全 Pass + 已关联 ERP 入库单/检验单 + ERP 检验合格。
+  const stored = candidates.filter((d) => erpLinked(d) && erpPass(d));
+  // 可入库 / 待确认：全 Pass，但尚未完成 ERP 入库/检验关联或未合格。
+  const pending = candidates.filter((d) => !stored.includes(d));
   // 平台侧确认设备进入可交付状态（不代替 ERP 创建入库单）。
   const markDeliverable = (device) => {
     dispatch({ type: 'UPDATE_DEVICE', payload: { id: device.id, status: '已入库', updatedAt: nowText() } });
   };
+  const allDeliverable = planDevices.length > 0 && stored.length === planDevices.length;
+  const notDone = planDevices.length - stored.length;
   const finishPlan = () => {
+    if (!allDeliverable) return;
     dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: plan.id, status: '已完成', currentNode: '整机入库', updatedAt: nowText() } });
   };
   const typeName = (id) => state.deviceTypes.find((t) => t.id === id)?.name || id;
-  const erpInbound = (device) => device.erpInboundNo || plan.erpInboundNo || '未关联';
-  const erpInspect = (device) => device.erpInspectionNo || plan.erpInspectionNo || '未关联';
-  const erpInspectStatus = (device) => device.erpInspectionStatus || (['已入库', '待分配项目', '已分配项目', '在线运营'].includes(device.status) ? '合格' : '待检');
-  const erpStock = (device) => device.erpStockStatus || (['已入库', '待分配项目', '已分配项目', '在线运营'].includes(device.status) ? '合格可用' : '待检');
+  const erpInbound = (device) => erpInboundNoOf(device) || '未关联';
+  const erpInspect = (device) => erpInspectNoOf(device) || '未关联';
+  const erpInspectStatus = (device) => device.erpInspectionStatus || '待检';
+  // ERP 入库/检验未关联时，库存状态不得显示“合格可用”。
+  const erpStock = (device) => device.erpStockStatus || (!erpLinked(device) ? '未关联' : erpPass(device) ? '合格可用' : '待同步');
   const pendingPaged = usePaged(pending, 10);
   const storedPaged = usePaged(stored, 10);
 
@@ -725,7 +738,7 @@ function WarehouseNode({ plan, planDevices, testRecords, state, dispatch, openAc
           <div><span className="text-gray-500">说明：</span><span className="text-gray-500 text-xs">批号 / 序列号 / 仓库以 ERP 产品入库单为准</span></div>
         </div>
       </Section>
-      <Section title="可入库设备列表" action={<div className="flex gap-2"><button className={BTN_PRIMARY} onClick={finishPlan}>推进生产计划完成</button></div>}>
+      <Section title="可入库设备列表" action={<div className="flex gap-2"><button className={`${BTN_PRIMARY} disabled:opacity-40`} disabled={!allDeliverable} title={!allDeliverable ? `仍有 ${notDone} 台设备未完成 ERP 入库/检验关联，暂不能完成生产计划。` : ''} onClick={finishPlan}>推进生产计划完成</button></div>}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', 'OQT结果', '当前状态', 'ERP产品入库单', 'ERP检验状态', 'ERP库存状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
@@ -811,12 +824,14 @@ export default function ProductionPlanDetail() {
   const workOrders = state.productionWorkOrders.filter((item) => item.productionPlanId === plan.id || planDeviceIds.has(item.deviceId));
   const target = plan.targetCount || 0;
   const cap = (n) => (target ? Math.min(n, target) : n);
+  // 顶部流程数字统一口径：质量测试=工站全 Pass 数，整机入库=ERP 检验合格数，均封顶计划数量并与下方表格一致。
+  const passedAllCount = planDevices.filter((d) => STATIONS.every((_, i) => stationPassed(testRecords, d.id, i))).length;
+  const erpQualifiedCount = planDevices.filter((d) => STATIONS.every((_, i) => stationPassed(testRecords, d.id, i)) && d.erpInboundNo && d.erpInspectionNo && d.erpInspectionStatus === '合格').length;
   const counts = {
     materialPrep: (plan.materialBatchIds || []).length,
     assembly: cap(planDevices.length),
-    // 测试中设备数（不含已入库及下游），封顶计划数量，避免出现“计划5却显示7”。
-    quality: cap(planDevices.filter((d) => ['半成品检验中', '初测中', '中测中', 'OQT终测中', '生产返修中', '功能测试中', '老化测试中', '终测中'].includes(d.status)).length),
-    warehouse: cap(planDevices.filter((device) => ['待入库', '已入库', '待分配项目', '已分配项目', '在线运营'].includes(device.status)).length),
+    quality: cap(passedAllCount),
+    warehouse: cap(erpQualifiedCount),
   };
   const writeLog = (actionType, notes, fromStatus = plan.status, toStatus = plan.status) => {
     dispatch({ type: 'ADD_OPERATION_LOG', payload: { id: `LOG-${Date.now()}-${plan.id}`, productionPlanId: plan.id, projectId: plan.projectId, operator: state.currentUser, timestamp: nowText(), actionType, fromStatus, toStatus, notes } });
