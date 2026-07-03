@@ -237,8 +237,8 @@ export default function DeviceTypes() {
   return (
     <div className="p-6 space-y-6">
       <div className="bg-slate-50 border border-slate-200 rounded p-3 text-xs text-slate-600">
-        设备类型用于维护整机装配模板、质量测试流程模板和设备标签模板；模块类型库用于维护可被整机类型引用的模块主数据。这里定义模板，不占用库存。
-        <span className="text-slate-400">（设备类型定义整机需要哪些模块，模块类型库定义模块主数据，实际到货批次与模块 SN 在「模块来料」管理；生产计划在来料准备中关联批次、在录入待测试设备时绑定具体模块 SN，模块库存数量只在「模块与来料 / 模块库存汇总」展示。）</span>
+        设备类型用于维护整机装配模板与涉及的模块供应商信息；模块类型库用于维护可被整机类型引用的模块主数据。这里定义模板，不占用库存。
+        <span className="text-slate-400">（设备类型定义整机需要哪些模块，模块类型库定义模块主数据，实际到货批次与模块 SN 在「模块来料」管理；生产计划在来料准备中关联批次、在录入待测试设备时绑定具体模块 SN，模块库存数量只在「模块来料 / 模块库存汇总」展示。）</span>
       </div>
       {/* Tabs */}
       <div className="flex gap-0 border-b border-gray-200">
@@ -273,7 +273,7 @@ export default function DeviceTypes() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['设备类型ID', '设备类型名称', '配置版本', 'URDF文件', '装配模板', '测试流程', '标签模板', '已关联设备数', '关联供应商', '状态', '操作'].map((h) => (
+                {['设备类型ID', '设备类型名称', '配置版本', 'URDF文件', '装配模板', '已关联设备数', '关联供应商', '状态', '操作'].map((h) => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -294,8 +294,6 @@ export default function DeviceTypes() {
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-xs px-2 py-0.5">{slots.length} 个装配槽位</span>
                       </td>
-                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">4 工站</td>
-                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">3 个标签</td>
                       <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{assembledCount}</td>
                       <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">
                         {(() => { const s = deviceTypeSupplierSummary(dt); return s.count > 0 ? `${s.count} 家 · ${s.main.join('、')}` : '—'; })()}
@@ -313,9 +311,9 @@ export default function DeviceTypes() {
                     </tr>
                     {isExpanded && (
                       <tr key={`${dt.id}-expand`}>
-                        <td colSpan={11} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
+                        <td colSpan={9} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
                           <div className="px-12 py-4">
-                            <div className="text-[11px] text-gray-400 mb-4">设备类型定义装配 BOM、质量测试流程与标签模板。生产计划绑定设备类型后，整机装配节点按装配 BOM 绑定模块 SN。</div>
+                            <div className="text-[11px] text-gray-400 mb-4">设备类型定义整机装配 BOM 与涉及的模块供应商。生产计划绑定设备类型后，整机装配节点按装配 BOM 绑定模块 SN。</div>
 
                             {/* 基础信息 */}
                             <div className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">基础信息</div>
@@ -392,66 +390,6 @@ export default function DeviceTypes() {
                                 <div className="text-sm text-gray-400">暂无供应商信息</div>
                               );
                             })()}
-
-                            {/* 质量测试流程模板 */}
-                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-1 uppercase tracking-wide">质量测试流程模板</div>
-                            <div className="text-[11px] text-gray-400 mb-2">工站顺序（半成品检验 → 初测 → 中测 → OQT终测）与生产计划详情的质量测试矩阵保持一致。</div>
-                            <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
-                              <thead className="bg-gray-100">
-                                <tr>
-                                  {['顺序', '工站名称', '是否必测', '可录入测试内容类型', 'Pass 后流向', 'NG 后处理方式'].map((h) => (
-                                    <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100">
-                                {[
-                                  { seq: 1, name: '半成品检验', must: '是', content: '功能测试', pass: '进入初测', ng: '生成生产返修' },
-                                  { seq: 2, name: '初测', must: '是', content: '功能测试', pass: '进入中测', ng: '生成生产返修' },
-                                  { seq: 3, name: '中测', must: '是', content: '老化测试', pass: '进入OQT终测', ng: '生成生产返修' },
-                                  { seq: 4, name: 'OQT终测', must: '是', content: 'OQT终测', pass: '进入整机入库', ng: '生成生产返修' },
-                                ].map((st) => (
-                                  <tr key={st.seq} className="bg-white">
-                                    <td className="px-3 py-2 text-gray-700">{st.seq}</td>
-                                    <td className="px-3 py-2 text-gray-800 font-medium">{st.name}</td>
-                                    <td className="px-3 py-2 text-xs text-gray-600">{st.must}</td>
-                                    <td className="px-3 py-2 text-xs text-gray-600">{st.content}</td>
-                                    <td className="px-3 py-2 text-xs text-green-700">{st.pass}</td>
-                                    <td className="px-3 py-2 text-xs text-red-600">{st.ng}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-
-                            {/* 设备标签模板 */}
-                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-1 uppercase tracking-wide">设备标签模板</div>
-                            <div className="text-[11px] text-gray-400 mb-2">标签模板定义设备在装配、入库、交付等节点需要补充的追溯字段。</div>
-                            <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
-                              <thead className="bg-gray-100">
-                                <tr>
-                                  {['标签名称', '标签用途', '填写节点', '字段类型', '是否必填', '是否写入设备详情', '示例值'].map((h) => (
-                                    <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100">
-                                {[
-                                  { name: '批次标签', use: '生产追溯', node: '整机装配', type: '单选', required: '是', write: '是', sample: '首批' },
-                                  { name: '客户标签', use: '客户归属', node: '交付绑定', type: '文本', required: '否', write: '是', sample: '智魔方' },
-                                  { name: '版本标签', use: '版本管理', node: '整机入库', type: '单选', required: '否', write: '是', sample: 'V2' },
-                                ].map((lab) => (
-                                  <tr key={lab.name} className="bg-white">
-                                    <td className="px-3 py-2 text-gray-800 font-medium">{lab.name}</td>
-                                    <td className="px-3 py-2 text-xs text-gray-600">{lab.use}</td>
-                                    <td className="px-3 py-2 text-xs text-gray-600">{lab.node}</td>
-                                    <td className="px-3 py-2 text-xs text-gray-600">{lab.type}</td>
-                                    <td className="px-3 py-2 text-xs text-gray-600">{lab.required}</td>
-                                    <td className="px-3 py-2 text-xs text-gray-600">{lab.write}</td>
-                                    <td className="px-3 py-2 text-xs text-gray-500">{lab.sample}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
 
                             {/* 已关联设备 */}
                             {(() => {
