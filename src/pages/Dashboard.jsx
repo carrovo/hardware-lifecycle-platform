@@ -47,7 +47,6 @@ function FilterBar({ children, scope }) {
       <div className="flex flex-wrap gap-2 items-center">{children}</div>
       <div className="text-xs text-gray-500 border-t border-gray-100 pt-2">
         当前分析范围：{scope}
-        <span className="text-gray-400 ml-1">（时间范围为页面级分析范围，用于说明统计口径；当前 mock 数据不逐条按时间联动。）</span>
       </div>
     </div>
   );
@@ -151,7 +150,7 @@ function OperationBoard({ state }) {
   wpp.filter((p) => productionPlanStatus(p) === '生产中' && !p.materialReady).forEach((p) => tasks.push({ type: '待确认来料齐套', target: p.name || p.id, project: projName(p.projectId), owner: p.owner || '—', time: (p.createdAt || '').slice(0, 10), risk: '中', to: `/production-plans/${p.id}?node=materialPrep`, entry: '查看生产计划' }));
   wpp.filter((p) => productionPlanStatus(p) === '生产中' && devices.some((d) => d.productionPlanId === p.id && TESTING_STATUSES.includes(d.status))).forEach((p) => tasks.push({ type: '待录入测试结果', target: p.name || p.id, project: projName(p.projectId), owner: p.owner || '—', time: (p.createdAt || '').slice(0, 10), risk: '中', to: `/production-plans/${p.id}?node=quality`, entry: '查看生产计划' }));
   deliveryPlans.filter((dp) => deliveryPlanStatus(dp) === '交付中' && (dp.boundDeviceIds || []).length > (dp.records?.customerAccept || []).filter(isPass).length).forEach((dp) => tasks.push({ type: '待客户验收', target: dp.batchNo || dp.name, project: projName(dp.projectId), owner: dp.owner || '—', time: dp.acceptanceDate || dp.dueDate || '—', risk: '中', to: `/delivery-plans/${dp.id}?node=customerAccept`, entry: '查看交付计划' }));
-  inventoryRows.filter((r) => r.risk === '缺料').forEach((r) => tasks.push({ type: '库存不足', target: `${r.category}（${r.supplier}）`, project: '—', owner: '—', time: '—', risk: '高', to: '/assets?tab=materials', entry: '查看模块与来料' }));
+  inventoryRows.filter((r) => r.risk === '缺料').forEach((r) => tasks.push({ type: '库存不足', target: `${r.category}（${r.supplier}）`, project: '—', owner: '—', time: '—', risk: '高', to: '/assets?tab=materials', entry: '查看模块来料' }));
   workOrders.filter((w) => !['已关闭', '已作废'].includes(w.status) && (w.createdAt || '') < '2026-06-20').forEach((w) => tasks.push({ type: '工单超时', target: w.id, project: projName(w.projectId), owner: w.assignedTo || '—', time: w.createdAt || '—', risk: '高', to: '/after-sales?tab=orders', entry: '查看工单' }));
   deliveryPlans.filter((dp) => deliveryPlanStatus(dp) === '已延期').forEach((dp) => tasks.push({ type: '延期交付', target: dp.batchNo || dp.name, project: projName(dp.projectId), owner: dp.owner || '—', time: dp.acceptanceDate || dp.dueDate || '—', risk: '高', to: `/delivery-plans/${dp.id}`, entry: '查看交付计划' }));
   const taskRows = tasks.filter((t) => !projectId || t.project === projName(projectId));
@@ -167,7 +166,6 @@ function OperationBoard({ state }) {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-900">运营看板</h1>
-        <p className="text-sm text-gray-500 mt-1">按项目 / 供应商 / 设备类型视角监控项目推进、生产交付进度、库存风险与待处理事项；只做监控与入口，处理闭环在项目中心 / 资产管理 / 售后管理。</p>
       </div>
 
       <FilterBar scope={scope}>
@@ -180,10 +178,6 @@ function OperationBoard({ state }) {
         <select className={SELECT} value={deviceTypeId} onChange={(e) => setDeviceTypeId(e.target.value)}><option value="">全部设备类型</option>{deviceTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
         <select className={SELECT} value={range} onChange={(e) => setRange(e.target.value)}>{['近30天', '本月', '本周'].map((r) => <option key={r}>{r}</option>)}</select>
       </FilterBar>
-
-      <div className="text-xs text-gray-400">
-        取数边界：生产订单 / 材料出库 / 超额出库 / 产品入库 / 产品检验 / 库存状态以 <span className="text-gray-500">ERP</span> 为权威来源；项目 / 生产跟踪计划 / 设备与模块 SN 绑定 / 工站测试 / 返修 / 工单 / 质量问题 / 点位交付来自<span className="text-gray-500">平台</span>。当前 mock 为平台侧展示口径，不逐条联动 ERP。
-      </div>
 
       {(view === '全部' || view === '按设备类型') && (
         <Board title="全局运营概览">
@@ -234,7 +228,7 @@ function OperationBoard({ state }) {
                 <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{r.affectedPlans.length ? r.affectedPlans.map((w) => w.name || w.id).join('、') : '—'}</td>
                 <td className="px-3 py-2.5 text-xs whitespace-nowrap">
                   <div className="flex items-center gap-x-3">
-                    <Entry to="/assets?tab=materials">查看模块与来料</Entry>
+                    <Entry to="/assets?tab=materials">查看模块来料</Entry>
                     <Entry to="/projects?tab=production">查看生产计划</Entry>
                   </div>
                 </td>
@@ -356,7 +350,6 @@ function QualityBoard({ state }) {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-900">质量看板</h1>
-        <p className="text-sm text-gray-500 mt-1">监控供应商来料质量、装配测试质量、交付质量与未关闭质量问题；只做统计与风险定位，处理入口在质量问题台账与工单中心。</p>
       </div>
 
       <FilterBar scope={scope}>
@@ -371,10 +364,6 @@ function QualityBoard({ state }) {
         <select className={SELECT} value={deviceTypeId} onChange={(e) => setDeviceTypeId(e.target.value)}><option value="">全部设备类型</option>{deviceTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
         <select className={SELECT} value={range} onChange={(e) => setRange(e.target.value)}>{['近30天', '本月', '本周'].map((r) => <option key={r}>{r}</option>)}</select>
       </FilterBar>
-
-      <div className="text-xs text-gray-400">
-        取数边界：ERP 产品检验结果、库存状态以 <span className="text-gray-500">ERP</span> 为权威；平台工站测试（半成品检验 / 初测 / 中测 / OQT终测）、交付阶段质量问题、售后 / 工单问题来自<span className="text-gray-500">平台</span>，四类分区展示、互不替代（平台工站测试 ≠ ERP 产品检验）。
-      </div>
 
       {view === '总体' && (
         <Board title="质量核心指标">
@@ -402,7 +391,7 @@ function QualityBoard({ state }) {
                 <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{r.affected.length ? r.affected.map((w) => w.name || w.id).join('、') : '—'}</td>
                 <td className="px-3 py-2.5 text-xs whitespace-nowrap">
                   <div className="flex items-center gap-x-3">
-                    <Entry to="/assets?tab=materials">查看模块与来料</Entry>
+                    <Entry to="/assets?tab=materials">查看模块来料</Entry>
                     <Entry to="/after-sales?tab=quality">查看质量问题</Entry>
                   </div>
                 </td>

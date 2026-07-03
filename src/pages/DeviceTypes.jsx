@@ -166,6 +166,31 @@ export default function DeviceTypes() {
   const getModuleName = (id) => state.moduleTypes.find((m) => m.id === id)?.name || id;
   const getModuleCategory = (id) => state.moduleTypes.find((m) => m.id === id)?.category || '';
 
+  // 设备类型供应商派生：从装配 BOM 涉及的模块类型 → 按物料类别聚合供应商。
+  // 设备类型是整机模板，不是库存主账；供应商仅用于说明该设备类型涉及哪些模块供应商。
+  const suppliersOfCategory = (cat) => [...new Set(state.materials.filter((m) => m.category === cat).map((m) => m.supplier).filter(Boolean))];
+  const modelOfCategory = (cat) => state.materials.find((m) => m.category === cat)?.model || '—';
+  const deviceTypeSupplierRows = (dt) => {
+    const ids = [...new Set((dt.slots || []).map((s) => s.moduleTypeId))];
+    return ids.map((id) => {
+      const cat = getModuleCategory(id);
+      const sups = suppliersOfCategory(cat);
+      return {
+        moduleTypeId: id,
+        moduleName: getModuleName(id),
+        category: cat,
+        model: modelOfCategory(cat),
+        defaultSupplier: sups[0] || '—',
+        altSuppliers: sups.slice(1),
+        key: sups.length <= 1, // 单一供应商 → 关键（供应风险较高）
+      };
+    });
+  };
+  const deviceTypeSupplierSummary = (dt) => {
+    const all = [...new Set(deviceTypeSupplierRows(dt).flatMap((r) => [r.defaultSupplier, ...r.altSuppliers]).filter((s) => s && s !== '—'))];
+    return { count: all.length, main: all.slice(0, 2) };
+  };
+
   const getAssembledDevices = (deviceTypeId) =>
     state.devices.filter((d) => d.deviceTypeId === deviceTypeId);
 
@@ -213,7 +238,7 @@ export default function DeviceTypes() {
     <div className="p-6 space-y-6">
       <div className="bg-slate-50 border border-slate-200 rounded p-3 text-xs text-slate-600">
         设备类型用于维护整机装配模板、质量测试流程模板和设备标签模板；模块类型库用于维护可被整机类型引用的模块主数据。这里定义模板，不占用库存。
-        <span className="text-slate-400">（设备类型定义整机需要哪些模块，模块类型库定义模块主数据，实际到货批次与模块 SN 在「模块与来料」管理；生产计划在来料准备中关联批次、在录入待测试设备时绑定具体模块 SN，模块库存数量只在「模块与来料 / 模块库存汇总」展示。）</span>
+        <span className="text-slate-400">（设备类型定义整机需要哪些模块，模块类型库定义模块主数据，实际到货批次与模块 SN 在「模块来料」管理；生产计划在来料准备中关联批次、在录入待测试设备时绑定具体模块 SN，模块库存数量只在「模块与来料 / 模块库存汇总」展示。）</span>
       </div>
       {/* Tabs */}
       <div className="flex gap-0 border-b border-gray-200">
@@ -248,7 +273,7 @@ export default function DeviceTypes() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['设备类型ID', '设备类型名称', '配置版本', 'URDF文件', '装配模板', '测试流程', '标签模板', '已关联设备数', '状态', '操作'].map((h) => (
+                {['设备类型ID', '设备类型名称', '配置版本', 'URDF文件', '装配模板', '测试流程', '标签模板', '已关联设备数', '关联供应商', '状态', '操作'].map((h) => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -272,6 +297,9 @@ export default function DeviceTypes() {
                       <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">4 工站</td>
                       <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">3 个标签</td>
                       <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{assembledCount}</td>
+                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">
+                        {(() => { const s = deviceTypeSupplierSummary(dt); return s.count > 0 ? `${s.count} 家 · ${s.main.join('、')}` : '—'; })()}
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${dt.active !== false ? 'bg-green-100 text-green-700 border-green-300' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>{dt.active !== false ? '启用' : '已停用'}</span>
                       </td>
@@ -285,7 +313,7 @@ export default function DeviceTypes() {
                     </tr>
                     {isExpanded && (
                       <tr key={`${dt.id}-expand`}>
-                        <td colSpan={10} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
+                        <td colSpan={11} className="px-0 py-0 bg-slate-50 border-b border-slate-200">
                           <div className="px-12 py-4">
                             <div className="text-[11px] text-gray-400 mb-4">设备类型定义装配 BOM、质量测试流程与标签模板。生产计划绑定设备类型后，整机装配节点按装配 BOM 绑定模块 SN。</div>
 
@@ -333,6 +361,37 @@ export default function DeviceTypes() {
                             ) : (
                               <div className="text-sm text-gray-400">暂无装配 BOM 模板</div>
                             )}
+
+                            {/* 供应商信息 */}
+                            <div className="text-xs font-semibold text-gray-500 mt-5 mb-1 uppercase tracking-wide">供应商信息</div>
+                            <div className="text-[11px] text-gray-400 mb-2">设备类型仍是整机模板，不是库存主账；供应商字段只说明该设备类型涉及哪些模块供应商，实际到货批次 / 库存以「模块来料」与 ERP 为准。</div>
+                            {(() => {
+                              const supplierRows = deviceTypeSupplierRows(dt);
+                              return supplierRows.length > 0 ? (
+                                <table className="w-full text-sm border border-gray-200 rounded overflow-hidden">
+                                  <thead className="bg-gray-100">
+                                    <tr>
+                                      {['模块类型', '型号', '默认供应商', '可替代供应商', '是否关键供应商'].map((h) => (
+                                        <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100">
+                                    {supplierRows.map((r) => (
+                                      <tr key={r.moduleTypeId} className="bg-white">
+                                        <td className="px-3 py-2 text-gray-800 font-medium">{r.moduleName}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{r.category}</span></td>
+                                        <td className="px-3 py-2 text-xs text-gray-600">{r.model}</td>
+                                        <td className="px-3 py-2 text-xs text-gray-700">{r.defaultSupplier}</td>
+                                        <td className="px-3 py-2 text-xs text-gray-500">{r.altSuppliers.length ? r.altSuppliers.join('、') : '—'}</td>
+                                        <td className="px-3 py-2 text-xs">{r.key ? <span className="text-red-600">关键（单一供应商）</span> : <span className="text-gray-500">一般</span>}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              ) : (
+                                <div className="text-sm text-gray-400">暂无供应商信息</div>
+                              );
+                            })()}
 
                             {/* 质量测试流程模板 */}
                             <div className="text-xs font-semibold text-gray-500 mt-5 mb-1 uppercase tracking-wide">质量测试流程模板</div>
@@ -461,7 +520,7 @@ export default function DeviceTypes() {
       {activeTab === '模块类型库' && (
         <div>
           <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 mb-4">
-            模块类型库用于定义可被整机类型引用的模块主数据；实际到货批次和模块 SN 在「模块与来料」中管理，库存数量在「模块库存汇总」中查看。此处不展示库存。
+            模块类型库用于定义可被整机类型引用的模块主数据；实际到货批次和模块 SN 在「模块来料」中管理，库存数量在「模块库存汇总」中查看。此处不展示库存。
           </div>
         <div className="bg-white rounded shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">

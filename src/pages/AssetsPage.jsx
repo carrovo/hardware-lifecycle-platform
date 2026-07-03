@@ -13,8 +13,8 @@ import { deviceLifecycleStatus, deviceBusinessNode } from '../utils/status';
 
 const TABS = [
   { key: 'devices',   label: '设备台账' },
-  { key: 'materials', label: '模块与来料' },
   { key: 'types',     label: '设备类型' },
+  { key: 'materials', label: '模块来料' },
   { key: 'locations', label: '点位管理' },
 ];
 
@@ -791,7 +791,7 @@ export default function AssetsPage() {
   return (
     <div>
       <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
-        <div className="text-xs text-gray-400">设备全生命周期质量管理平台 / 资产管理 / {activeLabel}</div>
+        <div className="text-xs text-gray-400">资产管理 / {activeLabel}</div>
       </div>
       <div className="p-6">
         {activeTab === 'devices' && <DevicesTab />}

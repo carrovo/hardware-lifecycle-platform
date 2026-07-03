@@ -26,8 +26,8 @@ const NAV_ITEMS = [
     label: '资产管理', base: '/assets', icon: '📦', match: ['/assets', '/devices'],
     children: [
       { label: '设备台账', to: '/assets?tab=devices', tab: 'devices' },
-      { label: '模块与来料', to: '/assets?tab=materials', tab: 'materials' },
       { label: '设备类型', to: '/assets?tab=types', tab: 'types' },
+      { label: '模块来料', to: '/assets?tab=materials', tab: 'materials' },
       { label: '点位管理', to: '/assets?tab=locations', tab: 'locations' },
     ],
   },
@@ -214,13 +214,6 @@ export default function Layout({ children }) {
             );
           })}
         </nav>
-
-        <div className="px-4 py-2 border-t border-slate-700">
-          <div className="flex items-center gap-1.5 text-xs text-slate-400">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
-            <span>飞书通知已集成</span>
-          </div>
-        </div>
       </aside>
 
       {/* Content：顶部条（右上角用户 / 角色区域）+ 页面内容 */}

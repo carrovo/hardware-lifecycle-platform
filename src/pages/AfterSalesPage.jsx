@@ -1928,7 +1928,7 @@ export default function AfterSalesPage() {
   return (
     <div>
       <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
-        <div className="text-xs text-gray-400">设备全生命周期质量管理平台 / 售后管理 / {activeLabel}</div>
+        <div className="text-xs text-gray-400">售后管理 / {activeLabel}</div>
       </div>
       <div className="p-6">
         {activeTab === 'orders' && (

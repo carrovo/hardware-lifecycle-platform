@@ -508,6 +508,7 @@ export default function Materials() {
   const deviceTypeNameOf = (id) => (state.deviceTypes || []).find((t) => t.id === id)?.name || '';
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('模块批次管理');
+  const [showIntro, setShowIntro] = useState(false); // 顶部说明默认收起，点击「查看模块来料说明」展开
   const [showModal, setShowModal] = useState(false);
   const [filterCategory, setFilterCategory] = useState('全部');
   const [filterSupplier, setFilterSupplier] = useState('全部');
@@ -576,12 +577,21 @@ export default function Materials() {
 
   return (
     <div className="p-6">
-      <div className="bg-slate-50 border border-slate-200 rounded p-3 text-xs text-slate-600 mb-4 space-y-1">
-        <div>模块与来料用于管理供应商到货批次、具体模块 SN 实例和模块库存水位：</div>
-        <div className="text-slate-500">· <span className="font-medium">模块批次管理</span>：这一批货到了多少、检验结果怎样、是否可用于生产计划。</div>
-        <div className="text-slate-500">· <span className="font-medium">模块实例追踪</span>：每个模块 SN 当前在哪里（在库 / 锁定 / 装配 / 维修 / 报废）。</div>
-        <div className="text-slate-500">· <span className="font-medium">模块库存汇总</span>：某类模块现在可用多少、已锁定多少、已装配多少、维修 / 报废多少。</div>
-        <div className="text-slate-400 pt-0.5">ERP 批次 / 出库 / 库存是 ERP 主账；平台只做 ERP 记录关联展示和模块 SN 追踪，不替代 ERP 库存主账。</div>
+      <div className="mb-4">
+        <button type="button" onClick={() => setShowIntro((v) => !v)}
+          className="inline-flex items-center gap-1.5 text-xs text-slate-500 border border-slate-200 rounded px-2.5 py-1 hover:bg-slate-50">
+          <span>💡</span>查看模块来料说明
+          <span className={`text-slate-400 transition-transform ${showIntro ? 'rotate-90' : ''}`}>›</span>
+        </button>
+        {showIntro && (
+          <div className="bg-slate-50 border border-slate-200 rounded p-3 text-xs text-slate-600 mt-2 space-y-1">
+            <div>模块来料用于管理供应商到货批次、具体模块 SN 实例和模块库存水位：</div>
+            <div className="text-slate-500">· <span className="font-medium">模块批次管理</span>：这一批货到了多少、检验结果怎样、是否可用于生产计划。</div>
+            <div className="text-slate-500">· <span className="font-medium">模块实例追踪</span>：每个模块 SN 当前在哪里（在库 / 锁定 / 装配 / 维修 / 报废）。</div>
+            <div className="text-slate-500">· <span className="font-medium">模块库存汇总</span>：某类模块现在可用多少、已锁定多少、已装配多少、维修 / 报废多少。</div>
+            <div className="text-slate-400 pt-0.5">ERP 批次 / 出库 / 库存是 ERP 主账；平台只做 ERP 记录关联展示和模块 SN 追踪，不替代 ERP 库存主账。</div>
+          </div>
+        )}
       </div>
       {/* Tabs + Button in one row */}
       <div className="flex items-center border-b border-gray-200 mb-4">

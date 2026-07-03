@@ -22,6 +22,10 @@ const PRODUCTION_NODES = ['来料准备', '整机装配', '质量测试', '整�
 const DELIVERY_NODES = ['绑定设备', '出厂检验', '现场安装调试', '客户验收'];
 const DELIVERY_STATUSES = ['未开始', '交付中', '已验收', '已延期', '已作废'];
 
+// 项目成员角色 + 可选成员（评审版 mock：仅前端展示与弹窗配置，不做全平台数据权限拦截）。
+const MEMBER_ROLES = ['项目负责人', '生产协同', '质量协同', '交付协同', '售后协同', 'ERP 协同', '只读成员'];
+const MEMBER_CANDIDATES = ['张三', '李四', '王五', '赵六', '蔡八'];
+
 const INPUT = 'border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500 bg-white';
 const BTN_GHOST = 'px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded hover:bg-gray-50';
 const BTN_PRIMARY = 'px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800';
@@ -132,6 +136,74 @@ function ConfirmModal({ isOpen, onClose, title, text, onConfirm, danger = false 
   );
 }
 
+// 项目成员配置弹窗：展示/编辑项目成员与成员角色，说明「项目成员决定项目数据操作范围」。
+function MemberConfigModal({ isOpen, onClose, project, onSave }) {
+  const [members, setMembers] = useState(() => (project?.members || []).map((m) => ({ ...m })));
+  const [newName, setNewName] = useState('');
+  const [newRole, setNewRole] = useState('生产协同');
+  if (!project) return null;
+
+  const owner = project.manager || members.find((m) => m.role === '项目负责人')?.name || '—';
+  const addMember = () => {
+    if (!newName || members.some((m) => m.name === newName)) return;
+    setMembers([...members, { name: newName, role: newRole }]);
+    setNewName('');
+  };
+  const removeMember = (name) => setMembers(members.filter((m) => m.name !== name));
+  const changeRole = (name, role) => setMembers(members.map((m) => (m.name === name ? { ...m, role } : m)));
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="配置项目成员" size="lg">
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div><div className="text-xs text-gray-400 mb-1">项目名称</div><div className="text-gray-800 font-medium">{project.name}</div></div>
+          <div><div className="text-xs text-gray-400 mb-1">当前项目负责人</div><div className="text-gray-800 font-medium">{owner}</div></div>
+        </div>
+
+        <div>
+          <div className="text-xs font-medium text-gray-500 mb-2">项目成员列表（{members.length} 人）</div>
+          <div className="border border-gray-200 rounded divide-y divide-gray-100">
+            {members.length === 0 && <div className="px-3 py-4 text-center text-sm text-gray-400">暂无项目成员，请在下方添加</div>}
+            {members.map((mem) => (
+              <div key={mem.name} className="flex items-center gap-3 px-3 py-2">
+                <span className="w-7 h-7 rounded-full bg-slate-600 text-white text-xs flex items-center justify-center flex-shrink-0">{mem.name.slice(-2)}</span>
+                <span className="text-sm text-gray-800 w-14">{mem.name}</span>
+                <select className={`${INPUT} text-xs flex-1`} value={mem.role} onChange={(e) => changeRole(mem.name, e.target.value)}>
+                  {MEMBER_ROLES.map((r) => <option key={r}>{r}</option>)}
+                </select>
+                <button type="button" onClick={() => removeMember(mem.name)} className="text-red-400 hover:text-red-600 text-xs">移除</button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-xs font-medium text-gray-500 mb-2">添加成员</div>
+          <div className="flex items-center gap-2">
+            <select className={`${INPUT} flex-1`} value={newName} onChange={(e) => setNewName(e.target.value)}>
+              <option value="">-- 选择成员 --</option>
+              {MEMBER_CANDIDATES.filter((n) => !members.some((m) => m.name === n)).map((n) => <option key={n}>{n}</option>)}
+            </select>
+            <select className={`${INPUT} flex-1`} value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+              {MEMBER_ROLES.map((r) => <option key={r}>{r}</option>)}
+            </select>
+            <button type="button" onClick={addMember} className={BTN_GHOST}>添加</button>
+          </div>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
+          只有项目成员可以查看或操作该项目下的生产计划、交付计划、设备、点位、质量问题和工单。管理员不受此限制。
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button type="button" onClick={() => { onSave(members); onClose(); }} className={BTN_PRIMARY}>保存成员配置</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function ProjectListTab() {
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
@@ -203,6 +275,7 @@ function ProjectListTab() {
   const actionButtons = (project) => {
     const view = <button className="text-slate-600 hover:underline text-xs" onClick={() => navigate(`/projects/${project.id}`)}>查看</button>;
     const edit = <button className="text-blue-600 hover:underline text-xs" onClick={() => openModal('editProject', project)}>编辑</button>;
+    const membersBtn = <button className="text-indigo-600 hover:underline text-xs" onClick={() => openModal('members', project)}>配置成员</button>;
     const newProduction = <button className="text-emerald-600 hover:underline text-xs" onClick={() => openModal('createProduction', project)}>新建生产计划</button>;
     const newDelivery = <button className="text-emerald-600 hover:underline text-xs" onClick={() => openModal('createDelivery', project)}>新建交付计划</button>;
     const voidBtn = <button className="text-red-400 hover:text-red-600 hover:underline text-xs" onClick={() => openModal('void', project)}>作废</button>;
@@ -210,9 +283,9 @@ function ProjectListTab() {
     const logsBtn = <button className="text-gray-600 hover:underline text-xs" onClick={() => navigate(`/projects/${project.id}`)}>查看日志</button>;
 
     const map = {
-      未开始: [view, edit, newProduction, voidBtn],
-      进行中: [view, edit, newProduction, newDelivery, voidBtn, logsBtn],
-      已交付: [view, closeBtn, logsBtn],
+      未开始: [view, edit, membersBtn, newProduction, voidBtn],
+      进行中: [view, edit, membersBtn, newProduction, newDelivery, voidBtn, logsBtn],
+      已交付: [view, membersBtn, closeBtn, logsBtn],
       已关闭: [view, logsBtn],
       已作废: [view, logsBtn],
     };
@@ -261,7 +334,7 @@ function ProjectListTab() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['项目ID', '项目名称', '客户', '负责人', '状态', '生产进度', '交付进度', 'ERP状态', '操作'].map((h) => (
+                {['项目ID', '项目名称', '客户', '负责人', '项目成员', '状态', '生产进度', '交付进度', 'ERP状态', '操作'].map((h) => (
                   <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -273,6 +346,18 @@ function ProjectListTab() {
                   <td className="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">{project.name}</td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{project.client || '—'}</td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{project.manager || '—'}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {(() => {
+                      const mems = project.members || [];
+                      if (mems.length === 0) return <span className="text-gray-400 text-xs">未配置</span>;
+                      return (
+                        <div className="flex items-center gap-1">
+                          {mems.slice(0, 3).map((mem) => <span key={mem.name} className="text-xs bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">{mem.name}</span>)}
+                          {mems.length > 3 && <span className="text-xs text-gray-400">+{mems.length - 3}</span>}
+                        </div>
+                      );
+                    })()}
+                  </td>
                   <td className="px-4 py-3"><StatusBadge status={project.status} /></td>
                   <td className="px-4 py-3">{progressBar(project.producedDone, project.targetCount, 'bg-blue-500')}</td>
                   <td className="px-4 py-3">{progressBar(project.deliveryDone, project.targetCount, 'bg-emerald-500')}</td>
@@ -284,7 +369,7 @@ function ProjectListTab() {
                   <td className="px-4 py-3 min-w-[320px]">{actionButtons(project)}</td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">暂无匹配项目</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">暂无匹配项目</td></tr>}
             </tbody>
           </table>
         </div>
@@ -422,6 +507,19 @@ function ProjectListTab() {
           writeProjectLog(target.id, '关闭项目', reason || '项目关闭', target.status, '已关闭');
         }}
       />
+
+      {modal === 'members' && (
+        <MemberConfigModal
+          key={`members-${target?.id || 'none'}`}
+          isOpen
+          onClose={() => setModal(null)}
+          project={target}
+          onSave={(members) => {
+            dispatch({ type: 'UPDATE_PROJECT', payload: { id: target.id, members, updatedAt: nowText() } });
+            writeProjectLog(target.id, '配置项目成员', `更新项目成员（${members.length} 人）`);
+          }}
+        />
+      )}
 
     </div>
   );
@@ -710,7 +808,7 @@ export default function ProjectsCenter() {
   return (
     <div>
       <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
-        <div className="text-xs text-gray-400">设备全生命周期质量管理平台 / 项目中心 / {activeLabel}</div>
+        <div className="text-xs text-gray-400">项目中心 / {activeLabel}</div>
       </div>
       <div className="p-6">
         {activeTab === 'list' && <ProjectListTab />}

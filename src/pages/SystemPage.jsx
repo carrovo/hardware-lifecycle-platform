@@ -491,7 +491,7 @@ export default function SystemPage() {
   return (
     <div>
       <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
-        <div className="text-xs text-gray-400">设备全生命周期质量管理平台 / 系统管理 / {activeLabel}</div>
+        <div className="text-xs text-gray-400">系统管理 / {activeLabel}</div>
       </div>
       {activeTab === 'roles' && <UsersRolesPage />}
       {activeTab === 'permissions' && <PermissionsConfig />}
