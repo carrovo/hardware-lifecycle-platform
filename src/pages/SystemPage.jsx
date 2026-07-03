@@ -4,14 +4,17 @@ import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { ROLES_LIST, ROLE_NAV_PERMISSIONS, ROLE_ACTION_PERMISSIONS, FEISHU_USERS } from '../data/mockData';
 
+// 「标签配置」「工站配置」评审阶段暂不开放，从导航与可见入口隐藏（组件代码保留）；
+// 直接访问 ?tab=labels / ?tab=stations 时会回退到「用户与角色」。
 const TABS = [
   { key: 'roles', label: '用户与角色' },
   { key: 'permissions', label: '权限配置' },
-  { key: 'labels', label: '标签配置' },
-  { key: 'stations', label: '工站配置' },
   { key: 'notifications', label: '通知配置' },
   { key: 'logs', label: '操作日志' },
 ];
+
+// 内部角色值 → 展示名（与右上角用户菜单一致）。
+const roleDisplay = (r) => ({ 厂长: '工厂负责人', ERP协同角色: 'ERP 协同角色' }[r] || r);
 
 const NAV_LABELS = {
   '/home': '首页', '/dashboard': '看板中心', '/projects': '项目中心',
@@ -20,26 +23,31 @@ const NAV_LABELS = {
 
 /* ─────── 用户与角色 ─────── */
 function UsersRolesPage() {
-  const projectScope = (role) => (['管理员', '厂长'].includes(role) ? '全部项目' : role === '项目负责人' ? '本人负责项目' : '本部门项目');
   return (
     <div className="p-6 space-y-4">
-      <p className="text-sm text-gray-500">管理用户所属部门、角色与可访问项目范围；具体能看哪些模块、能做哪些动作在「权限配置」维护。</p>
+      <p className="text-sm text-gray-500">用户与角色用于维护人员所属部门、角色和可访问项目范围。具体能看哪些模块、能做哪些操作，在权限配置中维护。</p>
       <div className="bg-white rounded shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
-            <tr>{['用户', '部门', '角色', '可访问项目', '状态', '操作'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr>
+            <tr>{['用户', '部门', '岗位/职能', '当前角色', '可访问项目', '数据权限范围', '状态', '最近登录', '操作'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {FEISHU_USERS.map(u => (
-              <tr key={u.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-medium text-gray-800">{u.name}</td>
-                <td className="px-4 py-2.5 text-gray-600">{u.dept}</td>
-                <td className="px-4 py-2.5"><span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">{u.role}</span></td>
-                <td className="px-4 py-2.5 text-gray-600 text-xs">{projectScope(u.role)}</td>
-                <td className="px-4 py-2.5"><span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">启用</span></td>
-                <td className="px-4 py-2.5 text-xs text-slate-500">编辑 / 停用</td>
-              </tr>
-            ))}
+            {FEISHU_USERS.map(u => {
+              const enabled = (u.status || '启用') === '启用';
+              return (
+                <tr key={u.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2.5 font-medium text-gray-800 whitespace-nowrap">{u.name}</td>
+                  <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{u.dept}</td>
+                  <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{u.title || '—'}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap"><span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">{roleDisplay(u.role)}</span></td>
+                  <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">{u.projectScope || '—'}</td>
+                  <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">{u.dataScope || '—'}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap"><span className={`text-xs px-2 py-0.5 rounded-full border ${enabled ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>{u.status || '启用'}</span></td>
+                  <td className="px-4 py-2.5 text-gray-500 text-xs whitespace-nowrap">{u.lastLogin || '—'}</td>
+                  <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">编辑 / {enabled ? '停用' : '启用'}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

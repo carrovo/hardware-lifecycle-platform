@@ -3,6 +3,7 @@ import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import { FEISHU_USERS } from '../data/mockData';
+import Modal from './Modal';
 
 // 一级导航 + 可展开的二级菜单。二级菜单通过 ?tab= 深链到既有页面。
 const NAV_ITEMS = [
@@ -25,7 +26,7 @@ const NAV_ITEMS = [
   {
     label: '资产管理', base: '/assets', icon: '📦', match: ['/assets', '/devices'],
     children: [
-      { label: '设备台账', to: '/assets?tab=devices', tab: 'devices' },
+      { label: '设备列表', to: '/assets?tab=devices', tab: 'devices' },
       { label: '设备类型', to: '/assets?tab=types', tab: 'types' },
       { label: '模块来料', to: '/assets?tab=materials', tab: 'materials' },
       { label: '点位管理', to: '/assets?tab=locations', tab: 'locations' },
@@ -41,28 +42,16 @@ const NAV_ITEMS = [
   {
     label: '系统管理', base: '/system', icon: '⚙️',
     children: [
+      // 「标签配置」「工站配置」评审阶段暂不开放，先从导航隐藏（页面代码保留）。
       { label: '用户与角色', to: '/system?tab=roles', tab: 'roles' },
       { label: '权限配置', to: '/system?tab=permissions', tab: 'permissions' },
-      { label: '标签配置', to: '/system?tab=labels', tab: 'labels' },
-      { label: '工站配置', to: '/system?tab=stations', tab: 'stations' },
       { label: '通知配置', to: '/system?tab=notifications', tab: 'notifications' },
       { label: '操作日志', to: '/system?tab=logs', tab: 'logs' },
     ],
   },
 ];
 
-// 角色切换列表（内部角色值 → 展示名）。ERP 统一为「ERP 协同角色」，不再显示「财务 / ERP」。
-const SWITCH_ROLES = [
-  ['管理员', '管理员'],
-  ['项目负责人', '项目负责人'],
-  ['厂长', '工厂负责人'],
-  ['质检员', '质检员'],
-  ['装配工', '装配工'],
-  ['测试员', '测试员'],
-  ['运维工程师', '运维工程师'],
-  ['维修工程师', '维修工程师'],
-  ['ERP协同角色', 'ERP 协同角色'],
-];
+// 内部角色值 → 展示名。ERP 统一为「ERP 协同角色」。
 const ROLE_DISPLAY = { '厂长': '工厂负责人', 'ERP协同角色': 'ERP 协同角色' };
 const roleLabel = (r) => ROLE_DISPLAY[r] || r;
 
@@ -84,10 +73,17 @@ function isGroupActive(item, pathname) {
   return bases.some((b) => pathname === b || pathname.startsWith(`${b}/`));
 }
 
-// 右上角用户 / 角色区域（所有页面可见）。
-function UserRoleMenu({ currentUser, currentRole, setCurrentRole }) {
+// 右上角用户菜单（所有页面可见）：当前用户 / 部门 / 角色 + 个人信息 / 权限说明 / 退出登录。
+// 评审版不再提供角色切换入口，也不显示飞书通知状态。
+function UserRoleMenu({ currentUser, currentRole }) {
   const [open, setOpen] = useState(false);
+  const [dialog, setDialog] = useState(null); // 'profile' | 'perm' | 'logout' | 'loggedOut'
   const roleColor = ROLE_COLORS[currentRole] || 'bg-slate-600';
+  const openDialog = (d) => { setDialog(d); setOpen(false); };
+  const menuItem = (label, onClick, danger) => (
+    <button onClick={onClick} className={`w-full text-left text-sm px-2 py-1.5 rounded ${danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'}`}>{label}</button>
+  );
+
   return (
     <div className="relative">
       <button onClick={() => setOpen((v) => !v)}
@@ -103,38 +99,77 @@ function UserRoleMenu({ currentUser, currentRole, setCurrentRole }) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 space-y-3">
-            <div className="space-y-1.5 text-sm">
+          <div className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-3 space-y-2">
+            <div className="space-y-1.5 text-sm px-1">
               <div className="flex justify-between"><span className="text-gray-400 text-xs">当前用户</span><span className="text-gray-800 font-medium">{currentUser.name}</span></div>
               <div className="flex justify-between"><span className="text-gray-400 text-xs">所属部门</span><span className="text-gray-700">{currentUser.dept}</span></div>
               <div className="flex justify-between"><span className="text-gray-400 text-xs">当前角色</span><span className="text-gray-800 font-medium">{roleLabel(currentRole)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400 text-xs">飞书通知</span><span className="text-blue-600">已集成</span></div>
             </div>
-            <div className="border-t border-gray-100 pt-2">
-              <div className="text-xs text-gray-400 mb-1.5">切换角色（预览不同权限范围）</div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {SWITCH_ROLES.map(([value, label]) => (
-                  <button key={value} onClick={() => { setCurrentRole(value); setOpen(false); }}
-                    className={`text-xs px-2 py-1.5 rounded border text-left ${
-                      currentRole === value
-                        ? 'bg-slate-700 text-white border-slate-700'
-                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
-                    }`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
+            <div className="border-t border-gray-100 pt-2 space-y-0.5">
+              {menuItem('个人信息', () => openDialog('profile'))}
+              {menuItem('权限说明', () => openDialog('perm'))}
+              {menuItem('退出登录', () => openDialog('logout'), true)}
             </div>
           </div>
         </>
       )}
+
+      {/* 个人信息 */}
+      <Modal isOpen={dialog === 'profile'} onClose={() => setDialog(null)} title="个人信息">
+        <div className="space-y-2 text-sm">
+          {[
+            ['当前用户', currentUser.name],
+            ['所属部门', currentUser.dept],
+            ['岗位/职能', currentUser.title || '—'],
+            ['当前角色', roleLabel(currentRole)],
+            ['可访问项目', currentUser.projectScope || '—'],
+            ['数据权限范围', currentUser.dataScope || '—'],
+            ['最近登录', currentUser.lastLogin || '—'],
+          ].map(([k, v]) => (
+            <div key={k} className="flex justify-between border-b border-gray-50 pb-1.5"><span className="text-gray-400 text-xs">{k}</span><span className="text-gray-800">{v}</span></div>
+          ))}
+          <div className="flex justify-end pt-2"><button onClick={() => setDialog(null)} className="px-4 py-2 text-sm bg-slate-700 text-white rounded hover:bg-slate-800">关闭</button></div>
+        </div>
+      </Modal>
+
+      {/* 权限说明 */}
+      <Modal isOpen={dialog === 'perm'} onClose={() => setDialog(null)} title="权限说明">
+        <div className="space-y-3 text-sm text-gray-600">
+          <p>当前角色：<span className="text-gray-800 font-medium">{roleLabel(currentRole)}</span>。角色决定可见的导航模块与可执行的操作。</p>
+          <p>数据可见范围以项目成员与角色为准：只有项目成员可以查看或操作该项目下的生产计划、交付计划、设备、点位、质量问题和工单；管理员不受此限制。</p>
+          <p className="text-gray-400 text-xs">具体的模块可见性与操作权限在「系统管理 / 权限配置」中维护。</p>
+          <div className="flex justify-end gap-2 pt-1">
+            <Link to="/system?tab=permissions" onClick={() => setDialog(null)} className="px-4 py-2 text-sm border border-gray-300 text-gray-600 rounded hover:bg-gray-50">前往权限配置</Link>
+            <button onClick={() => setDialog(null)} className="px-4 py-2 text-sm bg-slate-700 text-white rounded hover:bg-slate-800">知道了</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 退出登录确认 */}
+      <Modal isOpen={dialog === 'logout'} onClose={() => setDialog(null)} title="确认退出登录">
+        <div className="space-y-4 text-sm">
+          <p className="text-gray-600">当前为原型演示环境，确认后将返回登录占位页或保持当前页面。</p>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setDialog(null)} className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+            <button onClick={() => setDialog('loggedOut')} className="px-4 py-2 text-white bg-red-600 rounded hover:bg-red-700">确认退出</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 模拟退出结果 */}
+      <Modal isOpen={dialog === 'loggedOut'} onClose={() => setDialog(null)} title="已退出登录">
+        <div className="space-y-4 text-sm">
+          <p className="text-gray-600">原型环境暂未接入真实登录，已模拟退出。</p>
+          <div className="flex justify-end"><button onClick={() => setDialog(null)} className="px-4 py-2 text-white bg-slate-700 rounded hover:bg-slate-800">知道了</button></div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
 export default function Layout({ children }) {
   const { state } = useApp();
-  const { currentRole, setCurrentRole, canSeeNav } = useRole();
+  const { currentRole, canSeeNav } = useRole();
   const location = useLocation();
   const activeTab = new URLSearchParams(location.search).get('tab');
 
@@ -148,7 +183,7 @@ export default function Layout({ children }) {
 
   return (
     <div className="flex min-h-screen w-full bg-gray-100">
-      {/* Sidebar：仅平台名称 + 主导航 + 极简飞书状态 */}
+      {/* Sidebar：仅平台名称 + 主导航（不含飞书状态 / 身份切换 / 用户下拉） */}
       <aside className="w-52 bg-slate-800 flex flex-col fixed top-0 left-0 h-full z-40">
         <div className="px-4 py-4 border-b border-slate-700">
           <div className="text-white font-bold text-sm leading-tight">设备全生命周期</div>
@@ -219,7 +254,7 @@ export default function Layout({ children }) {
       {/* Content：顶部条（右上角用户 / 角色区域）+ 页面内容 */}
       <div className="flex-1 min-w-0 ml-52 min-h-screen flex flex-col">
         <header className="sticky top-0 z-30 h-12 bg-white border-b border-gray-200 flex items-center justify-end px-4 flex-shrink-0">
-          <UserRoleMenu currentUser={currentUser} currentRole={currentRole} setCurrentRole={setCurrentRole} />
+          <UserRoleMenu currentUser={currentUser} currentRole={currentRole} />
         </header>
         <main className="flex-1 min-w-0">
           {children}

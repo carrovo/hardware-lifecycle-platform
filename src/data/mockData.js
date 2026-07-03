@@ -570,12 +570,13 @@ export const deliveryPlans = [
 ];
 
 export const FEISHU_USERS = [
-  { id: 'u1', name: '张三', avatar: 'Z', dept: '制造部', role: '装配工' },
-  { id: 'u2', name: '李四', avatar: 'L', dept: '质检部', role: '质检员' },
-  { id: 'u3', name: '王五', avatar: 'W', dept: '测试部', role: '测试员' },
-  { id: 'u4', name: '赵六', avatar: 'Z', dept: '运维部', role: '运维工程师' },
-  { id: 'u5', name: '李七', avatar: 'L', dept: '管理部', role: '厂长' },
-  { id: 'u6', name: '蔡八', avatar: 'C', dept: '项目部', role: '项目负责人' },
+  { id: 'u1', name: '张三', avatar: 'Z', dept: '制造部', role: '装配工', title: '装配', projectScope: '本部门项目', dataScope: '生产数据可见', status: '启用', lastLogin: '2026-07-02 09:30' },
+  { id: 'u2', name: '李四', avatar: 'L', dept: '质检部', role: '质检员', title: '质检', projectScope: '本部门项目', dataScope: '质量数据可见', status: '启用', lastLogin: '2026-07-02 09:10' },
+  { id: 'u3', name: '王五', avatar: 'W', dept: '测试部', role: '测试员', title: '测试', projectScope: '本部门项目', dataScope: '质量数据可见', status: '启用', lastLogin: '2026-07-01 18:20' },
+  { id: 'u4', name: '赵六', avatar: 'Z', dept: '运维部', role: '运维工程师', title: '现场运维', projectScope: '指定项目', dataScope: '交付数据可见', status: '启用', lastLogin: '2026-07-01 17:45' },
+  { id: 'u5', name: '李七', avatar: 'L', dept: '管理部', role: '厂长', title: '工厂管理', projectScope: '全部项目', dataScope: '全局可见', status: '启用', lastLogin: '2026-07-02 08:50' },
+  { id: 'u6', name: '蔡八', avatar: 'C', dept: '项目部', role: '项目负责人', title: '项目管理', projectScope: '本人负责项目', dataScope: '项目内可见', status: '启用', lastLogin: '2026-07-02 10:00' },
+  { id: 'u7', name: '陈九', avatar: 'C', dept: 'ERP 协同', role: 'ERP协同角色', title: '单据协同', projectScope: '指定项目', dataScope: 'ERP 单据关联可见', status: '启用', lastLogin: '2026-07-01 16:30' },
 ];
 
 export const ROLES_LIST = [

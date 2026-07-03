@@ -12,7 +12,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { deviceLifecycleStatus, deviceBusinessNode } from '../utils/status';
 
 const TABS = [
-  { key: 'devices',   label: '设备台账' },
+  { key: 'devices',   label: '设备列表' },
   { key: 'types',     label: '设备类型' },
   { key: 'materials', label: '模块来料' },
   { key: 'locations', label: '点位管理' },
