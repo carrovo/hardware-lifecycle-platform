@@ -22,8 +22,11 @@ const NAV_ITEMS = [
   {
     label: '看板中心', base: '/dashboard', icon: 'dashboard',
     children: [
-      { label: '运营看板', to: '/dashboard?tab=operation', tab: 'operation' },
+      { label: '总览看板', to: '/dashboard?tab=overview', tab: 'overview' },
+      { label: '项目看板', to: '/dashboard?tab=project', tab: 'project' },
       { label: '质量看板', to: '/dashboard?tab=quality', tab: 'quality' },
+      { label: '交付看板', to: '/dashboard?tab=delivery', tab: 'delivery' },
+      { label: '售后看板', to: '/dashboard?tab=aftersales', tab: 'aftersales' },
     ],
   },
   {
