@@ -19,19 +19,19 @@ const WORKFLOW = [
 
 export default function HomePage() {
   return (
-    <div className="p-6 md:p-10 bg-gradient-to-b from-slate-50 to-gray-100 min-h-screen">
+    <div className="p-6 md:p-10 min-h-screen">
       <div className="max-w-5xl mx-auto space-y-8">
         {/* 标题 + 一句副标题 */}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">设备全生命周期质量管理平台</h1>
-          <p className="text-sm text-gray-500 mt-2">
+          <h1 className="text-xl font-semibold text-gray-900 tracking-tight">设备全生命周期质量管理平台</h1>
+          <p className="text-[13px] text-gray-500 mt-1.5">
             从项目、生产、交付、资产到售后，统一追踪设备全生命周期质量状态。
           </p>
         </div>
 
         {/* 工作流 / 项目流程图占位卡片 */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div className="text-sm font-semibold text-gray-700 mb-5">设备全生命周期工作流</div>
+        <div className="bg-white rounded-lg border border-[#ececec] p-6">
+          <div className="text-[13px] font-semibold text-gray-700 mb-5">设备全生命周期工作流</div>
           <div className="flex flex-wrap items-center gap-y-3">
             {WORKFLOW.map((node, i) => (
               <div key={node} className="flex items-center">
