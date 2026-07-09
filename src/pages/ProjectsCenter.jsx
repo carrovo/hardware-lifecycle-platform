@@ -11,8 +11,24 @@ import {
 } from '../components/ui';
 import {
   isPass, projectStatus as deriveProjectStatus,
-  productionPlanStatus, deliveryPlanStatus,
+  productionPlanStatus, deliveryPlanStatus, TODAY,
 } from '../utils/status';
+
+// 生产计划「当前卡点」派生阈值：创建早于 TODAY-45 天且未完成 → 长期未结。
+const LONG_UNSETTLED_BEFORE = (() => {
+  const d = new Date(TODAY);
+  d.setDate(d.getDate() - 45);
+  return d.toISOString().slice(0, 10);
+})();
+
+// 生产计划「当前卡点」（平台派生，非计划唯一节点）：未结返修单 / NG → 质量测试；创建久未完成 → 长期未结；否则无明显卡点。
+function planBottleneck(plan, status, devices, openRepairs) {
+  if (['已完成', '已作废'].includes(status)) return '无明显卡点';
+  const anyNG = devices.some((d) => ['生产返修中', '返修中', '测试NG', 'NG待返修'].includes(d.status));
+  if (openRepairs > 0 || anyNG) return '质量测试';
+  const longUnsettled = !!plan.createdAt && String(plan.createdAt).slice(0, 10) < LONG_UNSETTLED_BEFORE;
+  return longUnsettled ? '长期未结' : '无明显卡点';
+}
 
 // 项目中心容器：项目列表 / 生产计划 / 交付计划 / ERP 表单 四个 tab。
 // tab 由 ?tab= 决定，默认 list。视觉统一复用 ../components/ui 设计系统。
@@ -67,7 +83,7 @@ function erpChip(linked) {
 }
 
 /* ── 弹窗（保留既有交互与数据接线） ─────────────────── */
-function SimpleFormModal({ isOpen, onClose, title, fields, onSubmit, submitText = '保存', size = 'lg' }) {
+function SimpleFormModal({ isOpen, onClose, title, fields, onSubmit, submitText = '保存', size = 'lg', note }) {
   const initial = Object.fromEntries(fields.map((f) => [f.key, f.defaultValue ?? '']));
   const [form, setForm] = useState(initial);
 
@@ -119,6 +135,7 @@ function SimpleFormModal({ isOpen, onClose, title, fields, onSubmit, submitText 
             </div>
           ))}
         </div>
+        {note && <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">{note}</div>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
           <button type="submit" className="px-4 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800">{submitText}</button>
@@ -530,10 +547,11 @@ function ProjectListTab() {
 
 /* ═════════ 生产计划 ═════════ */
 function ProductionPlanTab() {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const [filters, setFilters] = useState({ keyword: '', projectId: '', deviceType: '', status: '', owner: '', delayed: '' });
   const [placeholder, setPlaceholder] = useState(null);
+  const [editPlan, setEditPlan] = useState(null);
   // 生产计划列表只展示流程型生产计划 (WPP-*)。PLAN-* 属于日产能数据，不混入此列表。
   const plans = state.workflowProductionPlans || [];
   const projects = state.projects || [];
@@ -545,6 +563,7 @@ function ProductionPlanTab() {
     const stored = devices.filter((d) => ['已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status)).length;
     const status = productionPlanStatus(plan);
     const currentNode = plan.currentNode || (status === '已完成' ? '整机入库' : PRODUCTION_NODES[Math.min(Math.floor(stored / Math.max(plan.targetCount || 1, 1) * 4), 3)]);
+    const openRepairs = (state.productionWorkOrders || []).filter((w) => w.productionPlanId === plan.id && !['已关闭', '已作废', '已完成'].includes(w.status)).length;
     const project = projects.find((p) => p.id === plan.projectId);
     return {
       ...plan,
@@ -554,12 +573,14 @@ function ProductionPlanTab() {
       owner: plan.owner || project?.manager || '—',
       stored: Math.min(stored, plan.targetCount || 0),
       currentNode,
+      bottleneck: planBottleneck(plan, status, devices, openRepairs),
       delayed: status === '已延期',
     };
   });
 
   const owners = [...new Set(enriched.map((p) => p.owner).filter((o) => o && o !== '—'))];
   const deviceTypeNames = [...new Set(enriched.map((p) => p.deviceType))];
+  const erpOrderNos = [...new Set(plans.map((p) => p.erpProductionOrderNo).filter(Boolean))];
 
   const filtered = enriched.filter((plan) => {
     const kw = filters.keyword.trim().toLowerCase();
@@ -610,7 +631,7 @@ function ProductionPlanTab() {
       </Toolbar>
 
       <Table
-        head={['生产计划ID', '计划名称', '所属项目', '设备类型', '计划数量', '已入库', '计划周期', '当前节点', '状态', '负责人', 'ERP 生产订单号', '操作']}
+        head={['生产计划ID', '计划名称', '所属项目', '设备类型', '计划数量', '已入库', '计划周期', '当前卡点', '状态', '负责人', 'ERP 生产订单号', '操作']}
         empty="暂无匹配生产计划"
         footer={<Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />}
       >
@@ -623,7 +644,7 @@ function ProductionPlanTab() {
             <td className="px-3 py-2 text-gray-600">{plan.targetCount || 0}</td>
             <td className="px-3 py-2 text-gray-600">{plan.stored}</td>
             <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{(plan.createdAt || '').slice(0, 10)} ~ {plan.endDate || '—'}</td>
-            <td className="px-3 py-2"><StatusBadge status={plan.currentNode} /></td>
+            <td className="px-3 py-2"><StatusBadge status={plan.bottleneck} /></td>
             <td className="px-3 py-2"><StatusBadge status={plan.status} /></td>
             <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{plan.owner}</td>
             <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{plan.erpProductionOrderNo || '—'}</td>
@@ -631,7 +652,7 @@ function ProductionPlanTab() {
               <div className="flex items-center gap-x-3">
                 <LinkAction onClick={() => navigate(`/production-plans/${plan.id}`)}>查看</LinkAction>
                 <LinkAction onClick={() => enterCurrentNode(plan)}>进入当前节点</LinkAction>
-                <LinkAction onClick={() => setPlaceholder({ title: '编辑生产计划', text: `编辑「${plan.name || plan.id}」的入口已保留，后续接入表单与校验。` })}>编辑</LinkAction>
+                <LinkAction onClick={() => setEditPlan(plan)}>编辑</LinkAction>
                 {!['已完成', '已作废'].includes(plan.status) && (
                   <LinkAction onClick={() => setPlaceholder({ title: '作废生产计划', text: `作废「${plan.name || plan.id}」的入口已保留，后续接入审批流程。` })}>作废</LinkAction>
                 )}
@@ -649,6 +670,59 @@ function ProductionPlanTab() {
           <div className="flex justify-end"><button onClick={() => setPlaceholder(null)} className={BTN_PRIMARY}>知道了</button></div>
         </div>
       </Modal>
+
+      {editPlan && (
+        <SimpleFormModal
+          key={`edit-plan-${editPlan.id}`}
+          isOpen
+          onClose={() => setEditPlan(null)}
+          title="编辑生产计划"
+          note="ERP 生产订单、工单、产品入库、产品检验状态来自 ERP，只读同步，不能在平台编辑。"
+          fields={[
+            { key: 'name', label: '生产计划名称 *', required: true, defaultValue: editPlan.name || '' },
+            { key: 'projectId', label: '所属项目', options: projects.map((p) => ({ value: p.id, label: p.name })), defaultValue: editPlan.projectId || '' },
+            { key: 'owner', label: '负责人', options: ['张三', '李四', '王五', '赵六'], defaultValue: editPlan.owner || '' },
+            { key: 'targetCount', label: '计划数量 *', type: 'number', min: 1, required: true, defaultValue: editPlan.targetCount || 1 },
+            { key: 'startDate', label: '计划开始时间', type: 'date', defaultValue: editPlan.startDate || '' },
+            { key: 'endDate', label: '计划完成时间', type: 'date', defaultValue: editPlan.endDate || '' },
+            { key: 'enabled', label: '是否启用', options: ['启用', '停用'], defaultValue: editPlan.enabled === false ? '停用' : '启用' },
+            { key: 'erpProductionOrderNo', label: '绑定 / 更换 ERP 工单（选择绑定，只读引用）', options: erpOrderNos, defaultValue: editPlan.erpProductionOrderNo || '' },
+            { key: 'notes', label: '备注', type: 'textarea', full: true, defaultValue: editPlan.notes || '' },
+          ]}
+          onSubmit={(form) => {
+            dispatch({
+              type: 'UPDATE_PRODUCTION_PLAN',
+              payload: {
+                id: editPlan.id,
+                name: form.name,
+                projectId: form.projectId,
+                owner: form.owner,
+                targetCount: Number(form.targetCount || 0),
+                startDate: form.startDate,
+                endDate: form.endDate,
+                notes: form.notes,
+                enabled: form.enabled !== '停用',
+                erpProductionOrderNo: form.erpProductionOrderNo,
+                updatedAt: nowText(),
+              },
+            });
+            dispatch({
+              type: 'ADD_OPERATION_LOG',
+              payload: {
+                id: `LOG-${Date.now()}-${editPlan.id}`,
+                productionPlanId: editPlan.id,
+                projectId: form.projectId || editPlan.projectId,
+                operator: state.currentUser,
+                timestamp: nowText(),
+                actionType: '编辑生产计划',
+                fromStatus: '',
+                toStatus: '',
+                notes: `更新生产计划平台字段：${form.name}`,
+              },
+            });
+          }}
+        />
+      )}
     </Page>
   );
 }
@@ -726,7 +800,7 @@ function DeliveryPlanTab() {
       </Toolbar>
 
       <Table
-        head={['交付计划ID', '所属项目', '交付批次', '计划交付数量', '已绑定设备数', '计划出厂时间', '计划现场安装调试时间', '计划客户验收时间', '当前节点', '状态', '负责人', '操作']}
+        head={['交付计划ID', '所属项目', '交付批次', '计划交付数量', '已绑定设备数', '计划出厂时间', '计划现场安装调试时间', '计划客户验收时间', '主要阶段', '状态', '负责人', '操作']}
         empty="暂无匹配交付计划"
         footer={<Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />}
       >
