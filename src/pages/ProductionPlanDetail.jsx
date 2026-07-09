@@ -1,1149 +1,245 @@
-import { useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
+import OperationLog from '../components/OperationLog';
 import { Pagination, usePaged } from '../components/Pagination';
-import { productionPlanStatus } from '../utils/status';
+import { Page, PageHeader, Section, DescList, Table, StatCard, StatGrid, Chip, Btn, EmptyState } from '../components/ui';
+import { productionPlanStatus, TODAY } from '../utils/status';
 
-const NODES = [
-  { key: 'materialPrep', label: '来料准备' },
-  { key: 'assembly', label: '整机装配' },
-  { key: 'quality', label: '质量测试' },
-  { key: 'warehouse', label: '整机入库' },
-];
+// 生产计划详情（只读追溯视图）
+// 定位：平台不创建 ERP 生产订单、不维护 BOM / 入库 / 出库 / 检验。
+// 本页 = ERP 工单关联（只读同步）+ 平台生产过程记录 + 质量测试追溯。
+// 分区：计划基础信息 / ERP 工单·入库·检验信息 / 设备列表 / 单机生产记录 /
+//       质量测试记录 / 生产返修记录 / 操作日志。
 
-const STATIONS = ['半成品检验', '初测', '中测', 'OQT终测'];
-const STATION_KEY_LABEL = { semi: '半成品检验', init: '初测', mid: '中测', oqt: 'OQT终测' };
-const STATION_KEYS = ['semi', 'init', 'mid', 'oqt'];
-const INPUT = 'w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500 bg-white';
-const BTN_PRIMARY = 'px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-800';
-const BTN_GHOST = 'px-3 py-1.5 text-sm border border-gray-300 text-gray-600 rounded hover:bg-gray-50';
+const STATION_LABEL = { semi: '半成品检验', init: '初测', mid: '中测', oqt: 'OQT终测' };
+const isPassRec = (r) => r.stationResult === 'Pass' || ['合格', 'Pass', '通过'].includes(r.result);
 
-function nowText() {
-  return new Date().toISOString().slice(0, 16).replace('T', ' ');
-}
-
-function MetricCards({ items }) {
-  return (
-    <div className="grid grid-cols-4 gap-4 mb-5">
-      {items.map((item) => (
-        <div key={item.label} className={`bg-white rounded shadow-sm border-l-4 ${item.color} p-4`}>
-          <div className="text-2xl font-semibold text-gray-900">{item.value}</div>
-          <div className="text-xs text-gray-500 mt-1">{item.label}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function FlowStepper({ activeNode, onChange, counts }) {
-  return (
-    <div className="bg-white rounded shadow-sm p-5 mb-6">
-      <div className="flex items-center">
-        {NODES.map((node, index) => (
-          <div key={node.key} className="flex items-center flex-1">
-            <button onClick={() => onChange(node.key)} className="flex-1 flex flex-col items-center gap-1">
-              <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${activeNode === node.key ? 'bg-blue-600 text-white ring-2 ring-blue-200' : 'bg-gray-100 text-gray-500'}`}>{index + 1}</span>
-              <span className={`text-xs ${activeNode === node.key ? 'text-slate-800 font-medium' : 'text-gray-500'}`}>{node.label}</span>
-              <span className="text-xs text-gray-400">{counts[node.key] || 0}</span>
-            </button>
-            {index < NODES.length - 1 && <div className="w-10 h-0.5 bg-gray-200 mx-2" />}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Section({ title, action, children }) {
-  return (
-    <section className="bg-white rounded shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700">{title}</h2>
-        {action}
-      </div>
-      <div className="p-4">{children}</div>
-    </section>
-  );
-}
-
-// 生产计划详情内的通用动作占位弹窗，仅用于尚未业务化的次要动作（关联/查看类）。
-const ACTION_FIELDS = {
-  关联ERP生产订单: ['生产计划', 'ERP生产订单号', '交易类型', '订单数量', '订单状态', '关联说明'],
-  查看ERP材料出库: ['ERP生产订单号', '材料出库单号', '模块类型', '批号', '仓库', '领用数量', '是否超额出库', '超额申请单号'],
-  查看关联批次: ['批次号', '模块类型', '供应商', 'ERP采购单号', 'ERP到货通知单号', '可用数量', '批号', '仓库'],
-  生成生产返修记录: ['设备SN', '来源工站', 'NG原因', '返修说明', '负责人', '状态'],
-  查看返修: ['返修记录ID', '设备SN', '来源工站', '返修说明', '状态'],
-};
-
-// 需要业务化的核心动作：不再显示原型占位，改为展示真实业务字段与值的详情弹窗。
-const BUSINESS_ACTIONS = new Set(['查看装配模板', '查看装配记录', '绑定模块', '补充标签', '作废录入', '关联ERP产品入库单', '关联ERP产品检验单', '查看入库记录']);
-
-const LABEL_META = {
-  批次标签: { purpose: '标记生产批次', type: '文本', required: true, sample: '首批' },
-  客户标签: { purpose: '标记交付客户', type: '文本', required: false, sample: '智魔方' },
-  版本标签: { purpose: '标记配置版本', type: '文本', required: false, sample: 'V2' },
-};
-
-function DField({ label, value, full }) {
-  return (
-    <div className={full ? 'col-span-2' : ''}>
-      <div className="text-xs font-medium text-gray-500 mb-1">{label}</div>
-      <div className="text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded px-3 py-2 min-h-[38px] break-all">{value === undefined || value === null || value === '' ? '—' : value}</div>
-    </div>
-  );
-}
-
-// 计算设备的 ERP 库存状态：未关联入库单/检验单 → 未关联；已关联但检验非合格 → 待同步；均满足 → 合格可用。
-function deviceErpStock(device) {
-  if (!device) return '—';
-  if (!device.erpInboundNo || !device.erpInspectionNo) return '未关联';
-  if (device.erpInspectionStatus !== '合格') return '待同步';
-  return device.erpStockStatus || '合格可用';
-}
-
-// 生产计划详情核心动作的业务详情弹窗（只读展示为主，作废录入含二次确认）。
-function ActionDetailModal({ isOpen, onClose, action, plan, state, dispatch }) {
-  const name = action?.name || '';
-  const deviceType = resolveDeviceType(plan, state);
-  const device = action?.device || state.devices.find((d) => d.productionPlanId === plan.id) || null;
-  const slots = deviceType?.slots || [];
-  const mtName = (id) => state.moduleTypes.find((m) => m.id === id)?.name || id;
-  const mtOf = (id) => state.moduleTypes.find((m) => m.id === id) || {};
-  const matById = (id) => state.materials.find((m) => m.id === id);
-  const [voidReason, setVoidReason] = useState('');
-  const [voidConfirm, setVoidConfirm] = useState(false);
-
-  const boundBySlot = {};
-  (device?.usedMaterials || []).forEach((u) => { (boundBySlot[u.moduleTypeId] = boundBySlot[u.moduleTypeId] || []).push(u.materialId); });
-  const usedForSlot = {};
-  const bindingFor = (slot) => {
-    const pool = boundBySlot[slot.moduleTypeId] || [];
-    const idx = (usedForSlot[slot.moduleTypeId] = (usedForSlot[slot.moduleTypeId] ?? -1) + 1);
-    return matById(pool[idx]);
-  };
-
-  const submitVoid = () => {
-    if (!voidReason.trim() || !voidConfirm || !device) return;
-    dispatch({ type: 'UPDATE_DEVICE', payload: { id: device.id, status: '装配异常', voidReason: voidReason.trim(), updatedAt: nowText() } });
-    setVoidReason(''); setVoidConfirm(false);
-    onClose();
-  };
-
-  const deviceHeader = device ? `${device.sn}` : '（该生产计划下暂无设备）';
-
-  let body = null;
-  if (name === '查看装配模板') {
-    body = (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <DField label="设备类型" value={deviceType?.name} />
-          <DField label="配置版本" value={deviceType?.version || 'V1'} />
-        </div>
-        <div className="overflow-x-auto border border-gray-200 rounded">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['装配位置', '需要模块类型', '默认型号', '默认供应商', '数量', '是否必填', '是否允许替代', '备注'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {slots.map((s) => { const mt = mtOf(s.moduleTypeId); return (
-                <tr key={s.id}>
-                  <td className="px-3 py-2 whitespace-nowrap">{s.slotName}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{mt.name || s.moduleTypeId}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{mt.model || '—'}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{mt.supplier || '—'}</td>
-                  <td className="px-3 py-2">{s.quantity || 1}</td>
-                  <td className="px-3 py-2 text-xs">{s.required === false ? '否' : '是'}</td>
-                  <td className="px-3 py-2 text-xs">{s.allowSubstitute ? '是' : '否'}</td>
-                  <td className="px-3 py-2 text-xs text-gray-500">{s.remark || '—'}</td>
-                </tr>
-              ); })}
-              {slots.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">该设备类型暂无装配 BOM 模板</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  } else if (name === '查看装配记录') {
-    body = (
-      <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-3">
-          <DField label="设备SN" value={device?.sn} />
-          <DField label="设备类型" value={deviceType?.name} />
-          <DField label="ERP生产订单号" value={plan.erpProductionOrderNo || '—'} />
-          <DField label="装配人" value={device?.assembler} />
-          <DField label="装配时间" value={device?.assemblyTime} />
-          <DField label="模块绑定进度" value={`${device?.usedMaterials?.length || 0}/${slots.length}`} />
-          <DField label="设备标签状态" value={device?.labels && Object.keys(device.labels).length ? '已填写' : '未填写'} />
-        </div>
-        <div className="text-xs font-semibold text-gray-500">已绑定模块列表</div>
-        <div className="overflow-x-auto border border-gray-200 rounded">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['装配位置', '模块类型', '模块SN', '来源批次', '当前状态'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {slots.map((s) => { const mat = bindingFor(s); return (
-                <tr key={s.id}>
-                  <td className="px-3 py-2 whitespace-nowrap">{s.slotName}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{mtName(s.moduleTypeId)}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{mat?.sn || '—'}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-gray-500">{mat?.batchNo || '—'}</td>
-                  <td className="px-3 py-2"><StatusBadge status={mat ? '已装配' : '待绑定'} /></td>
-                </tr>
-              ); })}
-              {slots.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-400">暂无装配模板</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  } else if (name === '绑定模块') {
-    body = (
-      <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-3">
-          <DField label="整机SN" value={device?.sn} />
-          <DField label="设备类型" value={deviceType?.name} />
-          <DField label="配置版本" value={deviceType?.version || 'V1'} />
-          <DField label="所属生产计划" value={plan.name || plan.id} />
-          <DField label="ERP生产订单号" value={plan.erpProductionOrderNo || '—'} />
-        </div>
-        <div className="text-xs text-gray-400">展示当前整机-模块绑定关系；模块 SN 只能从在库可用实例中选择（本弹窗为绑定关系视图）。</div>
-        <div className="overflow-x-auto border border-gray-200 rounded">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['装配位置', '需要模块类型', '是否必填', '已绑定模块SN', '模块型号', '供应商', '来源批次', '当前状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {slots.map((s) => { const mat = bindingFor(s); const mt = mtOf(s.moduleTypeId); return (
-                <tr key={s.id}>
-                  <td className="px-3 py-2 whitespace-nowrap">{s.slotName}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{mt.name || s.moduleTypeId}</td>
-                  <td className="px-3 py-2 text-xs">{s.required === false ? '否' : '是'}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{mat?.sn || <span className="text-gray-400">未绑定</span>}</td>
-                  <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{mat?.model || mt.model || '—'}</td>
-                  <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{mat?.supplier || mt.supplier || '—'}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-gray-500">{mat?.batchNo || '—'}</td>
-                  <td className="px-3 py-2"><StatusBadge status={mat ? '已装配' : '待绑定'} /></td>
-                  <td className="px-3 py-2 text-xs whitespace-nowrap">
-                    {mat
-                      ? <span className="text-gray-400">已绑定（更换 / 移除）</span>
-                      : <span className="text-blue-600">选择在库可用SN</span>}
-                  </td>
-                </tr>
-              ); })}
-              {slots.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-400">暂无装配模板</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  } else if (name === '补充标签') {
-    body = (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3"><DField label="设备SN" value={device?.sn} /></div>
-        <div className="overflow-x-auto border border-gray-200 rounded">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['标签名称', '标签用途', '字段类型', '是否必填', '当前值', '示例值', '备注'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {LABEL_TEMPLATE.map((l) => { const meta = LABEL_META[l.key] || {}; return (
-                <tr key={l.key}>
-                  <td className="px-3 py-2 whitespace-nowrap">{l.key}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{meta.purpose || '—'}</td>
-                  <td className="px-3 py-2 text-xs">{meta.type || '文本'}</td>
-                  <td className="px-3 py-2 text-xs">{l.required ? '是' : '否'}</td>
-                  <td className="px-3 py-2">{device?.labels?.[l.key] || <span className="text-gray-400">未填写</span>}</td>
-                  <td className="px-3 py-2 text-gray-500 text-xs">{meta.sample || l.sample}</td>
-                  <td className="px-3 py-2 text-gray-400 text-xs">—</td>
-                </tr>
-              ); })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  } else if (name === '作废录入') {
-    body = (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <DField label="设备SN" value={device?.sn} />
-          <DField label="当前状态" value={device?.status} />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">作废原因 *</label>
-          <textarea className={INPUT} rows={2} value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="请填写作废原因（必填）" />
-        </div>
-        <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={voidConfirm} onChange={(e) => setVoidConfirm(e.target.checked)} />我确认作废该录入</label>
-        <div className="bg-amber-50 border border-amber-100 rounded p-3 text-xs text-amber-700">作废只保留记录，不物理删除；作废后设备标记为「装配异常」，不再参与后续测试 / 入库。</div>
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className={BTN_GHOST}>取消</button>
-          <button onClick={submitVoid} disabled={!voidReason.trim() || !voidConfirm || !device} className={`${BTN_PRIMARY} disabled:opacity-40`}>确认作废</button>
-        </div>
-      </div>
-    );
-  } else if (name === '关联ERP产品入库单') {
-    body = (
-      <div className="grid grid-cols-2 gap-3">
-        <DField label="整机SN" value={device?.sn} />
-        <DField label="ERP生产订单号" value={plan.erpProductionOrderNo || '—'} />
-        <DField label="ERP产品入库单号" value={device?.erpInboundNo || '未关联'} />
-        <DField label="批号 / 序列号" value={device?.erpSerialNo || device?.sn} />
-        <DField label="入库仓库" value={plan.warehouse || '成品库'} />
-        <DField label="ERP入库时间" value={device?.inboundTime || '—'} />
-        <DField label="库管员" value={device?.inboundOperator || '—'} />
-        <DField label="备注" value={device?.erpInboundNo ? '入库单以 ERP 为准，平台仅关联展示' : '尚未关联 ERP 产品入库单'} full />
-      </div>
-    );
-  } else if (name === '关联ERP产品检验单') {
-    body = (
-      <div className="grid grid-cols-2 gap-3">
-        <DField label="整机SN" value={device?.sn} />
-        <DField label="ERP产品入库单号" value={device?.erpInboundNo || '未关联'} />
-        <DField label="ERP产品检验单号" value={device?.erpInspectionNo || '未关联'} />
-        <DField label="ERP检验状态" value={device?.erpInspectionStatus || '待检'} />
-        <DField label="检验员" value={device?.inspector || '—'} />
-        <DField label="检验时间" value={device?.inspectTime || '—'} />
-        <DField label="ERP库存状态" value={deviceErpStock(device)} />
-        <DField label="检验备注" value={device?.erpInspectionStatus === '合格' ? '检验合格，ERP 自动更新库存状态' : '检验状态以 ERP 为准'} full />
-      </div>
-    );
-  } else if (name === '查看入库记录') {
-    body = (
-      <div className="grid grid-cols-2 gap-3">
-        <DField label="整机SN" value={device?.sn} />
-        <DField label="ERP产品入库单号" value={device?.erpInboundNo || '未关联'} />
-        <DField label="ERP产品检验单号" value={device?.erpInspectionNo || '未关联'} />
-        <DField label="ERP库存状态" value={deviceErpStock(device)} />
-        <DField label="入库仓库" value={plan.warehouse || '成品库'} />
-        <DField label="入库时间" value={device?.inboundTime || device?.updatedAt || '—'} />
-        <DField label="入库操作人" value={device?.inboundOperator || '—'} />
-        <DField label="平台可交付状态" value={device?.status === '已入库' ? '可交付' : (device?.erpInboundNo && device?.erpInspectionNo && device?.erpInspectionStatus === '合格' ? '可确认交付' : '待入库确认')} />
-        <DField label="备注" value="批号 / 序列号 / 仓库 / 入库时间以 ERP 产品入库单为准" full />
-      </div>
-    );
-  }
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={name} size="lg">
-      <div className="space-y-4">
-        {device && <div className="text-xs text-gray-400">当前设备：<span className="font-mono text-gray-600">{deviceHeader}</span></div>}
-        {body}
-        {name !== '作废录入' && (
-          <div className="flex justify-end"><button onClick={onClose} className={BTN_PRIMARY}>关闭</button></div>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-function ActionPlaceholderModal({ isOpen, onClose, title, text }) {
-  const fields = ACTION_FIELDS[title];
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
-      <div className="space-y-4">
-        <p className="text-sm text-gray-600">{text}</p>
-        {fields && (
-          <div className="grid grid-cols-2 gap-3">
-            {fields.map((f) => (
-              <div key={f} className={f.length > 4 ? 'col-span-2' : ''}>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{f}</label>
-                <input disabled className="w-full border border-gray-200 rounded px-3 py-2 text-sm bg-gray-50 text-gray-400" placeholder={`（原型占位）${f}`} />
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">当前阶段作为原型动作入口保留，后续会接入真实流转和校验。</div>
-        <div className="flex justify-end">
-          <button onClick={onClose} className={BTN_PRIMARY}>知道了</button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-/* ═════════ 装配位置 / 设备类型解析 ═════════ */
-function resolveDeviceType(plan, state) {
-  return state.deviceTypes.find((t) => t.id === plan.deviceTypeId)
-    || state.deviceTypes.find((t) => t.name === plan.deviceType)
-    || state.deviceTypes[0];
-}
-
-const LABEL_TEMPLATE = [
-  { key: '批次标签', required: true, sample: '首批' },
-  { key: '客户标签', required: false, sample: '智魔方' },
-  { key: '版本标签', required: false, sample: 'V2' },
-];
-
-/* ═════════ 来料准备 ═════════ */
-function MaterialPrepNode({ plan, state, openAction, goMaterials }) {
-  const deviceType = resolveDeviceType(plan, state);
-  const linkedBatches = (state.materialBatches || []).filter((batch) => plan.materialBatchIds?.includes(batch.id) || batch.planId === plan.id);
-  const target = Math.max(plan.targetCount || 1, 1);
-
-  // 按整机类型 BOM 归并所需模块类别
-  const bomByCategory = {};
-  (deviceType?.slots || []).forEach((s) => {
-    const mt = state.moduleTypes.find((m) => m.id === s.moduleTypeId);
-    const cat = mt?.category || '其他';
-    bomByCategory[cat] = (bomByCategory[cat] || 0) + (s.quantity || 1);
-  });
-  const categories = Object.keys(bomByCategory).length ? Object.keys(bomByCategory) : ['底盘', '机械臂', '电机', '末端', '全身相机', '预控'];
-
-  const kitStatus = (need, available, linked) => {
-    if (linked === 0) return '待关联';
-    if (available >= need) return '已齐套';
-    if (available > 0) return '部分齐套';
-    return '库存不足';
-  };
-
-  const rows = categories.map((cat) => {
-    const need = (bomByCategory[cat] || 1) * target;
-    const catMats = state.materials.filter((m) => m.category === cat);
-    const available = catMats.filter((m) => m.status === '待装配').length;
-    const issued = catMats.filter((m) => m.status === '已占用').length; // 已领用/已出库（ERP 材料出库口径的展示近似）
-    const catBatches = linkedBatches.filter((b) => b.category === cat);
-    const sample = catMats[0] || {};
-    const batch = catBatches[0] || {};
-    return {
-      category: cat,
-      model: batch.model || sample.model || '—',
-      supplier: batch.supplier || sample.supplier || '—',
-      need,
-      issued,
-      available,
-      overIssue: issued > need,
-      gap: Math.max(need - available - issued, 0),
-      erpPO: batch.erpPurchaseOrderNo || '—',
-      erpArrival: batch.erpArrivalNo || batch.arrivalNo || '—',
-      status: kitStatus(need, available, catBatches.length),
-    };
-  });
-  const readyCount = rows.filter((r) => r.status === '已齐套').length;
-  const waitLink = rows.filter((r) => r.status === '待关联').length;
-  const gapCount = rows.filter((r) => r.gap > 0).length;
-  const overCount = rows.filter((r) => r.overIssue).length;
-  const canConfirm = waitLink === 0 && gapCount === 0;
-  const rowsPaged = usePaged(rows, 10);
-  const batchPaged = usePaged(linkedBatches, 10);
-
-  return (
-    <div className="space-y-5">
-      <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-        领料与齐套确认：本节点关联 ERP 生产订单，查看该订单的 BOM 需求与 ERP 材料出库 / 超额出库记录（仓库、批号、领用数量），对比后由平台侧给出齐套状态与缺口提示。
-        <span className="text-blue-500">ERP 库存、材料出库、仓库、批号以 ERP 为准；平台仅做关联展示和齐套判断，不创建 ERP 出库单、不锁定 ERP 库存，也不依赖 MRP/LRP。</span>
-      </div>
-      <MetricCards items={[
-        { label: '齐套进度', value: `${readyCount}/${rows.length}`, color: 'border-cyan-500' },
-        { label: 'ERP生产订单号', value: plan.erpProductionOrderNo || '未关联', color: plan.erpProductionOrderNo ? 'border-green-500' : 'border-amber-500' },
-        { label: '关联材料出库单', value: linkedBatches.length, color: 'border-blue-500' },
-        { label: '计划数量', value: plan.targetCount || 0, color: 'border-slate-500' },
-      ]} />
-      <div className={`rounded p-3 text-xs border ${canConfirm ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-amber-50 border-amber-100 text-amber-700'}`}>
-        当前结论：共 {rows.length} 类关键物料，{waitLink} 类未出库/待关联，{gapCount} 类存在缺口，{canConfirm ? '已满足齐套条件，可标记齐套确认。' : '暂不可标记齐套。'}
-      </div>
-      <Section title="BOM 需求 vs 实际出库" action={
-        <div className="flex gap-2 flex-wrap">
-          <button className={BTN_GHOST} onClick={() => openAction('关联ERP生产订单')}>关联ERP生产订单</button>
-          <button className={BTN_GHOST} onClick={() => openAction('查看ERP材料出库')}>查看ERP材料出库</button>
-          <button className={`${BTN_PRIMARY} disabled:opacity-40`} disabled={!canConfirm} title={!canConfirm ? `仍有 ${gapCount + waitLink} 类物料未出库/存在缺口，暂不可标记齐套。` : ''} onClick={() => openAction('确认来料齐套')}>标记齐套确认</button>
-        </div>
-      }>
-        <div className="text-xs text-gray-400 mb-2">
-          领料 / 出库 / 批号在 ERP 材料出库单维护，本表按 BOM 需求对比实际出库与可用；可
-          <button className="text-blue-600 hover:underline mx-1" onClick={goMaterials}>跳转模块与来料</button>
-          查看批次与模块 SN。
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['模块类型', '型号', '供应商', 'BOM需求数量', '已出库数量', '参考库存', '缺口数量', '是否超额出库', 'ERP采购单号', 'ERP到货通知单号', '齐套状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">{rowsPaged.pageItems.map((r) => (
-              <tr key={r.category}>
-                <td className="px-3 py-2 whitespace-nowrap">{r.category}</td>
-                <td className="px-3 py-2 text-gray-600">{r.model}</td>
-                <td className="px-3 py-2 text-gray-600">{r.supplier}</td>
-                <td className="px-3 py-2">{r.need}</td>
-                <td className="px-3 py-2 text-gray-600">{r.issued}</td>
-                <td className="px-3 py-2">{r.available}</td>
-                <td className="px-3 py-2">{r.gap > 0 ? <span className="text-red-600 font-medium">{r.gap}</span> : <span className="text-gray-400">0</span>}</td>
-                <td className="px-3 py-2 text-xs whitespace-nowrap">{r.overIssue ? <span className="text-amber-600 font-medium">超额出库</span> : <span className="text-gray-400">否</span>}</td>
-                <td className="px-3 py-2 font-mono text-xs text-gray-500">{r.erpPO}</td>
-                <td className="px-3 py-2 font-mono text-xs text-gray-500">{r.erpArrival}</td>
-                <td className="px-3 py-2"><StatusBadge status={r.status} /></td>
-                <td className="px-3 py-2 text-xs whitespace-nowrap">
-                  <div className="flex gap-x-3">
-                    <button className="text-slate-600 hover:underline" onClick={() => openAction('查看ERP材料出库')}>查看出库记录</button>
-                    <button className="text-blue-600 hover:underline" onClick={() => openAction('查看关联批次')}>查看批次</button>
-                  </div>
-                </td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-        <Pagination page={rowsPaged.page} total={rowsPaged.total} totalPages={rowsPaged.totalPages} onChange={rowsPaged.setPage} />
-      </Section>
-      <Section title="ERP 材料出库记录（含超额出库）">
-        <div className="text-xs text-gray-400 mb-2">数据口径：ERP 按生产订单领料生成材料出库单，超出 BOM 比例部分走超额出库 / 超额申请；平台仅关联展示。</div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['出库单号', '关联生产订单', '模块类型', '批号', '仓库', '领用数量', '合格数', '是否超额'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {batchPaged.pageItems.map((batch) => {
-                const used = (batch.items || []).filter((it) => it.status === '已占用').length;
-                return (
-                  <tr key={batch.id}>
-                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{batch.erpDeliveryNo || `MO-OUT-${batch.batchNo}`}</td>
-                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{plan.erpProductionOrderNo || '—'}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{batch.category}</td>
-                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{batch.batchNo}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{batch.warehouse || '生产领料库'}</td>
-                    <td className="px-3 py-2">{used || batch.quantity}</td>
-                    <td className="px-3 py-2">{(batch.items || []).filter((item) => item.result !== '不合格').length}</td>
-                    <td className="px-3 py-2 text-xs whitespace-nowrap">{batch.overIssued ? <span className="text-amber-600 font-medium">是</span> : <span className="text-gray-400">否</span>}</td>
-                  </tr>
-                );
-              })}
-              {linkedBatches.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">暂无关联 ERP 材料出库记录</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={batchPaged.page} total={batchPaged.total} totalPages={batchPaged.totalPages} onChange={batchPaged.setPage} />
-      </Section>
-    </div>
-  );
-}
-
-/* ═════════ 整机装配：录入待测试设备 ═════════ */
-const ASSEMBLY_DISPLAY = {
-  未开始: '待录入', 整机装配: '待录入', 装配中: '录入中', 待确认装配完成: '待确认装配完成',
-  半成品检验中: '已录入待测试', 初测中: '已录入待测试', 中测中: '已录入待测试', OQT终测中: '已录入待测试',
-  待入库: '已录入待测试', 已入库: '已录入待测试', 待分配项目: '已录入待测试', 已分配项目: '已录入待测试',
-  在线运营: '已录入待测试', 生产返修中: '已录入待测试', 装配异常: '装配异常',
-};
-const assemblyDisplay = (device) => ASSEMBLY_DISPLAY[device.status] || (device.placeholder ? '待录入' : '录入中');
-
-function RecordDeviceModal({ isOpen, onClose, plan, state, dispatch }) {
-  const deviceType = resolveDeviceType(plan, state);
-  const slots = deviceType?.slots || [];
-  const [bindings, setBindings] = useState({});
-  const [labels, setLabels] = useState({});
-  const [sn, setSn] = useState('');
-  const [assembler, setAssembler] = useState(state.currentUser);
-
-  const availableFor = (moduleTypeId) => {
-    const mt = state.moduleTypes.find((m) => m.id === moduleTypeId);
-    const usedIds = new Set(Object.values(bindings));
-    return state.materials.filter((m) => m.category === mt?.category && m.status === '待装配' && !usedIds.has(m.id));
-  };
-  const matById = (id) => state.materials.find((m) => m.id === id);
-  const requiredSlots = slots;
-  const boundRequired = requiredSlots.filter((s) => bindings[s.id]).length;
-  const labelsOk = LABEL_TEMPLATE.filter((l) => l.required).every((l) => (labels[l.key] || '').trim());
-  const canSubmit = sn.trim() && boundRequired === requiredSlots.length && labelsOk;
-
-  const submit = (e) => {
-    e.preventDefault();
-    if (!canSubmit) return;
-    const ts = Date.now();
-    const usedMaterials = slots.filter((s) => bindings[s.id]).map((s) => ({ materialId: bindings[s.id], moduleTypeId: s.moduleTypeId }));
-    dispatch({
-      type: 'ADD_DEVICE',
-      payload: {
-        id: `DEV-${ts}`, sn: sn.trim(), deviceTypeId: deviceType?.id,
-        status: '半成品检验中', assembler, productionPlanId: plan.id,
-        assemblyTime: nowText(), createdAt: nowText(), updatedAt: nowText(),
-        usedMaterials, labels,
-      },
-    });
-    Object.values(bindings).forEach((materialId) => {
-      dispatch({ type: 'UPDATE_MATERIAL', payload: { id: materialId, status: '已占用' } });
-    });
-    setBindings({}); setLabels({}); setSn('');
-    onClose();
-  };
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="录入待测试设备" size="lg">
-      <form onSubmit={submit} className="space-y-4">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">基础信息</div>
-        <div className="grid grid-cols-3 gap-3">
-          <div><label className="block text-xs text-gray-600 mb-1">设备SN *</label><input className={INPUT} required value={sn} onChange={(e) => setSn(e.target.value)} placeholder="如 SN-DEV-1001" /></div>
-          <div><label className="block text-xs text-gray-600 mb-1">设备类型</label><input className={`${INPUT} bg-gray-50`} readOnly value={deviceType?.name || '—'} /></div>
-          <div><label className="block text-xs text-gray-600 mb-1">配置版本</label><input className={`${INPUT} bg-gray-50`} readOnly value={deviceType?.version || 'V1'} /></div>
-          <div><label className="block text-xs text-gray-600 mb-1">所属生产计划</label><input className={`${INPUT} bg-gray-50`} readOnly value={plan.name || plan.id} /></div>
-          <div><label className="block text-xs text-gray-600 mb-1">装配人</label><input className={INPUT} value={assembler} onChange={(e) => setAssembler(e.target.value)} /></div>
-          <div><label className="block text-xs text-gray-600 mb-1">装配时间</label><input className={`${INPUT} bg-gray-50`} readOnly value={nowText()} /></div>
-          <div><label className="block text-xs text-gray-600 mb-1">装配照片/附件</label><input className={`${INPUT} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）上传照片" /></div>
-        </div>
-
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">模块绑定（模块SN 只能从在库可用实例中选择：已装配 / 维修中 / 已报废 / 锁定其他计划的模块不可选）</div>
-        <div className="border border-gray-200 rounded overflow-hidden max-h-72 overflow-y-auto">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 sticky top-0"><tr>{['装配位置', '需要模块类型', '是否必填', '模块SN', '模块型号', '供应商', '来源批次', '当前状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
-              <tbody className="divide-y divide-gray-100">
-                {slots.map((s) => {
-                  const mt = state.moduleTypes.find((m) => m.id === s.moduleTypeId);
-                  const opts = availableFor(s.moduleTypeId);
-                  const chosen = matById(bindings[s.id]);
-                  return (
-                    <tr key={s.id}>
-                      <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.slotName}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{mt?.name || s.moduleTypeId}</td>
-                      <td className="px-3 py-2 text-xs text-gray-500">是</td>
-                      <td className="px-3 py-2">
-                        <select className="border border-gray-300 rounded px-2 py-1 text-xs w-44" value={bindings[s.id] || ''} onChange={(e) => setBindings({ ...bindings, [s.id]: e.target.value })}>
-                          <option value="">-- 选择在库可用SN --</option>
-                          {chosen && !opts.some((o) => o.id === chosen.id) && <option value={chosen.id}>{chosen.sn}</option>}
-                          {opts.map((o) => <option key={o.id} value={o.id}>{o.sn}（{o.supplier}）</option>)}
-                        </select>
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{chosen?.model || mt?.model || '—'}</td>
-                      <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{chosen?.supplier || '—'}</td>
-                      <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{chosen?.batchNo || '—'}</td>
-                      <td className="px-3 py-2"><StatusBadge status={chosen ? '待装配' : '待关联'} /></td>
-                      <td className="px-3 py-2 text-xs whitespace-nowrap">{chosen ? <button type="button" className="text-red-400 hover:text-red-600 hover:underline" onClick={() => setBindings({ ...bindings, [s.id]: '' })}>解绑</button> : <span className="text-gray-300">未绑定</span>}</td>
-                    </tr>
-                  );
-                })}
-                {slots.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-400">该设备类型暂无装配 BOM 模板</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">设备标签（按设备类型标签模板）</div>
-        <div className="grid grid-cols-3 gap-3">
-          {LABEL_TEMPLATE.map((l) => (
-            <div key={l.key}>
-              <label className="block text-xs text-gray-600 mb-1">{l.key}{l.required && <span className="text-red-500"> *</span>}</label>
-              <input className={INPUT} value={labels[l.key] || ''} onChange={(e) => setLabels({ ...labels, [l.key]: e.target.value })} placeholder={l.sample} />
-            </div>
-          ))}
-        </div>
-
-        <div className="bg-amber-50 border border-amber-100 rounded p-3 text-xs text-amber-700">
-          必填模块（{boundRequired}/{requiredSlots.length}）与必填标签全部完成后才能确认录入。确认后设备进入质量测试节点，状态为「待测试」，所选模块实例状态更新为「已装配」。
-        </div>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={BTN_GHOST}>取消</button>
-          <button type="submit" disabled={!canSubmit} className={`${BTN_PRIMARY} disabled:opacity-40`}>确认录入待测试设备</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-// 装配状态严格按“必填模块完成 + 必填标签完成”判定，避免 2/10 却显示已录入待测试。
-function assemblyRowStatus(device, reqTotal, bound, labelsFilled) {
-  if (device.status === '装配异常') return '装配异常';
-  if (bound === 0 && device.placeholder) return '待录入';
-  if (reqTotal > 0 && bound < reqTotal) return '待补齐模块';
-  if (!labelsFilled) return '待补齐标签';
-  return '已录入待测试';
-}
-
-function AssemblyNode({ planDevices, state, openRecord, openAction }) {
-  const rows = planDevices.map((device) => {
-    const type = state.deviceTypes.find((item) => item.id === device.deviceTypeId);
-    const total = type?.slots?.length || 0;
-    const bound = device.usedMaterials?.length || 0;
-    const labelsFilled = !!(device.labels && device.labels['批次标签']);
-    return { device, type, total, bound, labelsFilled, aStatus: assemblyRowStatus(device, total, bound, labelsFilled) };
-  });
-  const labelState = (device) => {
-    const count = device.labels ? Object.keys(device.labels).length : 0;
-    return count === 0 ? '未填写' : count === 1 ? '部分填写' : '已填写';
-  };
-  const paged = usePaged(rows, 10);
-  const done = rows.filter((r) => r.aStatus === '已录入待测试').length;
-  const allDone = rows.length > 0 && done === rows.length;
-  const notReady = rows.length - done;
-  return (
-    <div className="space-y-5">
-      <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-        整机装配按生产计划绑定的设备类型 / 配置版本生成装配模板。录入待测试设备时需填写整机 SN，并将每个必填模块位置绑定到具体模块 SN（只能从模块实例库存选择）。必填模块与必填标签全部完成，状态才会显示「已录入待测试」。
-        <span className="text-blue-500">整机 SN 需与 ERP 产品序列号保持一致；模块 SN 如不进入 ERP，由平台记录整机-模块绑定关系，用于测试、返修、换件追溯。</span>
-      </div>
-      <MetricCards items={[
-        { label: '装配设备', value: rows.length, color: 'border-blue-500' },
-        { label: '待补齐', value: rows.filter((r) => ['待录入', '待补齐模块', '待补齐标签'].includes(r.aStatus)).length, color: 'border-amber-500' },
-        { label: '已录入待测试', value: done, color: 'border-green-500' },
-        { label: '装配异常', value: rows.filter((r) => r.aStatus === '装配异常').length, color: 'border-red-500' },
-      ]} />
-      <Section title="装配设备列表" action={
-        <div className="flex gap-2 flex-wrap">
-          <button className={BTN_GHOST} onClick={() => openAction('批量导入待测试设备')}>批量导入待测试设备</button>
-          <button className={BTN_GHOST} onClick={() => openAction('查看装配模板')}>查看装配模板</button>
-          <button className={BTN_GHOST} onClick={openRecord}>录入待测试设备</button>
-          <button className={`${BTN_PRIMARY} disabled:opacity-40`} disabled={!allDone}
-            title={!allDone ? `仍有 ${notReady} 台设备未完成必填模块绑定或标签填写，暂不能进入质量测试。` : ''}
-            onClick={() => openAction('确认装配完成')}>确认装配完成并进入质量测试</button>
-        </div>
-      }>
-        {!allDone && rows.length > 0 && (
-          <div className="mb-3 text-xs bg-amber-50 border border-amber-100 text-amber-700 rounded px-3 py-2">
-            仍有 {notReady} 台设备未完成必填模块绑定或标签填写，暂不能进入质量测试。
-          </div>
-        )}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '装配状态', '模块绑定进度', '必填模块完成数', '设备标签状态', '装配人', '装配时间', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {paged.pageItems.map(({ device, type, aStatus, bound, total }) => (
-                <tr key={device.id}>
-                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap"><Link className="text-blue-600 hover:underline" to={`/devices/${device.id}`}>{device.sn}</Link></td>
-                  <td className="px-3 py-2 whitespace-nowrap">{type?.name || device.deviceTypeId}</td>
-                  <td className="px-3 py-2"><StatusBadge status={aStatus} /></td>
-                  <td className="px-3 py-2">{bound}/{total}</td>
-                  <td className="px-3 py-2">{bound}/{total}</td>
-                  <td className="px-3 py-2"><StatusBadge status={labelState(device)} /></td>
-                  <td className="px-3 py-2 whitespace-nowrap">{device.assembler || '—'}</td>
-                  <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{device.assemblyTime || '—'}</td>
-                  <td className="px-3 py-2 text-xs">
-                    <div className="flex gap-x-3 whitespace-nowrap">
-                      <button className="text-slate-600 hover:underline" onClick={() => openAction('查看装配记录', device)}>查看记录</button>
-                      <button className="text-blue-600 hover:underline" onClick={() => openAction('绑定模块', device)}>绑定模块</button>
-                      <button className="text-emerald-600 hover:underline" onClick={() => openAction('补充标签', device)}>补充标签</button>
-                      <button className="text-red-400 hover:text-red-600 hover:underline" onClick={() => openAction('作废录入', device)}>作废录入</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">暂无待测试设备，请「录入待测试设备」</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
-      </Section>
-    </div>
-  );
-}
-
-/* ═════════ 质量测试：设备测试矩阵 ═════════ */
-// 工站矩阵只认 stationKey（当前可录入工站）；测试内容类型 testType 只是记录分类，
-// 绝不参与工站推进。缺少 stationKey 的历史记录一律不进入工站矩阵。
-const stationOf = (record) => STATION_KEY_LABEL[record.stationKey] || null;
-const isPassRecord = (record) => record.stationResult === 'Pass' || (!record.stationResult && ['合格', 'Pass', '通过'].includes(record.result));
-const isNGRecord = (record) => record.stationResult === 'NG' || (!record.stationResult && ['不合格', 'NG', '不通过'].includes(record.result));
-
-function latestStationRec(records, deviceId, stationLabel) {
-  return records.filter((r) => r.deviceId === deviceId && stationOf(r) === stationLabel)
-    .sort((a, b) => (a.testTime || '').localeCompare(b.testTime || '')).at(-1);
-}
-function stationPassed(records, deviceId, idx) {
-  const rec = latestStationRec(records, deviceId, STATIONS[idx]);
-  return rec && isPassRecord(rec);
-}
-// 整条前缀（0..upToIdx）全部 Pass 才算“可以进入下一工站”。
-// 只看相邻工站会漏掉乱序数据（如初测 NG 但中测有 Pass 记录），这里逐级校验。
-function chainPassed(records, deviceId, upToIdx) {
-  for (let i = 0; i <= upToIdx; i++) {
-    if (!stationPassed(records, deviceId, i)) return false;
-  }
-  return true;
-}
-function cellStatus(device, records, idx) {
-  const prevPass = idx === 0 || chainPassed(records, device.id, idx - 1);
-  // 严格顺序：前序工站未全部 Pass 前，本工站一律显示 —，杜绝“前序待测/NG 但后序 Pass”。
-  if (!prevPass) return '—';
-  const rec = latestStationRec(records, device.id, STATIONS[idx]);
-  if (!rec) return '待测';
-  if (isPassRecord(rec)) return 'Pass';
-  // 该工站最新记录为 NG：返修中不可重录；返修完成待重测则回到该工站可重测（显示待测）。
-  if (device.status === '生产返修中') return '返修中';
-  if (device.status === '返修完成待重测') return '待测';
-  return 'NG';
-}
-const CELL_STYLE = {
-  Pass: 'bg-green-100 text-green-700', NG: 'bg-red-100 text-red-700',
-  待测: 'bg-gray-100 text-gray-500', 返修中: 'bg-amber-100 text-amber-700', '—': 'text-gray-300',
-};
-
-// 计算某设备当前可录入的工站下标（第一个非 Pass 的工站；全部 Pass 返回 -1）。
-function currentStationIdx(device, records) {
-  for (let idx = 0; idx < STATIONS.length; idx++) {
-    if (cellStatus(device, records, idx) !== 'Pass') return idx;
-  }
-  return -1;
-}
-
-function TestResultModal({ isOpen, onClose, planDevices, records, state, dispatch }) {
-  const [form, setForm] = useState({ deviceId: '', testType: '功能测试', result: 'Pass', operator: state.currentUser, ngReason: '', notes: '', genRepair: true, repairOwner: '' });
-  const device = planDevices.find((item) => item.id === form.deviceId);
-  const stationIdx = device ? currentStationIdx(device, records) : -1;
-  // 工站由设备当前进度自动带出，用户不能自由选择，避免跳站破坏流程。
-  const stationKey = stationIdx >= 0 ? STATION_KEYS[stationIdx] : null;
-  const stationName = stationIdx >= 0 ? STATIONS[stationIdx] : (device ? '已完成（全部工站 Pass）' : '请先选择设备');
-  // 返修中设备不允许直接录入，需先完成返修（返修完成待重测）。
-  const repairBlocked = device?.status === '生产返修中';
-  const canRecord = !!device && stationIdx >= 0 && !repairBlocked;
-  const isNG = form.result === 'NG';
-
-  const submit = (e) => {
-    e.preventDefault();
-    if (!canRecord) return;
-    const idSeed = Date.now();
-    dispatch({
-      type: 'ADD_TEST_RECORD',
-      payload: { id: `TEST-${idSeed}`, deviceId: form.deviceId, stationKey, stationResult: form.result, testType: form.testType, result: form.result === 'Pass' ? '合格' : '不合格', operator: form.operator, testTime: nowText(), status: '有效', notes: form.notes, ngReason: form.ngReason },
-    });
-    dispatch({ type: 'UPDATE_DEVICE', payload: { id: form.deviceId, status: form.result === 'Pass' && stationKey === 'oqt' ? '待入库' : form.result === 'NG' ? '生产返修中' : device?.status, updatedAt: nowText() } });
-    if (form.result === 'NG' && form.genRepair) {
-      dispatch({ type: 'ADD_PRODUCTION_WORK_ORDER', payload: { id: `PWO-${idSeed}`, type: 'production', productionPlanId: device?.productionPlanId, deviceId: form.deviceId, deviceSN: device?.sn || '', ngStation: stationName, description: `${stationName}测试NG：${form.ngReason || form.notes || '待补充原因'}`, severity: '中', status: '待处理', assignedTo: form.repairOwner || '', createdAt: nowText(), updatedAt: nowText(), processLogs: [] } });
-    }
-    setForm({ deviceId: '', testType: '功能测试', result: 'Pass', operator: state.currentUser, ngReason: '', notes: '', genRepair: true, repairOwner: '' });
-    onClose();
-  };
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="录入测试结果" size="lg">
-      <form onSubmit={submit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">设备SN</label><select className={INPUT} required value={form.deviceId} onChange={(e) => setForm({ ...form, deviceId: e.target.value })}><option value="">-- 选择设备 --</option>{planDevices.map((d) => <option key={d.id} value={d.id}>{d.sn}</option>)}</select></div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">当前可录入工站</label>
-            <input className={`${INPUT} bg-gray-50 ${!canRecord && device ? 'text-gray-400' : 'text-gray-700'}`} readOnly value={stationName} />
-            <p className="text-xs text-gray-400 mt-1">工站由设备测试进度自动带出，需上一工站 Pass 后才能录入下一工站。</p>
-          </div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">测试内容类型</label><select className={INPUT} value={form.testType} onChange={(e) => setForm({ ...form, testType: e.target.value })}>{['功能测试', '老化测试', '安全检查', '外观检查', '其他'].map((s) => <option key={s}>{s}</option>)}</select><p className="text-xs text-gray-400 mt-1">仅作测试记录分类，不影响当前工站与矩阵推进。</p></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">测试结果</label><select className={INPUT} value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}><option>Pass</option><option>NG</option></select></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">测试人</label><input className={INPUT} value={form.operator} onChange={(e) => setForm({ ...form, operator: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">测试时间</label><input className={`${INPUT} bg-gray-50`} readOnly value={nowText()} /></div>
-          {isNG && <>
-            <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">NG原因 *</label><input className={INPUT} required value={form.ngReason} onChange={(e) => setForm({ ...form, ngReason: e.target.value })} /></div>
-            <div className="flex items-center gap-2 pt-6"><input id="genRepair" type="checkbox" checked={form.genRepair} onChange={(e) => setForm({ ...form, genRepair: e.target.checked })} /><label htmlFor="genRepair" className="text-sm text-gray-700">生成生产返修记录</label></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">返修负责人</label><select className={INPUT} value={form.repairOwner} onChange={(e) => setForm({ ...form, repairOwner: e.target.value })}><option value="">-- 选择返修负责人 --</option>{['张三', '李四', '王五', '赵六'].map((p) => <option key={p}>{p}</option>)}</select></div>
-          </>}
-          <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">异常说明 / 备注</label><textarea className={INPUT} rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-          <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">附件 / 报告</label><input className={`${INPUT} bg-gray-50 text-gray-400`} disabled placeholder="（原型占位）上传测试报告" /></div>
-        </div>
-        {device && repairBlocked && <div className="bg-red-50 border border-red-100 rounded p-3 text-xs text-red-600">该设备返修中，暂不允许录入测试结果。需先完成返修（状态变为「返修完成待重测」）后，才能在原 NG 工站（{stationName}）重新录入。</div>}
-        {device && !repairBlocked && stationIdx < 0 && <div className="bg-amber-50 border border-amber-100 rounded p-3 text-xs text-amber-700">该设备已全部工站 Pass，无可录入工站，请前往整机入库节点。</div>}
-        {canRecord && device?.status === '返修完成待重测' && <div className="bg-amber-50 border border-amber-100 rounded p-3 text-xs text-amber-700">该设备返修完成待重测，请在原 NG 工站（{stationName}）重新录入测试结果。</div>}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={BTN_GHOST}>取消</button>
-          <button type="submit" disabled={!canRecord} className={`${BTN_PRIMARY} disabled:opacity-40`}>保存测试结果</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function QualityNode({ planDevices, testRecords, workOrders, openTest, openAction }) {
-  const deviceIds = new Set(planDevices.map((d) => d.id));
-  const records = testRecords.filter((r) => deviceIds.has(r.deviceId));
-  const stationProgress = STATIONS.map((label, idx) => {
-    let waiting = 0, pass = 0, ng = 0, repair = 0;
-    planDevices.forEach((d) => {
-      const c = cellStatus(d, records, idx);
-      if (c === 'Pass') pass++; else if (c === 'NG') ng++; else if (c === '返修中') repair++; else if (c === '待测') waiting++;
-    });
-    return { label, waiting, pass, ng, repair };
-  });
-
-  const repairIds = new Set((workOrders || []).map((w) => w.deviceId));
-  const matrix = planDevices.map((d) => {
-    const cells = STATIONS.map((_, idx) => cellStatus(d, records, idx));
-    // 当前工站 = 第一个非 Pass 的工站；全 Pass 则已完成。
-    const currentIdx = cells.findIndex((c) => c !== 'Pass');
-    const currentCell = currentIdx === -1 ? null : cells[currentIdx];
-    // NG次数只统计有效工站（stationKey）的 NG 记录，历史 testType-only 记录不计入。
-    const ngCount = records.filter((r) => r.deviceId === d.id && stationOf(r) && isNGRecord(r)).length;
-    const hasNG = cells.includes('NG') || cells.includes('返修中');
-    // 当前状态严格由当前工站单元格推导：NG→待返修、返修中→返修中、待测→测试中、全过→测试通过。
-    const currentStatus = currentIdx === -1 ? '测试通过'
-      : currentCell === '返修中' ? '返修中'
-      : currentCell === 'NG' ? '待返修'
-      : '测试中';
-    return {
-      device: d,
-      cells,
-      currentStation: currentIdx === -1 ? '已完成' : STATIONS[currentIdx],
-      currentStatus,
-      ngCount,
-      hasNG,
-      hasRepair: repairIds.has(d.id),
-      repairBlocked: currentStatus === '返修中',
-      repair: currentCell === '返修中' ? '返修中' : currentCell === 'NG' ? '待返修' : '—',
-    };
-  });
-  const paged = usePaged(matrix, 10);
-
-  return (
-    <div className="space-y-5">
-      <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-        质量测试按设备逐工站录入结果：仅上一工站 Pass 后才能录入下一工站；NG 生成生产返修记录，返修完成后回到原 NG 工站重测；全部工站 Pass 后设备方可进入整机入库。
-        <span className="text-blue-500">平台工站测试（半成品检验 / 初测 / 中测 / OQT终测）为生产过程测试追溯，不替代 ERP 产品检验单；ERP 产品检验单是正式入库检验，可在矩阵中关联展示其单号与检验状态。</span>
-      </div>
-      <Section title="工站进度概览">
-        <div className="grid grid-cols-4 gap-3">
-          {stationProgress.map((s) => (
-            <div key={s.label} className="border border-gray-100 rounded p-4">
-              <div className="text-sm font-medium text-gray-800 mb-2">{s.label}</div>
-              <div className="text-xs text-gray-500 space-y-0.5">
-                <div>待测 {s.waiting}</div>
-                <div className="text-green-600">Pass {s.pass}</div>
-                <div className="text-red-600">NG {s.ng}</div>
-                <div className="text-amber-600">返修中 {s.repair}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Section>
-      <Section title="设备测试矩阵" action={<button className={BTN_PRIMARY} onClick={openTest}>录入测试结果</button>}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['设备SN', '半成品检验', '初测', '中测', 'OQT终测', '当前工站', '当前状态', 'NG次数', '返修状态', 'ERP产品检验单', 'ERP检验状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {paged.pageItems.map((m) => (
-                <tr key={m.device.id}>
-                  <td className="px-3 py-2 font-mono text-xs"><Link className="text-blue-600 hover:underline" to={`/devices/${m.device.id}`}>{m.device.sn}</Link></td>
-                  {m.cells.map((c, i) => <td key={i} className="px-3 py-2"><span className={`text-xs px-2 py-0.5 rounded ${CELL_STYLE[c] || ''}`}>{c}</span></td>)}
-                  <td className="px-3 py-2 text-gray-600 text-xs">{m.currentStation}</td>
-                  <td className="px-3 py-2"><StatusBadge status={m.currentStatus} /></td>
-                  <td className="px-3 py-2">{m.ngCount > 0 ? <span className="text-red-600 font-medium">{m.ngCount}</span> : <span className="text-gray-400">0</span>}</td>
-                  <td className="px-3 py-2"><StatusBadge status={m.repair} /></td>
-                  <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{m.device.erpInspectionNo || '未关联'}</td>
-                  <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{m.device.erpInspectionStatus || (m.currentStatus === '测试通过' ? '待检' : '—')}</td>
-                  <td className="px-3 py-2 text-xs">
-                    <div className="flex gap-x-3 whitespace-nowrap">
-                      {m.repairBlocked
-                        ? <span className="text-gray-300 cursor-not-allowed" title="返修中设备需先完成返修（返修完成待重测）后，才能在原 NG 工站重新录入测试结果">录入结果</span>
-                        : <button className="text-blue-600 hover:underline" onClick={openTest}>录入结果</button>}
-                      <Link to={`/devices/${m.device.id}`} className="text-slate-600 hover:underline">查看测试记录</Link>
-                      {m.hasRepair
-                        ? <button className="text-slate-600 hover:underline" onClick={() => openAction('查看返修')}>查看返修记录</button>
-                        : m.hasNG
-                          ? <button className="text-red-500 hover:text-red-700 hover:underline" onClick={() => openAction('生成生产返修记录')}>生成返修记录</button>
-                          : <span className="text-gray-300 cursor-not-allowed">生成返修记录</span>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {matrix.length === 0 && <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-400">暂无待测试设备</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
-      </Section>
-      <Section title="当前 NG / 返修中设备">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50"><tr>{['设备SN', '返修单', '来源工站', '状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600">{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-gray-100">
-            {workOrders.map((wo) => <tr key={wo.id}><td className="px-3 py-2 font-mono text-xs">{wo.deviceSN}</td><td className="px-3 py-2 font-mono text-xs">{wo.id}</td><td className="px-3 py-2">{wo.ngStation || '—'}</td><td className="px-3 py-2"><StatusBadge status={wo.status} /></td><td className="px-3 py-2 text-xs"><button className="text-slate-600 hover:underline" onClick={() => openAction('查看返修')}>查看返修</button></td></tr>)}
-            {workOrders.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-400">暂无 NG / 返修中设备</td></tr>}
-          </tbody>
-        </table>
-      </Section>
-    </div>
-  );
-}
-
-/* ═════════ 整机入库 ═════════ */
-function WarehouseNode({ plan, planDevices, testRecords, state, dispatch, openAction }) {
-  const deviceIds = new Set(planDevices.map((d) => d.id));
-  const records = testRecords.filter((r) => deviceIds.has(r.deviceId));
-  // 只有工站四站全部 Pass 的设备才进入整机入库范围（测试中/返修中/待测一律排除）。
-  const passedAll = (device) => STATIONS.every((_, idx) => stationPassed(records, device.id, idx));
-  const erpInboundNoOf = (d) => d.erpInboundNo || '';
-  const erpInspectNoOf = (d) => d.erpInspectionNo || '';
-  const erpLinked = (d) => !!erpInboundNoOf(d) && !!erpInspectNoOf(d);
-  const erpPass = (d) => d.erpInspectionStatus === '合格';
-  const candidates = planDevices.filter(passedAll);
-  // 已入库：全 Pass + 已关联 ERP 入库单/检验单 + ERP 检验合格。
-  const stored = candidates.filter((d) => erpLinked(d) && erpPass(d));
-  // 可入库 / 待确认：全 Pass，但尚未完成 ERP 入库/检验关联或未合格。
-  const pending = candidates.filter((d) => !stored.includes(d));
-  // 平台侧确认设备进入可交付状态（不代替 ERP 创建入库单）。
-  const markDeliverable = (device) => {
-    dispatch({ type: 'UPDATE_DEVICE', payload: { id: device.id, status: '已入库', updatedAt: nowText() } });
-  };
-  const allDeliverable = planDevices.length > 0 && stored.length === planDevices.length;
-  const notDone = planDevices.length - stored.length;
-  const finishPlan = () => {
-    if (!allDeliverable) return;
-    dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: plan.id, status: '已完成', currentNode: '整机入库', updatedAt: nowText() } });
-  };
-  const typeName = (id) => state.deviceTypes.find((t) => t.id === id)?.name || id;
-  const erpInbound = (device) => erpInboundNoOf(device) || '未关联';
-  const erpInspect = (device) => erpInspectNoOf(device) || '未关联';
-  const erpInspectStatus = (device) => device.erpInspectionStatus || '待检';
-  // ERP 入库/检验未关联时，库存状态不得显示“合格可用”；已关联但未合格显示“待同步”；
-  // 只有已关联入库单+检验单且检验合格时，才允许显示“合格可用”。
-  const erpStock = (device) => !erpLinked(device) ? '未关联' : !erpPass(device) ? '待同步' : (device.erpStockStatus || '合格可用');
-  const pendingPaged = usePaged(pending, 10);
-  const storedPaged = usePaged(stored, 10);
-
-  return (
-    <div className="space-y-5">
-      <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-        产品入库确认：ERP 由库管员选择已完工生产订单生成产品入库单（批号 / 序列号 / 仓库），审核后下推产品检验单，检验合格后 ERP 自动调整库存状态。
-        <span className="text-blue-500">本节点只关联 ERP 产品入库单 / 产品检验单、展示 ERP 库存状态，并由平台侧确认设备是否进入可交付状态；不代替 ERP 创建入库单。</span>
-      </div>
-      <MetricCards items={[
-        { label: '待入库/待确认', value: pending.length, color: 'border-teal-500' },
-        { label: '已入库', value: stored.length, color: 'border-green-500' },
-        { label: '可入库设备', value: pending.length, color: 'border-blue-500' },
-        { label: '目标数量', value: plan.targetCount || 0, color: 'border-slate-500' },
-      ]} />
-      <Section title="ERP 产品入库 / 检验关联" action={<div className="flex gap-2"><button className={BTN_GHOST} onClick={() => openAction('关联ERP产品入库单')}>关联ERP产品入库单</button><button className={BTN_GHOST} onClick={() => openAction('关联ERP产品检验单')}>关联ERP产品检验单</button></div>}>
-        <div className="grid grid-cols-3 gap-4 text-sm">
-          <div><span className="text-gray-500">ERP生产订单号：</span><span className="font-mono text-gray-700">{plan.erpProductionOrderNo || '—'}</span></div>
-          <div><span className="text-gray-500">ERP产品入库单号：</span><span className="font-mono text-gray-700">{plan.erpInboundNo || '未关联'}</span></div>
-          <div><span className="text-gray-500">ERP产品检验单号：</span><span className="font-mono text-gray-700">{plan.erpInspectionNo || '未关联'}</span></div>
-          <div><span className="text-gray-500">入库仓库：</span><span className="text-gray-700">{plan.warehouse || '成品库'}</span></div>
-          <div><span className="text-gray-500">ERP库存状态：</span><span className="text-gray-700">{plan.erpStockStatus || '按 ERP 检验结果'}</span></div>
-          <div><span className="text-gray-500">说明：</span><span className="text-gray-500 text-xs">批号 / 序列号 / 仓库以 ERP 产品入库单为准</span></div>
-        </div>
-      </Section>
-      <Section title="可入库设备列表" action={<div className="flex gap-2"><button className={`${BTN_PRIMARY} disabled:opacity-40`} disabled={!allDeliverable} title={!allDeliverable ? `仍有 ${notDone} 台设备未完成 ERP 入库/检验关联，暂不能完成生产计划。` : ''} onClick={finishPlan}>推进生产计划完成</button></div>}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', 'OQT结果', '当前状态', 'ERP产品入库单', 'ERP检验状态', 'ERP库存状态', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {pendingPaged.pageItems.map((device) => (
-                <tr key={device.id}>
-                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{device.sn}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{typeName(device.deviceTypeId)}</td>
-                  <td className="px-3 py-2"><StatusBadge status="Pass" /></td>
-                  <td className="px-3 py-2"><StatusBadge status="待入库" /></td>
-                  <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{erpInbound(device)}</td>
-                  <td className="px-3 py-2 text-xs whitespace-nowrap">{erpInspectStatus(device)}</td>
-                  <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{erpStock(device)}</td>
-                  <td className="px-3 py-2 text-xs">
-                    <div className="flex gap-x-3 whitespace-nowrap">
-                      <button className="text-teal-600 hover:underline" onClick={() => markDeliverable(device)}>确认可交付</button>
-                      <button className="text-blue-600 hover:underline" onClick={() => openAction('关联ERP产品入库单', device)}>关联入库单</button>
-                      <button className="text-slate-600 hover:underline" onClick={() => openAction('关联ERP产品检验单', device)}>关联检验单</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {pending.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">暂无可入库设备（需全部工站 Pass）</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={pendingPaged.page} total={pendingPaged.total} totalPages={pendingPaged.totalPages} onChange={pendingPaged.setPage} />
-      </Section>
-      <Section title="已入库设备列表">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50"><tr>{['设备SN', '设备类型', '当前状态', 'ERP产品入库单', 'ERP产品检验单', 'ERP库存状态', '入库仓库', '入库时间', '操作'].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {storedPaged.pageItems.map((device) => (
-                <tr key={device.id}>
-                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{device.sn}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{typeName(device.deviceTypeId)}</td>
-                  <td className="px-3 py-2"><StatusBadge status={device.status} /></td>
-                  <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{erpInbound(device)}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{erpInspect(device)}</td>
-                  <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{erpStock(device)}</td>
-                  <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{plan.warehouse || '成品库'}</td>
-                  <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{device.inboundTime || device.updatedAt || '—'}</td>
-                  <td className="px-3 py-2 text-xs">
-                    <div className="flex gap-x-3 whitespace-nowrap">
-                      <button className="text-slate-600 hover:underline" onClick={() => openAction('查看入库记录', device)}>查看入库记录</button>
-                      <button className="text-blue-600 hover:underline" onClick={() => openAction('关联ERP产品检验单', device)}>关联检验单</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {stored.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-400">暂无已入库设备</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={storedPaged.page} total={storedPaged.total} totalPages={storedPaged.totalPages} onChange={storedPaged.setPage} />
-      </Section>
-    </div>
-  );
-}
+// 「长期未结」阈值：创建早于 TODAY - 45 天且未完成。放在模块作用域，避免在渲染期做日期运算。
+const LONG_UNSETTLED_BEFORE = (() => {
+  const d = new Date(TODAY);
+  d.setDate(d.getDate() - 45);
+  return d.toISOString().slice(0, 10);
+})();
 
 export default function ProductionPlanDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const { state, dispatch } = useApp();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [action, setAction] = useState(null);
-  const [showRecord, setShowRecord] = useState(false);
-  const [showTest, setShowTest] = useState(false);
-  const nodeParam = searchParams.get('node');
-  const activeNode = NODES.some((node) => node.key === nodeParam) ? nodeParam : 'materialPrep';
-  const setActiveNode = (key) => setSearchParams({ node: key }, { replace: true });
-  const plan = [...(state.workflowProductionPlans || []), ...(state.productionPlans || [])].find((item) => item.id === id);
+  const { state } = useApp();
+
+  const plans = [...(state.workflowProductionPlans || []), ...(state.productionPlans || [])];
+  const plan = plans.find((p) => p.id === id);
+
+  const deviceTypes = state.deviceTypes || [];
+  const typeName = (tid) => deviceTypes.find((t) => t.id === tid)?.name || '—';
+
+  const planDevices = plan ? (state.devices || []).filter((d) => d.productionPlanId === plan.id) : [];
+  const planDeviceIds = new Set(planDevices.map((d) => d.id));
+  const snOf = (deviceId) => planDevices.find((d) => d.id === deviceId)?.sn || deviceId;
+  const testRecords = plan ? (state.testRecords || []).filter((r) => planDeviceIds.has(r.deviceId) && r.stationKey) : [];
+  const repairs = plan ? (state.productionWorkOrders || []).filter((w) => w.productionPlanId === plan.id || planDeviceIds.has(w.deviceId)) : [];
+  const planLogs = plan ? (state.operationLogs || []).filter((l) => l.productionPlanId === plan.id || planDeviceIds.has(l.deviceId)) : [];
+  const testSorted = [...testRecords].sort((a, b) => String(b.testTime || '').localeCompare(String(a.testTime || '')));
+
+  const devPaged = usePaged(planDevices, 8);
+  const asmPaged = usePaged(planDevices, 8);
+  const testPaged = usePaged(testSorted, 10);
+  const repairPaged = usePaged(repairs, 8);
 
   if (!plan) {
-    return <div className="p-8 text-center text-gray-400">未找到生产计划 {id}</div>;
+    return (
+      <Page>
+        <PageHeader title="生产计划详情" actions={<Btn as="link" to="/projects?tab=production" variant="secondary">返回生产计划</Btn>} />
+        <EmptyState>未找到生产计划 {id}</EmptyState>
+      </Page>
+    );
   }
 
-  const project = state.projects.find((item) => item.id === plan.projectId);
-  const planDevices = state.devices.filter((device) => device.productionPlanId === plan.id);
-  const planDeviceIds = new Set(planDevices.map((device) => device.id));
-  const testRecords = state.testRecords.filter((record) => planDeviceIds.has(record.deviceId));
-  const workOrders = state.productionWorkOrders.filter((item) => item.productionPlanId === plan.id || planDeviceIds.has(item.deviceId));
-  const target = plan.targetCount || 0;
-  const cap = (n) => (target ? Math.min(n, target) : n);
-  // 顶部流程数字统一口径：质量测试=工站全 Pass 数，整机入库=ERP 检验合格数，均封顶计划数量并与下方表格一致。
-  const passedAllCount = planDevices.filter((d) => STATIONS.every((_, i) => stationPassed(testRecords, d.id, i))).length;
-  const erpQualifiedCount = planDevices.filter((d) => STATIONS.every((_, i) => stationPassed(testRecords, d.id, i)) && d.erpInboundNo && d.erpInspectionNo && d.erpInspectionStatus === '合格').length;
-  const counts = {
-    materialPrep: (plan.materialBatchIds || []).length,
-    assembly: cap(planDevices.length),
-    quality: cap(passedAllCount),
-    warehouse: cap(erpQualifiedCount),
+  const project = (state.projects || []).find((p) => p.id === plan.projectId);
+  const planStatus = productionPlanStatus(plan);
+  const isDone = ['已完成', '已作废'].includes(planStatus);
+  const overdue = !!plan.endDate && plan.endDate < TODAY && !isDone && planStatus !== '未开始';
+  const longUnsettled = !isDone && !!plan.createdAt && String(plan.createdAt).slice(0, 10) < LONG_UNSETTLED_BEFORE;
+  const targetCount = plan.targetCount ?? plan.target ?? 0;
+
+  const stationPassed = (deviceId, key) => {
+    const recs = testRecords
+      .filter((r) => r.deviceId === deviceId && r.stationKey === key)
+      .sort((a, b) => String(a.testTime || '').localeCompare(String(b.testTime || '')));
+    const last = recs.at(-1);
+    return !!last && isPassRec(last);
   };
-  const writeLog = (actionType, notes, fromStatus = plan.status, toStatus = plan.status) => {
-    dispatch({ type: 'ADD_OPERATION_LOG', payload: { id: `LOG-${Date.now()}-${plan.id}`, productionPlanId: plan.id, projectId: plan.projectId, operator: state.currentUser, timestamp: nowText(), actionType, fromStatus, toStatus, notes } });
-  };
-  const handleAction = (name, device) => {
-    if (name === '确认来料齐套') {
-      dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: plan.id, currentNode: '整机装配', materialReady: true, status: '生产中', updatedAt: nowText() } });
-      writeLog(name, '来料齐套确认完成，推进到整机装配', productionPlanStatus(plan), '生产中');
-      setActiveNode('assembly');
-      return;
-    }
-    if (name === '确认装配完成') {
-      dispatch({ type: 'UPDATE_PRODUCTION_PLAN', payload: { id: plan.id, currentNode: '质量测试', status: '生产中', updatedAt: nowText() } });
-      writeLog(name, '装配完成，设备进入质量测试');
-      setActiveNode('quality');
-      return;
-    }
-    setAction({ name, device });
-  };
-  // 设备类型混用校验：生产计划下若存在设备类型与计划不一致的数据，给出红色异常提示。
-  const typeMismatch = planDevices.some((d) => d.deviceTypeId && plan.deviceTypeId && d.deviceTypeId !== plan.deviceTypeId);
+  const passedAll = planDevices.filter((d) => ['semi', 'init', 'mid', 'oqt'].every((k) => stationPassed(d.id, k))).length;
+  const repairing = planDevices.filter((d) => ['生产返修中', '返修中'].includes(d.status)).length;
+  const openRepairs = repairs.filter((w) => !['已关闭', '已作废', '已完成'].includes(w.status)).length;
+
+  const cycle = `${String(plan.createdAt || '').slice(0, 10) || '—'} ~ ${plan.endDate ?? '—'}`;
 
   return (
-    <div className="p-6">
-      <div className="flex items-start gap-4 mb-6">
-        <button onClick={() => navigate('/projects?tab=production')} className="text-gray-400 hover:text-gray-600 mt-1 text-sm">← 返回</button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-xl font-bold text-gray-900">{plan.name || plan.id}</h1>
-            <StatusBadge status={productionPlanStatus(plan)} />
-            <StatusBadge status={plan.currentNode || NODES.find((node) => node.key === activeNode)?.label} />
+    <Page>
+      <PageHeader
+        breadcrumb={(
+          <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+            <Link to="/projects?tab=production" className="hover:text-gray-700">生产计划</Link>
+            <span>/</span>
+            <span className="text-gray-600">{plan.name ?? plan.id}</span>
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
-            {project && <span>所属项目：<Link to={`/projects/${project.id}`} className="text-blue-600 hover:underline">{project.name}</Link></span>}
-            <span>设备类型：{resolveDeviceType(plan, state)?.name || '—'}</span>
-            <span>计划数量：{plan.targetCount || 0} 台</span>
-            <span>已录入：{planDevices.length} 台</span>
-            <span>计划周期：{(plan.createdAt || '').slice(0, 10)} ~ {plan.endDate || '—'}</span>
-            <span>ERP生产订单号：{plan.erpProductionOrderNo || '—'}</span>
-          </div>
-        </div>
+        )}
+        title={<span className="inline-flex items-center gap-3">{plan.name ?? plan.id}<StatusBadge status={planStatus} size="md" /></span>}
+        description="生产计划仅关联 ERP 工单并记录平台生产过程与质量测试追溯，不创建 ERP 生产订单，也不维护 BOM / 入库 / 出库 / 检验。"
+        actions={<Btn as="link" to="/projects?tab=production" variant="secondary">返回生产计划</Btn>}
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Chip>当前卡点 · {plan.currentNode ?? '—'}</Chip>
+        {longUnsettled && <StatusBadge status="长期未结" />}
+        {overdue && <StatusBadge status="超期" />}
       </div>
 
-      {typeMismatch && (
-        <div className="mb-4 bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
-          当前生产计划存在设备类型不一致的数据，请检查 mock 数据。
+      <StatGrid cols={4}>
+        <StatCard label="计划数量" value={targetCount || '—'} />
+        <StatCard label="已录入设备" value={planDevices.length} />
+        <StatCard label="全工站通过" value={passedAll} tone="success" />
+        <StatCard label="返修中 / 未结返修单" value={`${repairing} / ${openRepairs}`} tone={openRepairs ? 'warning' : 'default'} />
+      </StatGrid>
+
+      <Section title="计划基础信息">
+        <DescList
+          cols={3}
+          items={[
+            ['计划编号', plan.id],
+            ['计划名称', plan.name],
+            ['所属项目', project ? <Link to={`/projects/${project.id}`} className="ui-link">{project.name}</Link> : '—'],
+            ['机器人型号', typeName(plan.deviceTypeId)],
+            ['计划数量', targetCount ? `${targetCount} 台` : '—'],
+            ['已录入设备', `${planDevices.length} 台`],
+            ['负责人', plan.owner],
+            ['当前节点', plan.currentNode],
+            ['计划周期', cycle],
+            ['更新时间', plan.updatedAt],
+            ['备注', plan.notes],
+          ]}
+        />
+      </Section>
+
+      <Section
+        title="ERP 工单 / 入库 / 检验信息"
+        subtitle="ERP 工单状态 / 入库状态 / 检验状态均来自 ERP，平台只读同步展示，不创建 ERP 单据（枚举以后以 ERP API 为准）。"
+        right={<Chip>ERP 只读同步</Chip>}
+      >
+        <DescList
+          cols={3}
+          items={[
+            ['ERP 生产订单号', plan.erpProductionOrderNo],
+            ['ERP 产品入库单号', plan.erpInboundNo],
+            ['ERP 产品检验单号', plan.erpInspectionNo],
+            ['ERP 库存状态', plan.erpStockStatus],
+            ['入库仓库', plan.warehouse],
+            ['同步口径', '只读同步'],
+          ]}
+        />
+        <div className="mt-4 pt-4 border-t border-[#f2f2f2]">
+          <div className="text-xs text-gray-400 mb-2">平台派生状态（基于计划周期与当前节点计算，非 ERP 字段）</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Chip>当前卡点 · {plan.currentNode ?? '—'}</Chip>
+            {longUnsettled ? <StatusBadge status="长期未结" /> : <Chip tone="outline">非长期未结</Chip>}
+            {overdue ? <StatusBadge status="超期" /> : <Chip tone="outline">未超期</Chip>}
+          </div>
         </div>
-      )}
+      </Section>
 
-      <FlowStepper activeNode={activeNode} onChange={setActiveNode} counts={counts} />
+      <Section title="设备列表" subtitle={`该生产计划下设备 ${planDevices.length} 台`} bodyClassName="p-0">
+        <Table
+          head={['设备SN', '机器人型号', '当前状态', '装配人', '更新时间']}
+          empty="该生产计划暂无设备"
+          footer={<Pagination page={devPaged.page} total={devPaged.total} totalPages={devPaged.totalPages} onChange={devPaged.setPage} />}
+        >
+          {devPaged.pageItems.map((d) => (
+            <tr key={d.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 whitespace-nowrap"><Link to={`/devices/${d.id}`} className="ui-link font-mono text-xs">{d.sn}</Link></td>
+              <td className="px-3 py-2 whitespace-nowrap text-gray-700">{typeName(d.deviceTypeId)}</td>
+              <td className="px-3 py-2"><StatusBadge status={d.status} /></td>
+              <td className="px-3 py-2 whitespace-nowrap text-gray-600">{d.assembler ?? '—'}</td>
+              <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{d.updatedAt ?? '—'}</td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
 
-      {activeNode === 'materialPrep' && <MaterialPrepNode plan={plan} state={state} openAction={handleAction} goMaterials={() => navigate('/assets?tab=materials')} />}
-      {activeNode === 'assembly' && <AssemblyNode planDevices={planDevices} state={state} openRecord={() => setShowRecord(true)} openAction={handleAction} />}
-      {activeNode === 'quality' && <QualityNode planDevices={planDevices} testRecords={testRecords} workOrders={workOrders} openTest={() => setShowTest(true)} openAction={handleAction} />}
-      {activeNode === 'warehouse' && <WarehouseNode plan={plan} planDevices={planDevices} testRecords={testRecords} state={state} dispatch={dispatch} openAction={handleAction} />}
+      <Section title="单机生产记录" subtitle="整机装配与模块绑定记录（平台生产过程记录）" bodyClassName="p-0">
+        <Table
+          head={['设备SN', '机器人型号', '装配人', '装配时间', '模块绑定进度', '设备标签']}
+          empty="暂无单机生产记录"
+          footer={<Pagination page={asmPaged.page} total={asmPaged.total} totalPages={asmPaged.totalPages} onChange={asmPaged.setPage} />}
+        >
+          {asmPaged.pageItems.map((d) => {
+            const slots = deviceTypes.find((t) => t.id === d.deviceTypeId)?.slots?.length || 0;
+            const bound = d.usedMaterials?.length || 0;
+            const labelCount = d.labels ? Object.keys(d.labels).length : 0;
+            const labelStatus = labelCount === 0 ? '未填写' : labelCount === 1 ? '部分填写' : '已填写';
+            return (
+              <tr key={d.id} className="hover:bg-[#fafafa]">
+                <td className="px-3 py-2 whitespace-nowrap"><Link to={`/devices/${d.id}`} className="ui-link font-mono text-xs">{d.sn}</Link></td>
+                <td className="px-3 py-2 whitespace-nowrap text-gray-700">{typeName(d.deviceTypeId)}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{d.assembler ?? '—'}</td>
+                <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{d.assemblyTime ?? '—'}</td>
+                <td className="px-3 py-2 text-gray-600">{bound}/{slots}</td>
+                <td className="px-3 py-2"><StatusBadge status={labelStatus} /></td>
+              </tr>
+            );
+          })}
+        </Table>
+      </Section>
 
-      <ActionDetailModal isOpen={!!action && BUSINESS_ACTIONS.has(action.name)} onClose={() => setAction(null)} action={action} plan={plan} state={state} dispatch={dispatch} />
-      <ActionPlaceholderModal isOpen={!!action && !BUSINESS_ACTIONS.has(action.name)} onClose={() => setAction(null)} title={action?.name || ''} text={`已触发「${action?.name || ''}」动作。`} />
-      <RecordDeviceModal isOpen={showRecord} onClose={() => setShowRecord(false)} plan={plan} state={state} dispatch={dispatch} />
-      <TestResultModal isOpen={showTest} onClose={() => setShowTest(false)} planDevices={planDevices} records={testRecords} state={state} dispatch={dispatch} />
-    </div>
+      <Section
+        title="质量测试记录"
+        subtitle="工站测试追溯（半成品检验 / 初测 / 中测 / OQT终测）；为平台生产过程测试，不替代 ERP 产品检验单。"
+        bodyClassName="p-0"
+      >
+        <Table
+          head={['设备SN', '工站', '结果', '测试人', '测试时间', 'NG原因']}
+          empty="暂无质量测试记录"
+          footer={<Pagination page={testPaged.page} total={testPaged.total} totalPages={testPaged.totalPages} onChange={testPaged.setPage} />}
+        >
+          {testPaged.pageItems.map((r) => (
+            <tr key={r.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-700">{snOf(r.deviceId)}</td>
+              <td className="px-3 py-2 whitespace-nowrap text-gray-700">{STATION_LABEL[r.stationKey] ?? '—'}</td>
+              <td className="px-3 py-2"><StatusBadge status={isPassRec(r) ? 'Pass' : 'NG'} /></td>
+              <td className="px-3 py-2 whitespace-nowrap text-gray-600">{r.operator ?? '—'}</td>
+              <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{r.testTime ?? '—'}</td>
+              <td className="px-3 py-2 text-xs text-gray-500 max-w-xs">{r.ngReason ?? '—'}</td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
+
+      <Section
+        title="生产返修记录"
+        subtitle="测试 NG 生成的生产返修 / NG 工单（仅生产阶段，不进入售后工单中心）"
+        bodyClassName="p-0"
+      >
+        <Table
+          head={['工单编号', '设备SN', '来源工站', '问题描述', '严重程度', '负责人', '状态']}
+          empty="暂无生产返修记录"
+          footer={<Pagination page={repairPaged.page} total={repairPaged.total} totalPages={repairPaged.totalPages} onChange={repairPaged.setPage} />}
+        >
+          {repairPaged.pageItems.map((w) => (
+            <tr key={w.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-700">{w.id}</td>
+              <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600">{w.deviceSN ?? '—'}</td>
+              <td className="px-3 py-2 whitespace-nowrap text-gray-700">{STATION_LABEL[w.ngStation] ?? w.ngStation ?? '—'}</td>
+              <td className="px-3 py-2 text-xs text-gray-600 max-w-sm"><div className="truncate">{w.description ?? '—'}</div></td>
+              <td className="px-3 py-2"><StatusBadge status={w.severity ?? '—'} /></td>
+              <td className="px-3 py-2 whitespace-nowrap text-gray-600">{w.assignedTo || '待指派'}</td>
+              <td className="px-3 py-2"><StatusBadge status={w.status} /></td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
+
+      <Section title="操作日志" subtitle={`共 ${planLogs.length} 条`}>
+        {planLogs.length ? <OperationLog logs={planLogs} /> : <EmptyState>暂无操作日志</EmptyState>}
+      </Section>
+    </Page>
   );
 }

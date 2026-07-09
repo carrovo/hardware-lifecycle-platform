@@ -3,288 +3,64 @@ import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
+import Modal from '../components/Modal';
+import { Page, PageHeader, Section, DescList, Table, Btn, LinkAction, EmptyState } from '../components/ui';
 import { deviceLifecycleStatus, deviceBusinessNode } from '../utils/status';
 
-const FLOW_STAGES = ['整机装配', '质量测试', '整机入库', '出厂检验', '现场安装调试', '客户验收', '在线运营'];
+const STATION_LABELS = { semi: '半成品检验', init: '初测', mid: '中测', oqt: 'OQT终测' };
 
-function getStageProgress(status) {
-  switch (status) {
-    case '装配中':
-    case '待确认装配完成':
-    case '已装配':
-      return { doneUpTo: 0, currentIdx: 0 };
-    case '半成品检验中':
-    case '初测中':
-    case '中测中':
-    case 'OQT终测中':
-    case '生产返修中':
-    case '功能测试中':
-    case '老化测试中':
-    case '终测中':
-      return { doneUpTo: 1, currentIdx: 1 };
-    case '待入库':
-      return { doneUpTo: 2, currentIdx: 2 };
-    case '已入库':
-    case '待分配项目':
-      return { doneUpTo: 3, currentIdx: -1 };
-    case '已分配项目':
-    case '出厂检验中':
-      return { doneUpTo: 3, currentIdx: 3 };
-    case '现场安装调试中':
-      return { doneUpTo: 4, currentIdx: 4 };
-    case '客户验收中':
-      return { doneUpTo: 5, currentIdx: 5 };
-    case '在线运营':
-      return { doneUpTo: 7, currentIdx: -1 };
-    default:
-      return { doneUpTo: 0, currentIdx: -1 };
+// 模块作用域时间戳，避免组件渲染期调用不纯函数（react-hooks/purity）。
+const nowStamp = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
+
+// 在线状态四态推导（与设备台账口径一致）。
+function onlineStateOf(device) {
+  const lc = deviceLifecycleStatus(device);
+  if (lc === '在线运营') {
+    if (device.online === true) return '在线';
+    if (device.online === false) return '离线';
+    return '未知';
   }
+  if (['生产中', '待入库', '待交付', '交付中'].includes(lc)) return '未接入';
+  return '未知';
 }
 
-function StageStepper({ status }) {
-  const { doneUpTo, currentIdx } = getStageProgress(status);
-  const isRepair = status === '生产返修中';
-
+// 占位二维码：由 SN 派生的确定性图案 + 三个定位角，纯展示用。
+function QrPlaceholder({ seed = '' }) {
+  const n = 21;
+  const s = seed || 'SN';
+  const isFinder = (r, c) => {
+    const inBox = (br, bc) => r >= br && r < br + 7 && c >= bc && c < bc + 7;
+    const ring = (br, bc) => inBox(br, bc) && !(r > br && r < br + 6 && c > bc && c < bc + 6 && !(r > br + 1 && r < br + 5 && c > bc + 1 && c < bc + 5));
+    return ring(0, 0) || ring(0, n - 7) || ring(n - 7, 0);
+  };
+  const rects = [];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const finderZone = (r < 8 && c < 8) || (r < 8 && c >= n - 8) || (r >= n - 8 && c < 8);
+      if (finderZone) {
+        if (isFinder(r, c)) rects.push(<rect key={`${r}-${c}`} x={c} y={r} width="1" height="1" />);
+      } else {
+        const v = (s.charCodeAt((r * n + c) % s.length) + r * 7 + c * 13) % 5;
+        if (v < 2) rects.push(<rect key={`${r}-${c}`} x={c} y={r} width="1" height="1" />);
+      }
+    }
+  }
   return (
-    <div className="bg-white rounded shadow-sm p-5">
-      {isRepair && (
-        <div className="mb-4 flex items-center gap-2 text-red-600 text-sm font-medium">
-          <span>⚠</span><span>当前设备处于返修状态，待修复后继续流转</span>
-        </div>
-      )}
-      <div className="flex items-start overflow-x-auto">
-        {FLOW_STAGES.map((stage, i) => {
-          const done = doneUpTo > i;
-          const active = currentIdx === i;
-          return (
-            <div key={stage} className="flex items-start flex-1 last:flex-none">
-              <div className="flex flex-col items-center min-w-[64px]">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                  done ? 'bg-green-500 text-white'
-                  : active ? 'bg-blue-600 text-white ring-2 ring-blue-300'
-                  : 'border-2 border-gray-300 text-gray-400 bg-white'
-                }`}>
-                  {done ? '✓' : i + 1}
-                </div>
-                <span className={`text-xs mt-1 text-center whitespace-nowrap ${
-                  done ? 'text-green-700'
-                  : active ? 'text-blue-700 font-semibold'
-                  : 'text-gray-400'
-                }`}>{stage}</span>
-              </div>
-              {i < FLOW_STAGES.length - 1 && (
-                <div className={`flex-1 h-0.5 mt-4 mx-1 ${doneUpTo > i ? 'bg-green-300' : 'bg-gray-200'}`} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <svg viewBox={`0 0 ${n} ${n}`} className="w-44 h-44 text-gray-900" fill="currentColor" shapeRendering="crispEdges">
+      {rects}
+    </svg>
   );
 }
 
 function VoidTestRecordInline({ record, onVoid }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
-
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)}
-        className="px-2 py-0.5 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50">
-        作废
-      </button>
-    );
-  }
-
+  if (!open) return <button onClick={() => setOpen(true)} className="ui-link text-red-500">作废</button>;
   return (
-    <div className="flex items-center gap-2 mt-1">
-      <input type="text" value={reason} onChange={(e) => setReason(e.target.value)}
-        placeholder="填写作废原因..." className="border border-gray-300 rounded px-2 py-1 text-xs w-48 focus:outline-none focus:border-red-400" />
-      <button onClick={() => { if (reason.trim()) { onVoid(record, reason.trim()); setOpen(false); setReason(''); } }}
-        className="px-2 py-1 text-xs text-white bg-red-600 rounded hover:bg-red-700">确认</button>
-      <button onClick={() => { setOpen(false); setReason(''); }}
-        className="px-2 py-1 text-xs text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
-    </div>
-  );
-}
-
-// Timeline event types → visual config
-const EVENT_STYLES = {
-  '整机装配':      { dot: 'bg-blue-500',   label: '整机装配',   icon: '🔧' },
-  '功能测试-合格':  { dot: 'bg-green-500',  label: '功能测试',   icon: '✅' },
-  '功能测试-不合格':{ dot: 'bg-red-500',    label: '功能测试',   icon: '❌' },
-  '老化测试-合格':  { dot: 'bg-green-500',  label: '老化测试',   icon: '✅' },
-  '老化测试-不合格':{ dot: 'bg-red-500',    label: '老化测试',   icon: '❌' },
-  '终测-合格':     { dot: 'bg-green-500',  label: '终测',       icon: '✅' },
-  '终测-不合格':   { dot: 'bg-red-500',    label: '终测',       icon: '❌' },
-  '作废测试记录':  { dot: 'bg-gray-400',   label: '作废记录',   icon: '⊘' },
-  '返修完成':      { dot: 'bg-purple-500', label: '返修完成',   icon: '🔨' },
-  '项目分配':      { dot: 'bg-indigo-500', label: '项目分配',   icon: '📋' },
-  '项目转移':      { dot: 'bg-violet-500', label: '项目转移',   icon: '🔄' },
-  '出厂检验':      { dot: 'bg-teal-500',   label: '出厂检验',   icon: '🏭' },
-  '现场安装调试':  { dot: 'bg-orange-500', label: '现场安装调试', icon: '🛠' },
-  '客户验收':      { dot: 'bg-emerald-500',label: '客户验收',   icon: '🤝' },
-  '在线运营':      { dot: 'bg-emerald-500',label: '上线运营',   icon: '💡' },
-  '维修工单':      { dot: 'bg-red-500',    label: '维修工单',   icon: '🔴' },
-  '模块更换':      { dot: 'bg-purple-500', label: '模块更换',   icon: '🔩' },
-  '退役':          { dot: 'bg-gray-500',   label: '设备退役',   icon: '📦' },
-  '默认':          { dot: 'bg-gray-400',   label: '',           icon: '📝' },
-};
-
-function buildLifecycleTimeline(device, testRecords, operationLogs, deviceAllocations, deliveryRecords, workOrders, moduleReplacements, materials, projects) {
-  const events = [];
-  const getMaterialSN = (id) => materials.find((m) => m.id === id)?.sn || id;
-  const getProjectName = (id) => projects.find((p) => p.id === id)?.name || id;
-
-  // 1. Assembly event
-  if (device.assemblyTime) {
-    events.push({
-      key: `asm-${device.id}`,
-      type: '整机装配',
-      timestamp: device.assemblyTime,
-      operator: device.assembler,
-      summary: `完成整机装配，装配人：${device.assembler}`,
-    });
-  }
-
-  // 2. Test records
-  testRecords.forEach((t) => {
-    const resultKey = `${t.testType}-${t.result}`;
-    events.push({
-      key: t.id,
-      type: resultKey,
-      timestamp: t.testTime,
-      operator: t.operator,
-      summary: `${t.testType} ${t.result} · 测试人：${t.operator}${t.notes ? ' · ' + t.notes : ''}`,
-      voided: t.voided,
-      voidReason: t.voidReason,
-    });
-  });
-
-  // 3. Operation logs — include only types not covered by structured data above
-  const SKIP_LOG_TYPES = new Set([
-    '装配', '功能测试通过', '功能测试不合格', '老化测试通过', '老化测试不合格',
-    '分配至项目', '上线运营',
-  ]);
-  operationLogs.forEach((log) => {
-    if (!SKIP_LOG_TYPES.has(log.actionType)) {
-      events.push({
-        key: log.id,
-        type: log.actionType,
-        timestamp: log.timestamp,
-        operator: log.operator,
-        summary: log.notes || log.actionType,
-      });
-    }
-  });
-
-  // 4. Project allocations
-  deviceAllocations.forEach((a) => {
-    const typeLabel = a.type === '转移' ? '项目转移' : '项目分配';
-    const projectName = getProjectName(a.projectId);
-    events.push({
-      key: a.id,
-      type: typeLabel,
-      timestamp: a.allocatedAt,
-      operator: a.allocatedBy,
-      summary: `${typeLabel}至「${projectName}」${a.notes ? ' · ' + a.notes : ''}`,
-    });
-  });
-
-  // 5. Delivery records
-  deliveryRecords.forEach((d) => {
-    const resultIcon = (d.result === '合格' || d.result === '通过') ? '通过' : '未通过';
-    events.push({
-      key: d.id,
-      type: d.stage,
-      timestamp: d.recordTime,
-      operator: d.operator,
-      summary: `${d.stage} · 结果：${d.result}${d.address ? ' · 地点：' + d.address : ''}${d.notes ? ' · ' + d.notes : ''}`,
-      result: resultIcon,
-    });
-  });
-
-  // 6. Work orders (creation event only, to avoid clutter)
-  workOrders.forEach((w) => {
-    events.push({
-      key: `wo-${w.id}`,
-      type: '维修工单',
-      timestamp: w.createdAt,
-      operator: w.assignedTo,
-      summary: `维修工单 ${w.id} 创建 · ${w.description.length > 40 ? w.description.slice(0, 40) + '…' : w.description}`,
-      woId: w.id,
-    });
-  });
-
-  // 7. Module replacements
-  moduleReplacements.forEach((mr) => {
-    const oldSN = getMaterialSN(mr.removedMaterialId);
-    const newSN = getMaterialSN(mr.addedMaterialId);
-    events.push({
-      key: mr.id,
-      type: '模块更换',
-      timestamp: mr.timestamp,
-      operator: mr.operator,
-      summary: `${mr.slotName} 模块由 ${oldSN} → ${newSN} · 关联工单：${mr.workOrderId}${mr.notes ? ' · ' + mr.notes : ''}`,
-    });
-  });
-
-  // Defensive lifecycle filter: 时间线事件必须与设备当前生命周期阶段一致，
-  // 避免生产中/测试中/返修中设备误显示交付、在线告警、售后工单、客户验收等下游事件。
-  // （mock 数据已按阶段隔离，此处为兜底过滤，双重保证。）
-  const lifecycle = deviceLifecycleStatus(device);
-  const DELIVERY_TYPES = new Set(['出厂检验', '现场安装调试', '客户验收']);
-  const ONLINE_TYPES = new Set(['在线运营', '维修工单', '模块更换', '告警处理']);
-  const allowAll = ['在线运营', '已作废', '维修中'].includes(lifecycle);
-  const visible = allowAll ? events : events.filter((ev) => {
-    if (ONLINE_TYPES.has(ev.type)) return false;
-    if ((lifecycle === '生产中' || lifecycle === '待入库') && DELIVERY_TYPES.has(ev.type)) return false;
-    return true;
-  });
-
-  // Sort descending (newest first)
-  return visible.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-}
-
-function LifecycleTimeline({ events }) {
-  if (!events || events.length === 0) {
-    return <div className="text-center text-gray-400 py-8 text-sm">暂无操作记录</div>;
-  }
-
-  return (
-    <div className="space-y-0">
-      {events.map((ev, idx) => {
-        const style = EVENT_STYLES[ev.type] || EVENT_STYLES['默认'];
-        return (
-          <div key={ev.key} className="flex gap-3">
-            <div className="flex flex-col items-center">
-              <div className={`w-3 h-3 rounded-full mt-1.5 flex-shrink-0 ${style.dot} ${ev.voided ? 'opacity-40' : ''}`} />
-              {idx < events.length - 1 && <div className="w-0.5 bg-gray-200 flex-1 my-1" />}
-            </div>
-            <div className="pb-4 flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                <span className={`text-xs ${ev.voided ? 'line-through text-gray-400' : 'font-medium text-gray-800'}`}>
-                  {style.icon} {style.label || ev.type}
-                </span>
-                <span className="text-xs text-gray-400">{ev.timestamp}</span>
-                {ev.operator && <span className="text-xs text-gray-500">· {ev.operator}</span>}
-                {ev.woId && (
-                  <Link to={`/work-orders?highlight=${ev.woId}`}
-                    className="text-xs text-blue-600 hover:underline">
-                    查看工单 →
-                  </Link>
-                )}
-              </div>
-              <div className={`text-xs ${ev.voided ? 'text-gray-400 line-through' : 'text-gray-500'}`}>
-                {ev.summary}
-              </div>
-              {ev.voided && ev.voidReason && (
-                <div className="text-xs text-gray-400 mt-0.5">作废原因：{ev.voidReason}</div>
-              )}
-            </div>
-          </div>
-        );
-      })}
+    <div className="flex items-center gap-2">
+      <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="作废原因" className="ui-input w-36 h-7 text-xs" />
+      <Btn size="sm" variant="danger" onClick={() => { if (reason.trim()) { onVoid(record, reason.trim()); setOpen(false); setReason(''); } }}>确认</Btn>
+      <Btn size="sm" variant="ghost" onClick={() => { setOpen(false); setReason(''); }}>取消</Btn>
     </div>
   );
 }
@@ -293,302 +69,278 @@ export default function DeviceDetail() {
   const { id } = useParams();
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
+  const [showQR, setShowQR] = useState(false);
 
   const device = state.devices.find((d) => d.id === id);
 
   if (!device) {
     return (
-      <div className="p-6">
-        <Link to="/devices" className="text-slate-600 hover:underline text-sm">← 返回设备列表</Link>
-        <div className="mt-8 text-center text-gray-400">设备不存在</div>
-      </div>
+      <Page>
+        <PageHeader title="设备不存在" description="未找到该设备，可能已被移除。" actions={<Btn as="link" to="/assets?tab=devices" variant="secondary">返回设备台账</Btn>} />
+        <EmptyState>设备不存在</EmptyState>
+      </Page>
     );
   }
 
   const deviceType = state.deviceTypes.find((dt) => dt.id === device.deviceTypeId);
-  const testRecords = state.testRecords
-    .filter((t) => t.deviceId === id)
-    .sort((a, b) => new Date(a.testTime) - new Date(b.testTime));
-  const operationLogs = state.operationLogs.filter((l) => l.deviceId === id);
-  const allocations = state.deviceAllocations.filter((a) => a.deviceId === id);
-  const deliveries = state.deliveryRecords.filter((d) => d.deviceId === id);
-  const deviceWorkOrders = state.workOrders.filter((w) => w.deviceId === id);
-  const deviceModuleReplacements = state.moduleReplacements.filter((mr) => mr.deviceId === id);
+  const project = device.projectId ? state.projects.find((p) => p.id === device.projectId) : null;
+  const location = device.locationId ? (state.locations || []).find((l) => l.id === device.locationId) : null;
+  const plan = device.productionPlanId ? (state.workflowProductionPlans || []).find((p) => p.id === device.productionPlanId) : null;
+  const deliveryPlan = device.deliveryPlanId ? (state.deliveryPlans || []).find((p) => p.id === device.deliveryPlanId) : null;
 
-  const timelineEvents = buildLifecycleTimeline(
-    device, testRecords, operationLogs, allocations, deliveries,
-    deviceWorkOrders, deviceModuleReplacements, state.materials, state.projects
-  );
+  const testRecords = state.testRecords.filter((t) => t.deviceId === id).sort((a, b) => (b.testTime || '').localeCompare(a.testTime || ''));
+  const operationLogs = state.operationLogs.filter((l) => l.deviceId === id).sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+  const deliveries = state.deliveryRecords.filter((d) => d.deviceId === id).sort((a, b) => (b.recordTime || '').localeCompare(a.recordTime || ''));
+  const workOrders = state.workOrders.filter((w) => w.deviceId === id);
+  const productionWorkOrders = (state.productionWorkOrders || []).filter((w) => w.deviceId === id);
+  const replacements = state.moduleReplacements.filter((mr) => mr.deviceId === id);
+  const qualityIssues = (state.qualityIssues || []).filter((q) => q.deviceId === id);
+  const alerts = (state.alerts || []).filter((a) => a.deviceId === id);
 
-  const getModuleName = (moduleTypeId) =>
-    state.moduleTypes.find((m) => m.id === moduleTypeId)?.name || moduleTypeId;
+  const lifecycle = deviceLifecycleStatus(device);
+  const online = onlineStateOf(device);
 
-  const getModuleCategory = (moduleTypeId) =>
-    state.moduleTypes.find((m) => m.id === moduleTypeId)?.category || '';
-
-  const getMaterial = (materialId) =>
-    state.materials.find((m) => m.id === materialId);
-
-  const getSlotName = (moduleTypeId) => {
-    const slot = deviceType?.slots?.find((s) => s.moduleTypeId === moduleTypeId);
-    return slot?.slotName || '—';
-  };
+  const getModuleName = (mtId) => state.moduleTypes.find((m) => m.id === mtId)?.name || mtId;
+  const getModuleCategory = (mtId) => state.moduleTypes.find((m) => m.id === mtId)?.category || '';
+  const getMaterial = (materialId) => state.materials.find((m) => m.id === materialId);
+  const getMaterialSN = (materialId) => getMaterial(materialId)?.sn || materialId || '—';
+  const getSlotName = (mtId) => deviceType?.slots?.find((s) => s.moduleTypeId === mtId)?.slotName || '—';
 
   const handleVoidTestRecord = (record, reason) => {
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    const now = nowStamp();
     dispatch({ type: 'UPDATE_TEST_RECORD', payload: { id: record.id, voided: true, voidReason: reason, voidedAt: now } });
     dispatch({
       type: 'ADD_OPERATION_LOG',
-      payload: {
-        id: `LOG-${record.id}-void`,
-        deviceId: id,
-        operator: state.currentUser,
-        timestamp: now,
-        actionType: '作废测试记录',
-        fromStatus: device.status,
-        toStatus: device.status,
-        notes: `作废测试记录 ${record.id}，原因：${reason}`,
-      },
+      payload: { id: `LOG-${record.id}-void`, deviceId: id, operator: state.currentUser, timestamp: now, actionType: '作废测试记录', fromStatus: device.status, toStatus: device.status, notes: `作废测试记录 ${record.id}，原因：${reason}` },
     });
   };
 
+  // 问题与售后：质量问题 + 售后工单 + 健康告警合并时间线
+  const issueRows = [
+    ...qualityIssues.map((q) => ({ kind: '质量问题', id: q.id, summary: q.issueDesc, stage: q.sourceStage, severity: q.severity, status: q.status, owner: q.owner || q.reporterName, time: q.reportTime, to: '/after-sales?tab=quality' })),
+    ...workOrders.map((w) => ({ kind: '售后工单', id: w.id, summary: w.description, stage: w.woClass, severity: w.severity, status: w.status, owner: w.assignedTo || '待指派', time: w.createdAt, to: '/after-sales?tab=orders' })),
+    ...alerts.map((a) => ({ kind: '健康告警', id: a.id, summary: a.description, stage: a.alertType, severity: a.severity, status: a.status, owner: a.owner || '—', time: a.alertTime, to: null })),
+  ].sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+
+  const moduleRows = (device.usedMaterials && device.usedMaterials.length > 0)
+    ? device.usedMaterials.map((um) => ({ slot: getSlotName(um.moduleTypeId), type: getModuleName(um.moduleTypeId), cat: getModuleCategory(um.moduleTypeId), sn: getMaterial(um.materialId)?.sn || um.materialId, boundAt: device.assemblyTime || '—', status: getMaterial(um.materialId)?.status || '已装配', template: false }))
+    : (deviceType?.slots || []).map((slot) => ({ slot: slot.slotName, type: getModuleName(slot.moduleTypeId), cat: getModuleCategory(slot.moduleTypeId), sn: '待绑定', boundAt: '—', status: '待确认', template: true }));
+
   return (
-    <div className="p-6 space-y-4">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm">
-        <Link to="/devices" className="text-slate-600 hover:underline">设备列表</Link>
-        <span className="text-gray-400">/</span>
-        <span className="text-gray-700 font-medium">{device.sn}</span>
-      </div>
+    <Page>
+      <PageHeader
+        breadcrumb={
+          <div className="text-xs text-gray-400 mb-1">
+            <Link to="/assets?tab=devices" className="ui-link">设备台账</Link>
+            <span className="mx-1">/</span>
+            <span className="text-gray-500">{device.sn}</span>
+          </div>
+        }
+        title={device.sn}
+        description={
+          <span className="inline-flex items-center gap-2 flex-wrap">
+            <span>{deviceType?.name || device.deviceTypeId}</span>
+            {project && <><span className="text-gray-300">·</span><span>{project.name}</span></>}
+            <StatusBadge status={lifecycle} />
+            <StatusBadge status={online} />
+          </span>
+        }
+        actions={<Btn as="link" to="/assets?tab=devices" variant="secondary">返回设备台账</Btn>}
+      />
 
-      {/* Stage stepper */}
-      <StageStepper status={device.status} />
+      {/* 基础信息 */}
+      <Section title="基础信息">
+        <DescList
+          cols={4}
+          items={[
+            ['设备 SN', device.sn],
+            ['机器人型号', deviceType?.name || device.deviceTypeId],
+            ['所属项目', project ? <Link to={`/projects/${project.id}`} className="ui-link">{project.name}</Link> : '—'],
+            ['客户名称', project?.client ?? '—'],
+            ['项目类型 / 业务场景', project?.projectType ?? '—'],
+            ['所属点位', location?.name ?? '—'],
+            ['当前状态', <StatusBadge key="lc" status={lifecycle} />],
+            ['在线状态', <StatusBadge key="on" status={online} />],
+            ['当前业务节点', <StatusBadge key="node" status={deviceBusinessNode(device)} />],
+            ['装配人', device.assembler ?? '—'],
+            ['装配时间', device.assemblyTime ?? '—'],
+            ['创建时间', device.createdAt ?? '—'],
+            ['最近更新', device.updatedAt ?? '—'],
+            ['设备别名', device.alias ?? '—'],
+            ['网络标识', device.networkId ?? '—'],
+          ]}
+        />
+      </Section>
 
-      {/* Basic Info */}
-      <div className="bg-white rounded shadow-sm p-5">
-        <div className="text-sm font-medium text-gray-600 mb-3">基本信息</div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <div className="text-xs text-gray-400 mb-1">设备SN</div>
-            <div className="text-sm font-medium text-gray-800">{device.sn}</div>
+      {/* 二维码入口 */}
+      <Section title="二维码入口" right={<Btn size="sm" variant="secondary" onClick={() => setShowQR(true)}>查看二维码</Btn>}>
+        <DescList
+          cols={4}
+          items={[
+            ['二维码状态', device.qrStatus ?? '已生成'],
+            ['二维码标识', device.qrCodeId ?? `QR-${device.sn}`],
+            ['生成时间', device.qrGeneratedAt ?? device.createdAt ?? '—'],
+            ['最近扫码时间', device.qrLastScanAt ?? '—'],
+          ]}
+        />
+        <p className="text-xs text-gray-400 mt-3">扫码可进入移动端上报页登记质量问题；二维码标识用于设备识别，不承载敏感信息。</p>
+      </Section>
+
+      {/* 模块 / 核心部件 */}
+      <Section title="模块 / 核心部件" subtitle={moduleRows.some((r) => r.template) ? '该设备暂未登记核心部件实例，按机器人型号槽位模板展示应绑定模块' : `按槽位展示已绑定核心部件（${moduleRows.length}）`} bodyClassName="p-0">
+        <Table head={['槽位名称', '核心部件类型', '模块 SN', '绑定时间', '状态']} empty="暂无模块绑定记录">
+          {moduleRows.map((m, i) => (
+            <tr key={i} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{m.slot}</td>
+              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{m.type}{m.cat && <span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{m.cat}</span>}</td>
+              <td className="px-3 py-2 font-mono text-xs text-gray-600">{m.sn}</td>
+              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{m.boundAt}</td>
+              <td className="px-3 py-2"><StatusBadge status={m.status} /></td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
+
+      {/* 生产过程记录 */}
+      <Section title="生产过程记录" subtitle={`装配：${device.assembler || '—'} · ${device.assemblyTime || '—'}${plan ? ` · 生产计划 ${plan.name || plan.id}` : ''}`} bodyClassName="p-0">
+        <Table head={['生产工单', 'NG 工站', '描述', '严重程度', '状态', '负责人', '更新时间']} empty="暂无生产返修 / 工单记录">
+          {productionWorkOrders.map((w) => (
+            <tr key={w.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 font-mono text-xs text-gray-700 whitespace-nowrap">{w.id}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{STATION_LABELS[w.ngStation] || w.ngStation || '—'}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs max-w-xs"><span className="truncate block">{w.description}</span></td>
+              <td className="px-3 py-2"><StatusBadge status={w.severity} /></td>
+              <td className="px-3 py-2"><StatusBadge status={w.status} /></td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{w.assignedTo || '待指派'}</td>
+              <td className="px-3 py-2 text-gray-400 text-xs whitespace-nowrap">{w.updatedAt || '—'}</td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
+
+      {/* 质量测试记录 */}
+      <Section title="质量测试记录" subtitle={`共 ${testRecords.length} 条`} bodyClassName="p-0">
+        <Table head={['测试工站', '结果', '测试员', '测试时间', '报告文件', '备注', '操作']} empty="暂无测试记录">
+          {testRecords.map((t) => (
+            <tr key={t.id} className={`hover:bg-[#fafafa] ${t.voided ? 'opacity-60' : ''}`}>
+              <td className="px-3 py-2 text-gray-700 text-xs whitespace-nowrap">{STATION_LABELS[t.stationKey] || t.testType || '—'}</td>
+              <td className="px-3 py-2">{t.voided ? <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">已作废</span> : <StatusBadge status={t.result === '合格' ? '合格' : '不合格'} />}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs">{t.operator}</td>
+              <td className={`px-3 py-2 text-xs whitespace-nowrap ${t.voided ? 'line-through text-gray-400' : 'text-gray-500'}`}>{t.testTime}</td>
+              <td className="px-3 py-2 text-gray-400 text-xs font-mono">{t.reportFile || '—'}</td>
+              <td className="px-3 py-2 text-gray-400 text-xs">{t.notes || '—'}</td>
+              <td className="px-3 py-2 text-xs">
+                {t.voided
+                  ? <span className="text-gray-400 text-xs">已作废 · {t.voidedAt}</span>
+                  : canDo('void_test_record')
+                    ? <VoidTestRecordInline record={t} onVoid={handleVoidTestRecord} />
+                    : <span className="text-gray-300">—</span>}
+              </td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
+
+      {/* 交付记录 */}
+      <Section title="交付记录" subtitle={deliveryPlan ? `交付计划 ${deliveryPlan.batchNo || deliveryPlan.name}` : undefined} bodyClassName="p-0">
+        <Table head={['阶段', '结果', '地点', '操作人', '时间', '备注']} empty="暂无交付记录">
+          {deliveries.map((d) => (
+            <tr key={d.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 text-gray-700 text-xs whitespace-nowrap">{d.stage}</td>
+              <td className="px-3 py-2"><StatusBadge status={d.result} /></td>
+              <td className="px-3 py-2 text-gray-500 text-xs">{d.address || '—'}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs">{d.operator || '—'}</td>
+              <td className="px-3 py-2 text-gray-400 text-xs whitespace-nowrap">{d.recordTime}</td>
+              <td className="px-3 py-2 text-gray-400 text-xs max-w-xs"><span className="truncate block">{d.notes || '—'}</span></td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
+
+      {/* 问题与售后 */}
+      <Section title="问题与售后" subtitle="设备关联的质量问题、售后工单与健康告警" bodyClassName="p-0">
+        <Table head={['类型', '编号', '摘要', '阶段 / 分类', '严重程度', '状态', '负责人', '时间', '入口']} empty="暂无问题与售后记录">
+          {issueRows.map((r) => (
+            <tr key={`${r.kind}-${r.id}`} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 text-gray-700 text-xs whitespace-nowrap">{r.kind}</td>
+              <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{r.id}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs max-w-xs"><span className="truncate block">{r.summary}</span></td>
+              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{r.stage || '—'}</td>
+              <td className="px-3 py-2"><StatusBadge status={r.severity} /></td>
+              <td className="px-3 py-2"><StatusBadge status={r.status} /></td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{r.owner}</td>
+              <td className="px-3 py-2 text-gray-400 text-xs whitespace-nowrap">{r.time}</td>
+              <td className="px-3 py-2 text-xs whitespace-nowrap">{r.to ? <LinkAction to={r.to}>查看</LinkAction> : <span className="text-gray-300">—</span>}</td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
+
+      {/* 换件记录 */}
+      <Section title="换件记录" subtitle={`共 ${replacements.length} 条`} bodyClassName="p-0">
+        <Table head={['槽位', '原模块 SN', '新模块 SN', '原件处置', '关联工单', '操作人', '时间', '备注']} empty="暂无换件记录">
+          {replacements.map((mr) => (
+            <tr key={mr.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{mr.slotName || '—'}</td>
+              <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{getMaterialSN(mr.removedMaterialId)}</td>
+              <td className="px-3 py-2 font-mono text-xs text-gray-700 whitespace-nowrap">{getMaterialSN(mr.addedMaterialId)}</td>
+              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{mr.removedDisposition || '—'}</td>
+              <td className="px-3 py-2 text-xs whitespace-nowrap">{mr.workOrderId ? <LinkAction to="/after-sales?tab=orders">{mr.workOrderId}</LinkAction> : '—'}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{mr.operator || '—'}</td>
+              <td className="px-3 py-2 text-gray-400 text-xs whitespace-nowrap">{mr.timestamp}</td>
+              <td className="px-3 py-2 text-gray-400 text-xs max-w-xs"><span className="truncate block">{mr.notes || '—'}</span></td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
+
+      {/* ERP 关联信息 */}
+      <Section title="ERP 关联信息" subtitle="只读同步自 ERP">
+        <DescList
+          cols={4}
+          items={[
+            ['ERP 项目号', project?.erpProjectNo ?? '—'],
+            ['产成品入库单号', device.erpStorageOrderNo ?? '—'],
+            ['入库单号', device.erpInboundNo ?? '—'],
+            ['检验单号', device.erpInspectionNo ?? '—'],
+            ['检验状态', device.erpInspectionStatus ?? '—'],
+            ['库存状态', device.erpStockStatus ?? '—'],
+            ['ERP 序列号', device.erpSerialNo ?? '—'],
+            ['仓库', device.warehouse ?? '—'],
+            ['入库时间', device.inboundTime ?? '—'],
+          ]}
+        />
+      </Section>
+
+      {/* 操作日志 */}
+      <Section title="操作日志" subtitle={`共 ${operationLogs.length} 条 · 从新到旧`} bodyClassName="p-0">
+        <Table head={['时间', '操作人', '动作', '状态变化', '说明']} empty="暂无操作日志">
+          {operationLogs.map((log) => (
+            <tr key={log.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 text-gray-400 text-xs whitespace-nowrap">{log.timestamp}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{log.operator}</td>
+              <td className="px-3 py-2 text-gray-700 text-xs whitespace-nowrap">{log.actionType}</td>
+              <td className="px-3 py-2 text-xs whitespace-nowrap">
+                {log.fromStatus && log.toStatus
+                  ? <span className="inline-flex items-center gap-1.5 text-gray-500"><StatusBadge status={log.fromStatus} /><span className="text-gray-300">→</span><StatusBadge status={log.toStatus} /></span>
+                  : '—'}
+              </td>
+              <td className="px-3 py-2 text-gray-500 text-xs max-w-md"><span className="truncate block">{log.notes || '—'}</span></td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
+
+      <Modal isOpen={showQR} onClose={() => setShowQR(false)} title="设备二维码" size="sm">
+        <div className="flex flex-col items-center gap-3 py-2">
+          <div className="p-4 bg-white border border-[#ececec] rounded-lg"><QrPlaceholder seed={device.sn} /></div>
+          <div className="text-center">
+            <div className="text-sm font-medium text-gray-800 font-mono">{device.sn}</div>
+            <div className="text-xs text-gray-400 mt-0.5">二维码标识：{device.qrCodeId ?? `QR-${device.sn}`}</div>
           </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-1">整机类型</div>
-            <div className="text-sm font-medium text-gray-800">{deviceType?.name || device.deviceTypeId}</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-1">生命周期状态</div>
-            <StatusBadge status={deviceLifecycleStatus(device)} size="sm" />
-          </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-1">当前业务节点</div>
-            <StatusBadge status={deviceBusinessNode(device)} size="sm" />
-          </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-1">创建时间</div>
-            <div className="text-sm text-gray-600">{device.createdAt}</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-1">最近更新</div>
-            <div className="text-sm text-gray-600">{device.updatedAt}</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-1">装配人</div>
-            <div className="text-sm text-gray-600">{device.assembler}</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-1">装配时间</div>
-            <div className="text-sm text-gray-600">{device.assemblyTime}</div>
-          </div>
-          {device.erpStorageOrderNo && (
-            <div>
-              <div className="text-xs text-gray-400 mb-1">产成品入库单号</div>
-              <div className="text-sm text-gray-600 font-mono">{device.erpStorageOrderNo}</div>
-            </div>
-          )}
-          {device.photoName && (
-            <div>
-              <div className="text-xs text-gray-400 mb-1">现场照片</div>
-              <div className="text-sm text-gray-500 font-mono">{device.photoName}</div>
-            </div>
-          )}
+          <p className="text-xs text-gray-400 text-center">（原型占位二维码）扫码进入移动端上报页登记该设备的质量问题。</p>
         </div>
-        {device.labels && Object.keys(device.labels).length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="text-xs text-gray-400 mb-2">设备标签</div>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(device.labels).map(([k, v]) => (
-                <span key={k} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 text-xs px-2.5 py-1 rounded-full">
-                  <span className="text-blue-500">{k}:</span>
-                  <span className="font-medium">{v}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Module list by slot */}
-      <div className="bg-white rounded shadow-sm p-5">
-        <div className="text-sm font-medium text-gray-600 mb-3">模块绑定清单（按槽位）</div>
-        {(device.usedMaterials && device.usedMaterials.length > 0) ? (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {['槽位名称', '模块类型', '模块SN', '绑定时间', '状态'].map((h) => (
-                  <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {device.usedMaterials.map((um, i) => {
-                const mat = getMaterial(um.materialId);
-                return (
-                  <tr key={i} className="hover:bg-gray-50">
-                    <td className="px-4 py-2.5 text-xs text-gray-500">{getSlotName(um.moduleTypeId)}</td>
-                    <td className="px-4 py-2.5 text-gray-700 font-medium">{getModuleName(um.moduleTypeId)}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{getModuleCategory(um.moduleTypeId)}</span></td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-600">{mat?.sn || um.materialId}</td>
-                    <td className="px-4 py-2.5 text-xs text-gray-500">{device.assemblyTime || '—'}</td>
-                    <td className="px-4 py-2.5">{mat ? <StatusBadge status={mat.status} size="sm" /> : <StatusBadge status="已装配" size="sm" />}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : deviceType?.slots?.length > 0 ? (
-          <>
-            <div className="text-xs text-gray-400 mb-2">该设备暂未登记物料实例，以下按整机类型槽位模板展示应绑定模块：</div>
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  {['槽位名称', '模块类型', '模块SN', '绑定时间', '状态'].map((h) => (
-                    <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {deviceType.slots.map((slot) => (
-                  <tr key={slot.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2.5 text-xs text-gray-500">{slot.slotName}</td>
-                    <td className="px-4 py-2.5 text-gray-700 font-medium">{getModuleName(slot.moduleTypeId)}<span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{getModuleCategory(slot.moduleTypeId)}</span></td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-400">待绑定</td>
-                    <td className="px-4 py-2.5 text-xs text-gray-400">—</td>
-                    <td className="px-4 py-2.5"><StatusBadge status="待确认" size="sm" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        ) : (
-          <div className="text-sm text-gray-400">暂无模块绑定记录</div>
-        )}
-      </div>
-
-      {/* Test History — grouped by station */}
-      <div className="bg-white rounded shadow-sm p-5">
-        <div className="text-sm font-medium text-gray-600 mb-3">测试历史</div>
-        {testRecords.length > 0 ? (() => {
-          // Group by stationKey (quality stations) or testType (legacy)
-          const STATION_LABELS = {
-            semi: '半成品检验',
-            init: '初测',
-            mid: '中测',
-            oqt: 'OQT终测',
-          };
-          const stationOrder = ['semi', 'init', 'mid', 'oqt'];
-          const grouped = {};
-          testRecords.forEach((t) => {
-            const key = t.stationKey || t.testType || '其他';
-            if (!grouped[key]) grouped[key] = [];
-            grouped[key].push(t);
-          });
-          // Sort groups: known stations first in order, then legacy by first appearance
-          const knownKeys = stationOrder.filter((k) => grouped[k]);
-          const otherKeys = Object.keys(grouped).filter((k) => !stationOrder.includes(k));
-          const orderedKeys = [...knownKeys, ...otherKeys];
-
-          return (
-            <div className="space-y-4">
-              {orderedKeys.map((key) => {
-                const recs = grouped[key];
-                const label = STATION_LABELS[key] || key;
-                const passCount = recs.filter((r) => !r.voided && r.result === '合格').length;
-                const ngCount = recs.filter((r) => !r.voided && r.result === '不合格').length;
-                return (
-                  <div key={key}>
-                    {/* Station header */}
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-sm font-semibold text-gray-700">{label}</span>
-                      {passCount > 0 && (
-                        <span className="inline-flex items-center border rounded font-medium text-xs px-2 py-0.5 bg-green-100 text-green-700 border-green-300">
-                          合格 {passCount}
-                        </span>
-                      )}
-                      {ngCount > 0 && (
-                        <span className="inline-flex items-center border rounded font-medium text-xs px-2 py-0.5 bg-red-100 text-red-700 border-red-300">
-                          不合格 {ngCount}
-                        </span>
-                      )}
-                      <span className="text-xs text-gray-400">{recs.length} 条记录</span>
-                    </div>
-                    <table className="w-full text-sm mb-1">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          {['结果', '测试员', '测试时间', '报告文件', '备注', '操作'].map((h) => (
-                            <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {recs.map((t) => (
-                          <tr key={t.id} className={`${t.voided ? 'bg-gray-50 opacity-60' : t.result === '不合格' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
-                            <td className="px-4 py-2">
-                              {t.voided
-                                ? <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">已作废</span>
-                                : <StatusBadge status={t.result === '合格' ? '合格' : '不合格'} />
-                              }
-                            </td>
-                            <td className={`px-4 py-2 ${t.voided ? 'text-gray-400' : 'text-gray-600'}`}>{t.operator}</td>
-                            <td className={`px-4 py-2 text-xs whitespace-nowrap ${t.voided ? 'line-through text-gray-400' : 'text-gray-500'}`}>{t.testTime}</td>
-                            <td className="px-4 py-2 text-gray-400 text-xs font-mono">{t.reportFile || '—'}</td>
-                            <td className="px-4 py-2 text-gray-400 text-xs">{t.notes || '—'}</td>
-                            <td className="px-4 py-2">
-                              {t.voided ? (
-                                <div className="text-xs text-gray-400">
-                                  <div>已作废 · {t.voidedAt}</div>
-                                  <div className="truncate max-w-[120px]" title={t.voidReason}>{t.voidReason}</div>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <button className="text-xs text-slate-600 hover:underline">
-                                    {t.reportFile ? '查看报告' : '查看记录'}
-                                  </button>
-                                  {canDo('void_test_record') && <VoidTestRecordInline record={t} onVoid={handleVoidTestRecord} />}
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })() : (
-          <div className="text-sm text-gray-400">暂无测试记录</div>
-        )}
-      </div>
-
-      {/* Full Lifecycle Timeline */}
-      <div className="bg-white rounded shadow-sm p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="text-sm font-medium text-gray-600">全生命周期操作时间线</div>
-          <span className="text-xs text-gray-400">{timelineEvents.length} 条记录 · 从新到旧</span>
-        </div>
-        <LifecycleTimeline events={timelineEvents} />
-      </div>
-    </div>
+      </Modal>
+    </Page>
   );
 }

@@ -6,14 +6,22 @@ import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
 import { Pagination, usePaged } from '../components/Pagination';
 import {
+  Page, PageHeader, Section, Card, Toolbar, Input, Select, SearchInput,
+  Btn, LinkAction, Chip, StatCard, StatGrid, DescList, Table,
+} from '../components/ui';
+import {
   isPass, projectStatus as deriveProjectStatus,
   productionPlanStatus, deliveryPlanStatus,
 } from '../utils/status';
+
+// 项目中心容器：项目列表 / 生产计划 / 交付计划 / ERP 表单 四个 tab。
+// tab 由 ?tab= 决定，默认 list。视觉统一复用 ../components/ui 设计系统。
 
 const TABS = [
   { key: 'list', label: '项目列表' },
   { key: 'production', label: '生产计划' },
   { key: 'delivery', label: '交付计划' },
+  { key: 'erp', label: 'ERP 表单' },
 ];
 
 const PROJECT_STATUSES = ['未开始', '进行中', '已交付', '已关闭', '已作废'];
@@ -21,11 +29,13 @@ const PRODUCTION_STATUSES = ['未开始', '生产中', '已完成', '已延期',
 const PRODUCTION_NODES = ['来料准备', '整机装配', '质量测试', '整机入库'];
 const DELIVERY_NODES = ['绑定设备', '出厂检验', '现场安装调试', '客户验收'];
 const DELIVERY_STATUSES = ['未开始', '交付中', '已验收', '已延期', '已作废'];
+const PROJECT_TYPES = ['智魔方', '机场', '工业场景', '遥操数采'];
 
 // 项目成员角色 + 可选成员（评审版 mock：仅前端展示与弹窗配置，不做全平台数据权限拦截）。
 const MEMBER_ROLES = ['项目负责人', '生产协同', '质量协同', '交付协同', '售后协同', 'ERP 协同', '只读成员'];
 const MEMBER_CANDIDATES = ['张三', '李四', '王五', '赵六', '蔡八'];
 
+// 弹窗内沿用的紧凑表单样式（Modal 内部，不影响主页面视觉）。
 const INPUT = 'border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-slate-500 bg-white';
 const BTN_GHOST = 'px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded hover:bg-gray-50';
 const BTN_PRIMARY = 'px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800';
@@ -40,14 +50,23 @@ function progressBar(done, total, color = 'bg-blue-500') {
   const pct = total > 0 ? Math.min(Math.round((done / total) * 100), 100) : 0;
   return (
     <div className="flex items-center gap-2 min-w-[130px]">
-      <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
-        <div className={`h-2 rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+        <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs text-gray-600 whitespace-nowrap">{done}/{total || 0}</span>
+      <span className="text-xs text-gray-500 whitespace-nowrap">{done}/{total || 0}</span>
     </div>
   );
 }
 
+function erpChip(linked) {
+  return (
+    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${linked ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+      {linked ? '已关联' : '未关联'}
+    </span>
+  );
+}
+
+/* ── 弹窗（保留既有交互与数据接线） ─────────────────── */
 function SimpleFormModal({ isOpen, onClose, title, fields, onSubmit, submitText = '保存', size = 'lg' }) {
   const initial = Object.fromEntries(fields.map((f) => [f.key, f.defaultValue ?? '']));
   const [form, setForm] = useState(initial);
@@ -204,6 +223,7 @@ function MemberConfigModal({ isOpen, onClose, project, onSave }) {
   );
 }
 
+/* ═════════ 项目列表 ═════════ */
 function ProjectListTab() {
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
@@ -211,7 +231,7 @@ function ProjectListTab() {
   const [modal, setModal] = useState(null);
   const [target, setTarget] = useState(null);
   const [filters, setFilters] = useState({
-    keyword: '', status: '', owner: '', customer: '', erpLinked: '', createdFrom: '', createdTo: '',
+    keyword: '', status: '', projectType: '', owner: '', customer: '', erpLinked: '', createdFrom: '', createdTo: '',
   });
 
   const productionPlans = [...(state.workflowProductionPlans || []), ...(state.productionPlans || [])];
@@ -243,6 +263,7 @@ function ProjectListTab() {
     const created = (p.createdAt || '').slice(0, 10);
     return (!keyword || p.name.toLowerCase().includes(keyword) || p.id.toLowerCase().includes(keyword))
       && (!filters.status || p.status === filters.status)
+      && (!filters.projectType || p.projectType === filters.projectType)
       && (!filters.owner || p.manager === filters.owner)
       && (!filters.customer || p.client === filters.customer)
       && (!filters.erpLinked || (filters.erpLinked === 'yes' ? p.erpLinked : !p.erpLinked))
@@ -255,6 +276,7 @@ function ProjectListTab() {
     setTarget(project);
     setModal(name);
   };
+  const resetFilters = () => setFilters({ keyword: '', status: '', projectType: '', owner: '', customer: '', erpLinked: '', createdFrom: '', createdTo: '' });
 
   const writeProjectLog = (projectId, actionType, notes, fromStatus = '', toStatus = '') => {
     dispatch({
@@ -273,14 +295,14 @@ function ProjectListTab() {
   };
 
   const actionButtons = (project) => {
-    const view = <button className="text-slate-600 hover:underline text-xs" onClick={() => navigate(`/projects/${project.id}`)}>查看</button>;
-    const edit = <button className="text-blue-600 hover:underline text-xs" onClick={() => openModal('editProject', project)}>编辑</button>;
-    const membersBtn = <button className="text-indigo-600 hover:underline text-xs" onClick={() => openModal('members', project)}>配置成员</button>;
-    const newProduction = <button className="text-emerald-600 hover:underline text-xs" onClick={() => openModal('createProduction', project)}>新建生产计划</button>;
-    const newDelivery = <button className="text-emerald-600 hover:underline text-xs" onClick={() => openModal('createDelivery', project)}>新建交付计划</button>;
-    const voidBtn = <button className="text-red-400 hover:text-red-600 hover:underline text-xs" onClick={() => openModal('void', project)}>作废</button>;
-    const closeBtn = <button className="text-gray-700 hover:underline text-xs" onClick={() => openModal('close', project)}>关闭</button>;
-    const logsBtn = <button className="text-gray-600 hover:underline text-xs" onClick={() => navigate(`/projects/${project.id}`)}>查看日志</button>;
+    const view = <LinkAction onClick={() => navigate(`/projects/${project.id}`)}>查看</LinkAction>;
+    const edit = <LinkAction onClick={() => openModal('editProject', project)}>编辑</LinkAction>;
+    const membersBtn = <LinkAction onClick={() => openModal('members', project)}>配置成员</LinkAction>;
+    const newProduction = <LinkAction onClick={() => openModal('createProduction', project)}>新建生产计划</LinkAction>;
+    const newDelivery = <LinkAction onClick={() => openModal('createDelivery', project)}>新建交付计划</LinkAction>;
+    const voidBtn = <LinkAction onClick={() => openModal('void', project)}>作废</LinkAction>;
+    const closeBtn = <LinkAction onClick={() => openModal('close', project)}>关闭</LinkAction>;
+    const logsBtn = <LinkAction onClick={() => navigate(`/projects/${project.id}`)}>查看日志</LinkAction>;
 
     const map = {
       未开始: [view, edit, membersBtn, newProduction, voidBtn],
@@ -293,88 +315,68 @@ function ProjectListTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">项目列表</h1>
-          <p className="text-sm text-gray-500 mt-1">围绕项目、生产计划与交付计划追踪设备全生命周期质量进度。</p>
-        </div>
-        {canDo('add_project') && <button onClick={() => openModal('newProject')} className={BTN_PRIMARY}>新建项目</button>}
-      </div>
+    <Page>
+      <PageHeader
+        title="项目列表"
+        description="围绕项目、生产计划与交付计划追踪设备全生命周期质量进度。"
+        actions={canDo('add_project') && <Btn variant="primary" onClick={() => openModal('newProject')}>新建项目</Btn>}
+      />
 
-      <div className="bg-white rounded shadow-sm p-4">
-        <div className="grid grid-cols-6 gap-3">
-          <input className={`${INPUT} col-span-2`} placeholder="项目名称 / 项目ID" value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })} />
-          <select className={INPUT} value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
-            <option value="">全部状态</option>
-            {PROJECT_STATUSES.map((s) => <option key={s}>{s}</option>)}
-          </select>
-          <select className={INPUT} value={filters.owner} onChange={(e) => setFilters({ ...filters, owner: e.target.value })}>
-            <option value="">全部负责人</option>
-            {owners.map((o) => <option key={o}>{o}</option>)}
-          </select>
-          <select className={INPUT} value={filters.customer} onChange={(e) => setFilters({ ...filters, customer: e.target.value })}>
-            <option value="">全部客户</option>
-            {customers.map((c) => <option key={c}>{c}</option>)}
-          </select>
-          <select className={INPUT} value={filters.erpLinked} onChange={(e) => setFilters({ ...filters, erpLinked: e.target.value })}>
-            <option value="">ERP不限</option>
-            <option value="yes">已关联ERP</option>
-            <option value="no">未关联ERP</option>
-          </select>
-          <input className={INPUT} type="date" value={filters.createdFrom} onChange={(e) => setFilters({ ...filters, createdFrom: e.target.value })} />
-          <input className={INPUT} type="date" value={filters.createdTo} onChange={(e) => setFilters({ ...filters, createdTo: e.target.value })} />
-          <button className={BTN_GHOST} onClick={() => setFilters({ keyword: '', status: '', owner: '', customer: '', erpLinked: '', createdFrom: '', createdTo: '' })}>重置</button>
-          <span className="self-center text-sm text-gray-400 col-span-3">共 {filtered.length} 个项目</span>
-        </div>
-      </div>
+      <Toolbar right={<><span className="text-xs text-gray-400">共 {filtered.length} 个项目</span><Btn variant="ghost" size="sm" onClick={resetFilters}>重置</Btn></>}>
+        <SearchInput className="w-60" placeholder="项目名称 / 项目ID" value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })} />
+        <Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
+          <option value="">全部状态</option>{PROJECT_STATUSES.map((s) => <option key={s}>{s}</option>)}
+        </Select>
+        <Select value={filters.projectType} onChange={(e) => setFilters({ ...filters, projectType: e.target.value })}>
+          <option value="">全部项目类型</option>{PROJECT_TYPES.map((t) => <option key={t}>{t}</option>)}
+        </Select>
+        <Select value={filters.owner} onChange={(e) => setFilters({ ...filters, owner: e.target.value })}>
+          <option value="">全部负责人</option>{owners.map((o) => <option key={o}>{o}</option>)}
+        </Select>
+        <Select value={filters.customer} onChange={(e) => setFilters({ ...filters, customer: e.target.value })}>
+          <option value="">全部客户</option>{customers.map((c) => <option key={c}>{c}</option>)}
+        </Select>
+        <Select value={filters.erpLinked} onChange={(e) => setFilters({ ...filters, erpLinked: e.target.value })}>
+          <option value="">ERP 不限</option>
+          <option value="yes">已关联 ERP</option>
+          <option value="no">未关联 ERP</option>
+        </Select>
+        <Input type="date" value={filters.createdFrom} onChange={(e) => setFilters({ ...filters, createdFrom: e.target.value })} />
+        <Input type="date" value={filters.createdTo} onChange={(e) => setFilters({ ...filters, createdTo: e.target.value })} />
+      </Toolbar>
 
-      <div className="bg-white rounded shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {['项目ID', '项目名称', '客户', '负责人', '项目成员', '状态', '生产进度', '交付进度', 'ERP状态', '操作'].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {paged.pageItems.map((project) => (
-                <tr key={project.id} onClick={() => navigate(`/projects/${project.id}`)} className="hover:bg-blue-50 cursor-pointer">
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">{project.id}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">{project.name}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{project.client || '—'}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{project.manager || '—'}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {(() => {
-                      const mems = project.members || [];
-                      if (mems.length === 0) return <span className="text-gray-400 text-xs">未配置</span>;
-                      return (
-                        <div className="flex items-center gap-1">
-                          {mems.slice(0, 3).map((mem) => <span key={mem.name} className="text-xs bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">{mem.name}</span>)}
-                          {mems.length > 3 && <span className="text-xs text-gray-400">+{mems.length - 3}</span>}
-                        </div>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-4 py-3"><StatusBadge status={project.status} /></td>
-                  <td className="px-4 py-3">{progressBar(project.producedDone, project.targetCount, 'bg-blue-500')}</td>
-                  <td className="px-4 py-3">{progressBar(project.deliveryDone, project.targetCount, 'bg-emerald-500')}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded border ${project.erpLinked ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
-                      {project.erpLinked ? '已关联' : '未关联'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 min-w-[320px]">{actionButtons(project)}</td>
-                </tr>
-              ))}
-              {filtered.length === 0 && <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">暂无匹配项目</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
-      </div>
+      <Table
+        head={['项目ID', '项目名称', '项目类型 / 业务场景', '客户', '负责人', '项目成员', '状态', '生产进度', '交付进度', 'ERP 状态', '操作']}
+        empty="暂无匹配项目"
+        footer={<Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />}
+      >
+        {paged.pageItems.map((project) => (
+          <tr key={project.id} onClick={() => navigate(`/projects/${project.id}`)} className="hover:bg-[#fafafa] cursor-pointer">
+            <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{project.id}</td>
+            <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{project.name}</td>
+            <td className="px-3 py-2 whitespace-nowrap">{project.projectType ? <Chip>{project.projectType}</Chip> : '—'}</td>
+            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{project.client || '—'}</td>
+            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{project.manager || '—'}</td>
+            <td className="px-3 py-2 whitespace-nowrap">
+              {(() => {
+                const mems = project.members || [];
+                if (mems.length === 0) return <span className="text-gray-400 text-xs">未配置</span>;
+                return (
+                  <div className="flex items-center gap-1">
+                    {mems.slice(0, 3).map((mem) => <span key={mem.name} className="text-xs bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">{mem.name}</span>)}
+                    {mems.length > 3 && <span className="text-xs text-gray-400">+{mems.length - 3}</span>}
+                  </div>
+                );
+              })()}
+            </td>
+            <td className="px-3 py-2"><StatusBadge status={project.status} /></td>
+            <td className="px-3 py-2">{progressBar(project.producedDone, project.targetCount, 'bg-blue-500')}</td>
+            <td className="px-3 py-2">{progressBar(project.deliveryDone, project.targetCount, 'bg-emerald-500')}</td>
+            <td className="px-3 py-2">{erpChip(project.erpLinked)}</td>
+            <td className="px-3 py-2">{actionButtons(project)}</td>
+          </tr>
+        ))}
+      </Table>
 
       <SimpleFormModal
         key="new-project"
@@ -383,10 +385,11 @@ function ProjectListTab() {
         title="新建项目"
         fields={[
           { key: 'name', label: '项目名称 *', required: true },
+          { key: 'projectType', label: '项目类型 / 业务场景', options: PROJECT_TYPES },
           { key: 'client', label: '客户' },
           { key: 'manager', label: '负责人', options: ['张三', '李四', '王五', '赵六', '蔡八'] },
           { key: 'targetCount', label: '目标设备数 *', type: 'number', min: 1, defaultValue: 1, required: true },
-          { key: 'erpPurchaseOrderNo', label: 'ERP项目/订单号' },
+          { key: 'erpProjectNo', label: 'ERP 项目号' },
           { key: 'background', label: '项目背景', type: 'textarea', full: true },
         ]}
         onSubmit={(form) => {
@@ -410,10 +413,11 @@ function ProjectListTab() {
         title="编辑项目"
         fields={[
           { key: 'name', label: '项目名称 *', defaultValue: target?.name || '', required: true },
+          { key: 'projectType', label: '项目类型 / 业务场景', options: PROJECT_TYPES, defaultValue: target?.projectType || '' },
           { key: 'client', label: '客户', defaultValue: target?.client || '' },
           { key: 'manager', label: '负责人', defaultValue: target?.manager || '', options: ['张三', '李四', '王五', '赵六', '蔡八'] },
           { key: 'targetCount', label: '目标设备数 *', type: 'number', min: 1, defaultValue: target?.targetCount || 1, required: true },
-          { key: 'erpPurchaseOrderNo', label: 'ERP项目/订单号', defaultValue: target?.erpPurchaseOrderNo || '' },
+          { key: 'erpProjectNo', label: 'ERP 项目号', defaultValue: target?.erpProjectNo || '' },
           { key: 'notes', label: '备注', type: 'textarea', full: true, defaultValue: target?.notes || '' },
         ]}
         onSubmit={(form) => {
@@ -520,25 +524,11 @@ function ProjectListTab() {
           }}
         />
       )}
-
-    </div>
+    </Page>
   );
 }
 
-function MetricCards({ items, cols = 4 }) {
-  const colClass = { 4: 'grid-cols-4', 5: 'grid-cols-5' }[cols] || 'grid-cols-4';
-  return (
-    <div className={`grid ${colClass} gap-4 mb-5`}>
-      {items.map((item) => (
-        <div key={item.label} className={`bg-white rounded shadow-sm border-l-4 ${item.color} p-4`}>
-          <div className="text-2xl font-semibold text-gray-900">{item.value}</div>
-          <div className="text-sm text-gray-500 mt-1">{item.label}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
+/* ═════════ 生产计划 ═════════ */
 function ProductionPlanTab() {
   const { state } = useApp();
   const navigate = useNavigate();
@@ -585,82 +575,72 @@ function ProductionPlanTab() {
   const stop = (e) => e.stopPropagation();
   const NODE_KEY = { 来料准备: 'materialPrep', 整机装配: 'assembly', 质量测试: 'quality', 整机入库: 'warehouse' };
   const enterCurrentNode = (plan) => navigate(`/production-plans/${plan.id}?node=${NODE_KEY[plan.currentNode] || 'materialPrep'}`);
+  const delayedCount = enriched.filter((p) => p.delayed).length;
 
   return (
-    <div>
-      <MetricCards items={[
-        { label: '计划总数', value: enriched.length, color: 'border-slate-500' },
-        { label: '生产中', value: enriched.filter((p) => p.status === '生产中').length, color: 'border-blue-500' },
-        { label: '已完成', value: enriched.filter((p) => p.status === '已完成').length, color: 'border-green-500' },
-        { label: '延期计划', value: enriched.filter((p) => p.delayed).length, color: 'border-red-500' },
-      ]} />
-      <div className="bg-white rounded shadow-sm p-4 mb-4 grid grid-cols-7 gap-3">
-        <input className={`${INPUT} col-span-2`} placeholder="计划ID / 名称 / 项目" value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })} />
-        <select className={INPUT} value={filters.projectId} onChange={(e) => setFilters({ ...filters, projectId: e.target.value })}>
-          <option value="">所属项目</option>
-          {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <select className={INPUT} value={filters.deviceType} onChange={(e) => setFilters({ ...filters, deviceType: e.target.value })}>
-          <option value="">全部设备类型</option>
-          {deviceTypeNames.map((t) => <option key={t}>{t}</option>)}
-        </select>
-        <select className={INPUT} value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
-          <option value="">全部状态</option>
-          {PRODUCTION_STATUSES.map((s) => <option key={s}>{s}</option>)}
-        </select>
-        <select className={INPUT} value={filters.owner} onChange={(e) => setFilters({ ...filters, owner: e.target.value })}>
-          <option value="">全部负责人</option>
-          {owners.map((o) => <option key={o}>{o}</option>)}
-        </select>
-        <select className={INPUT} value={filters.delayed} onChange={(e) => setFilters({ ...filters, delayed: e.target.value })}>
+    <Page>
+      <PageHeader title="生产计划" description="流程型生产计划（WPP）列表，跟踪来料、装配、测试与入库四节点。" />
+
+      <StatGrid cols={4}>
+        <StatCard label="计划总数" value={enriched.length} />
+        <StatCard label="生产中" value={enriched.filter((p) => p.status === '生产中').length} />
+        <StatCard label="已完成" value={enriched.filter((p) => p.status === '已完成').length} tone="success" />
+        <StatCard label="延期计划" value={delayedCount} tone={delayedCount ? 'danger' : 'default'} />
+      </StatGrid>
+
+      <Toolbar>
+        <SearchInput className="w-56" placeholder="计划ID / 名称 / 项目" value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })} />
+        <Select value={filters.projectId} onChange={(e) => setFilters({ ...filters, projectId: e.target.value })}>
+          <option value="">所属项目</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </Select>
+        <Select value={filters.deviceType} onChange={(e) => setFilters({ ...filters, deviceType: e.target.value })}>
+          <option value="">全部设备类型</option>{deviceTypeNames.map((t) => <option key={t}>{t}</option>)}
+        </Select>
+        <Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
+          <option value="">全部状态</option>{PRODUCTION_STATUSES.map((s) => <option key={s}>{s}</option>)}
+        </Select>
+        <Select value={filters.owner} onChange={(e) => setFilters({ ...filters, owner: e.target.value })}>
+          <option value="">全部负责人</option>{owners.map((o) => <option key={o}>{o}</option>)}
+        </Select>
+        <Select value={filters.delayed} onChange={(e) => setFilters({ ...filters, delayed: e.target.value })}>
           <option value="">是否延期</option>
           <option value="yes">已延期</option>
           <option value="no">未延期</option>
-        </select>
-      </div>
-      <div className="bg-white rounded shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {['生产计划ID', '计划名称', '所属项目', '设备类型', '计划数量', '已入库', '计划周期', '当前节点', '状态', '负责人', 'ERP生产订单号', '操作'].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {paged.pageItems.map((plan) => (
-                <tr key={plan.id} onClick={() => navigate(`/production-plans/${plan.id}`)} className="hover:bg-blue-50 cursor-pointer">
-                  <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">{plan.id}</td>
-                  <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{plan.name || '—'}</td>
-                  <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{plan.projectName}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{plan.deviceType}</td>
-                  <td className="px-4 py-3">{plan.targetCount || 0}</td>
-                  <td className="px-4 py-3">{plan.stored}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{(plan.createdAt || '').slice(0, 10)} ~ {plan.endDate || '—'}</td>
-                  <td className="px-4 py-3"><StatusBadge status={plan.currentNode} /></td>
-                  <td className="px-4 py-3"><StatusBadge status={plan.status} /></td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{plan.owner}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">{plan.erpProductionOrderNo || '—'}</td>
-                  <td className="px-4 py-3 min-w-[300px]" onClick={stop}>
-                    <div className="flex items-center gap-x-3 text-xs whitespace-nowrap">
-                      <button className="text-slate-600 hover:underline" onClick={() => navigate(`/production-plans/${plan.id}`)}>查看</button>
-                      <button className="text-emerald-600 hover:underline" onClick={() => enterCurrentNode(plan)}>进入当前节点</button>
-                      <button className="text-blue-600 hover:underline" onClick={() => setPlaceholder({ title: '编辑生产计划', text: `编辑「${plan.name || plan.id}」的入口已保留，后续接入表单与校验。` })}>编辑</button>
-                      {!['已完成', '已作废'].includes(plan.status) && (
-                        <button className="text-red-400 hover:text-red-600 hover:underline" onClick={() => setPlaceholder({ title: '作废生产计划', text: `作废「${plan.name || plan.id}」的入口已保留，后续接入审批流程。` })}>作废</button>
-                      )}
-                      <button className="text-gray-600 hover:underline" onClick={() => navigate(`/projects/${plan.projectId}`)}>查看日志</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无匹配生产计划</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
-      </div>
+        </Select>
+      </Toolbar>
+
+      <Table
+        head={['生产计划ID', '计划名称', '所属项目', '设备类型', '计划数量', '已入库', '计划周期', '当前节点', '状态', '负责人', 'ERP 生产订单号', '操作']}
+        empty="暂无匹配生产计划"
+        footer={<Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />}
+      >
+        {paged.pageItems.map((plan) => (
+          <tr key={plan.id} onClick={() => navigate(`/production-plans/${plan.id}`)} className="hover:bg-[#fafafa] cursor-pointer">
+            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{plan.id}</td>
+            <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{plan.name || '—'}</td>
+            <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{plan.projectName}</td>
+            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{plan.deviceType}</td>
+            <td className="px-3 py-2 text-gray-600">{plan.targetCount || 0}</td>
+            <td className="px-3 py-2 text-gray-600">{plan.stored}</td>
+            <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{(plan.createdAt || '').slice(0, 10)} ~ {plan.endDate || '—'}</td>
+            <td className="px-3 py-2"><StatusBadge status={plan.currentNode} /></td>
+            <td className="px-3 py-2"><StatusBadge status={plan.status} /></td>
+            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{plan.owner}</td>
+            <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{plan.erpProductionOrderNo || '—'}</td>
+            <td className="px-3 py-2 text-xs whitespace-nowrap" onClick={stop}>
+              <div className="flex items-center gap-x-3">
+                <LinkAction onClick={() => navigate(`/production-plans/${plan.id}`)}>查看</LinkAction>
+                <LinkAction onClick={() => enterCurrentNode(plan)}>进入当前节点</LinkAction>
+                <LinkAction onClick={() => setPlaceholder({ title: '编辑生产计划', text: `编辑「${plan.name || plan.id}」的入口已保留，后续接入表单与校验。` })}>编辑</LinkAction>
+                {!['已完成', '已作废'].includes(plan.status) && (
+                  <LinkAction onClick={() => setPlaceholder({ title: '作废生产计划', text: `作废「${plan.name || plan.id}」的入口已保留，后续接入审批流程。` })}>作废</LinkAction>
+                )}
+                <LinkAction onClick={() => navigate(`/projects/${plan.projectId}`)}>查看日志</LinkAction>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </Table>
 
       <Modal isOpen={!!placeholder} onClose={() => setPlaceholder(null)} title={placeholder?.title || ''}>
         <div className="space-y-4">
@@ -669,10 +649,11 @@ function ProductionPlanTab() {
           <div className="flex justify-end"><button onClick={() => setPlaceholder(null)} className={BTN_PRIMARY}>知道了</button></div>
         </div>
       </Modal>
-    </div>
+    </Page>
   );
 }
 
+/* ═════════ 交付计划 ═════════ */
 function DeliveryPlanTab() {
   const { state } = useApp();
   const navigate = useNavigate();
@@ -710,83 +691,73 @@ function DeliveryPlanTab() {
 
   const stop = (e) => e.stopPropagation();
   const NODE_KEY = { 绑定设备: 'binding', 出厂检验: 'factoryInspection', 现场安装调试: 'siteInstall', 客户验收: 'customerAccept' };
+  const delayedCount = enriched.filter((p) => p.status === '已延期').length;
 
   return (
-    <div>
-      <MetricCards items={[
-        { label: '计划总数', value: enriched.length, color: 'border-slate-500' },
-        { label: '交付中', value: enriched.filter((p) => p.status === '交付中').length, color: 'border-blue-500' },
-        { label: '已验收', value: enriched.filter((p) => p.status === '已验收').length, color: 'border-green-500' },
-        { label: '延期计划', value: enriched.filter((p) => p.status === '已延期').length, color: 'border-red-500' },
-      ]} />
-      <div className="bg-white rounded shadow-sm p-4 mb-4 grid grid-cols-7 gap-3">
-        <input className={`${INPUT} col-span-2`} placeholder="交付计划ID / 项目名称" value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })} />
-        <select className={INPUT} value={filters.projectId} onChange={(e) => setFilters({ ...filters, projectId: e.target.value })}>
-          <option value="">所属项目</option>
-          {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <select className={INPUT} value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
-          <option value="">全部状态</option>
-          {DELIVERY_STATUSES.map((s) => <option key={s}>{s}</option>)}
-        </select>
-        <select className={INPUT} value={filters.node} onChange={(e) => setFilters({ ...filters, node: e.target.value })}>
-          <option value="">当前节点</option>
-          {DELIVERY_NODES.map((n) => <option key={n}>{n}</option>)}
-        </select>
-        <select className={INPUT} value={filters.owner} onChange={(e) => setFilters({ ...filters, owner: e.target.value })}>
-          <option value="">全部负责人</option>
-          {owners.map((o) => <option key={o}>{o}</option>)}
-        </select>
-        <select className={INPUT} value={filters.delayed} onChange={(e) => setFilters({ ...filters, delayed: e.target.value })}>
+    <Page>
+      <PageHeader title="交付计划" description="按交付计划跟踪绑定设备、出厂检验、现场安装调试与客户验收进度。" />
+
+      <StatGrid cols={4}>
+        <StatCard label="计划总数" value={enriched.length} />
+        <StatCard label="交付中" value={enriched.filter((p) => p.status === '交付中').length} />
+        <StatCard label="已验收" value={enriched.filter((p) => p.status === '已验收').length} tone="success" />
+        <StatCard label="延期计划" value={delayedCount} tone={delayedCount ? 'danger' : 'default'} />
+      </StatGrid>
+
+      <Toolbar>
+        <SearchInput className="w-56" placeholder="交付计划ID / 项目名称" value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })} />
+        <Select value={filters.projectId} onChange={(e) => setFilters({ ...filters, projectId: e.target.value })}>
+          <option value="">所属项目</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </Select>
+        <Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
+          <option value="">全部状态</option>{DELIVERY_STATUSES.map((s) => <option key={s}>{s}</option>)}
+        </Select>
+        <Select value={filters.node} onChange={(e) => setFilters({ ...filters, node: e.target.value })}>
+          <option value="">当前节点</option>{DELIVERY_NODES.map((n) => <option key={n}>{n}</option>)}
+        </Select>
+        <Select value={filters.owner} onChange={(e) => setFilters({ ...filters, owner: e.target.value })}>
+          <option value="">全部负责人</option>{owners.map((o) => <option key={o}>{o}</option>)}
+        </Select>
+        <Select value={filters.delayed} onChange={(e) => setFilters({ ...filters, delayed: e.target.value })}>
           <option value="">是否延期</option>
           <option value="yes">已延期</option>
           <option value="no">未延期</option>
-        </select>
-      </div>
-      <div className="bg-white rounded shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {['交付计划ID', '所属项目', '交付批次', '计划交付数量', '已绑定设备数', '计划出厂时间', '计划现场安装调试时间', '计划客户验收时间', '当前节点', '状态', '负责人', '操作'].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {paged.pageItems.map((plan) => (
-                <tr key={plan.id} onClick={() => navigate(`/delivery-plans/${plan.id}`)} className="hover:bg-blue-50 cursor-pointer">
-                  <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">{plan.id}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{plan.projectName}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{plan.batchNo || plan.name}</td>
-                  <td className="px-4 py-3">{plan.targetCount}</td>
-                  <td className="px-4 py-3">{plan.bindingCount}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{plan.factoryDate || plan.dueDate || '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{plan.siteInstallDate || '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{plan.acceptanceDate || plan.dueDate || '—'}</td>
-                  <td className="px-4 py-3"><StatusBadge status={plan.currentNode} /></td>
-                  <td className="px-4 py-3"><StatusBadge status={plan.status} /></td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{plan.owner}</td>
-                  <td className="px-4 py-3 min-w-[340px]" onClick={stop}>
-                    <div className="flex items-center gap-x-3 text-xs whitespace-nowrap">
-                      <button className="text-slate-600 hover:underline" onClick={() => navigate(`/delivery-plans/${plan.id}`)}>查看</button>
-                      <button className="text-emerald-600 hover:underline" onClick={() => navigate(`/delivery-plans/${plan.id}?node=${NODE_KEY[plan.currentNode] || 'binding'}`)}>进入当前节点</button>
-                      <button className="text-indigo-600 hover:underline" onClick={() => navigate(`/delivery-plans/${plan.id}?node=binding`)}>选择设备</button>
-                      <button className="text-blue-600 hover:underline" onClick={() => setPlaceholder({ title: '编辑交付计划', text: `编辑「${plan.name || plan.id}」的入口已保留，后续接入表单与校验。` })}>编辑</button>
-                      {!['已验收', '已作废'].includes(plan.status) && (
-                        <button className="text-red-400 hover:text-red-600 hover:underline" onClick={() => setPlaceholder({ title: '作废交付计划', text: `作废「${plan.name || plan.id}」的入口已保留，后续接入审批流程。` })}>作废</button>
-                      )}
-                      <button className="text-gray-600 hover:underline" onClick={() => navigate(`/projects/${plan.projectId}`)}>查看日志</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">暂无匹配交付计划</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />
-      </div>
+        </Select>
+      </Toolbar>
+
+      <Table
+        head={['交付计划ID', '所属项目', '交付批次', '计划交付数量', '已绑定设备数', '计划出厂时间', '计划现场安装调试时间', '计划客户验收时间', '当前节点', '状态', '负责人', '操作']}
+        empty="暂无匹配交付计划"
+        footer={<Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />}
+      >
+        {paged.pageItems.map((plan) => (
+          <tr key={plan.id} onClick={() => navigate(`/delivery-plans/${plan.id}`)} className="hover:bg-[#fafafa] cursor-pointer">
+            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{plan.id}</td>
+            <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{plan.projectName}</td>
+            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{plan.batchNo || plan.name}</td>
+            <td className="px-3 py-2 text-gray-600">{plan.targetCount}</td>
+            <td className="px-3 py-2 text-gray-600">{plan.bindingCount}</td>
+            <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{plan.factoryDate || plan.dueDate || '—'}</td>
+            <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{plan.siteInstallDate || '—'}</td>
+            <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{plan.acceptanceDate || plan.dueDate || '—'}</td>
+            <td className="px-3 py-2"><StatusBadge status={plan.currentNode} /></td>
+            <td className="px-3 py-2"><StatusBadge status={plan.status} /></td>
+            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{plan.owner}</td>
+            <td className="px-3 py-2 text-xs whitespace-nowrap" onClick={stop}>
+              <div className="flex items-center gap-x-3">
+                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}`)}>查看</LinkAction>
+                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}?node=${NODE_KEY[plan.currentNode] || 'binding'}`)}>进入当前节点</LinkAction>
+                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}?node=binding`)}>选择设备</LinkAction>
+                <LinkAction onClick={() => setPlaceholder({ title: '编辑交付计划', text: `编辑「${plan.name || plan.id}」的入口已保留，后续接入表单与校验。` })}>编辑</LinkAction>
+                {!['已验收', '已作废'].includes(plan.status) && (
+                  <LinkAction onClick={() => setPlaceholder({ title: '作废交付计划', text: `作废「${plan.name || plan.id}」的入口已保留，后续接入审批流程。` })}>作废</LinkAction>
+                )}
+                <LinkAction onClick={() => navigate(`/projects/${plan.projectId}`)}>查看日志</LinkAction>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </Table>
 
       <Modal isOpen={!!placeholder} onClose={() => setPlaceholder(null)} title={placeholder?.title || ''}>
         <div className="space-y-4">
@@ -795,7 +766,201 @@ function DeliveryPlanTab() {
           <div className="flex justify-end"><button onClick={() => setPlaceholder(null)} className={BTN_PRIMARY}>知道了</button></div>
         </div>
       </Modal>
-    </div>
+    </Page>
+  );
+}
+
+/* ═════════ ERP 表单（只读同步数据池） ═════════ */
+// 单个只读单据池：筛选 + 搜索 + 分页；所有行只读，操作列仅“查看 / 选择绑定”只读动作。
+function ErpPool({ title, subtitle, columns, rows, typeOptions, onView, onBind }) {
+  const [q, setQ] = useState('');
+  const [type, setType] = useState('');
+  const filtered = rows.filter((r) =>
+    (!type || r.type === type)
+    && (!q || (r.search || '').toLowerCase().includes(q.trim().toLowerCase())));
+  const pager = usePaged(filtered, 6);
+
+  return (
+    <Section
+      title={title}
+      subtitle={subtitle}
+      bodyClassName="p-0"
+      right={
+        <div className="flex items-center gap-2">
+          {typeOptions && (
+            <Select value={type} onChange={(e) => setType(e.target.value)}>
+              <option value="">全部单据类型</option>{typeOptions.map((t) => <option key={t}>{t}</option>)}
+            </Select>
+          )}
+          <SearchInput className="w-52" placeholder="搜索单号 / 关联对象" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+      }
+    >
+      <Table
+        head={[...columns, '操作']}
+        empty="暂无同步单据"
+        footer={<Pagination page={pager.page} total={pager.total} totalPages={pager.totalPages} onChange={pager.setPage} />}
+      >
+        {pager.pageItems.map((r) => (
+          <tr key={r.id} className="hover:bg-[#fafafa]">
+            {r.cells.map((c, i) => <td key={i} className="px-3 py-2 text-gray-700 align-middle whitespace-nowrap">{c}</td>)}
+            <td className="px-3 py-2 text-xs whitespace-nowrap">
+              <div className="flex items-center gap-x-3">
+                <LinkAction onClick={() => onView(r)}>查看</LinkAction>
+                <LinkAction onClick={() => onBind(r)}>选择绑定</LinkAction>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </Table>
+    </Section>
+  );
+}
+
+function ErpFormsTab() {
+  const { state } = useApp();
+  const [detail, setDetail] = useState(null);
+  const [bindInfo, setBindInfo] = useState(null);
+
+  const projects = state.projects || [];
+  const wpp = state.workflowProductionPlans || [];
+  const batches = state.materialBatches || [];
+  const devices = state.devices || [];
+  const deliveryPlans = state.deliveryPlans || [];
+  const dash = (v) => (v == null || v === '' ? '—' : v);
+  const projName = (pid) => projects.find((p) => p.id === pid)?.name ?? '—';
+
+  const mono = (v) => <span className="font-mono text-xs text-gray-600">{dash(v)}</span>;
+
+  // 池一：ERP 项目单
+  const projectRows = projects.map((p) => ({
+    id: `erp-proj-${p.id}`,
+    search: `${p.erpProjectNo ?? ''} ${p.name} ${p.client ?? ''}`,
+    cells: [mono(p.erpProjectNo), <span className="text-gray-800">{p.name}</span>, dash(p.client), p.projectType ? <Chip>{p.projectType}</Chip> : '—'],
+    detail: [['ERP 项目号', dash(p.erpProjectNo)], ['项目名称', p.name], ['客户', dash(p.client)], ['项目类型', dash(p.projectType)], ['负责人', dash(p.manager)]],
+    bindNo: dash(p.erpProjectNo),
+  }));
+
+  // 池二：ERP 生产工单（MO）
+  const moRows = wpp.map((p) => ({
+    id: `erp-mo-${p.id}`,
+    search: `${p.erpProductionOrderNo ?? ''} ${p.name} ${projName(p.projectId)}`,
+    cells: [mono(p.erpProductionOrderNo), <span className="text-gray-800">{p.name}</span>, projName(p.projectId), <StatusBadge status={productionPlanStatus(p)} />],
+    detail: [['ERP 生产工单号', dash(p.erpProductionOrderNo)], ['生产计划名称', p.name], ['关联项目', projName(p.projectId)], ['计划数量', dash(p.targetCount)], ['状态（只读）', productionPlanStatus(p)]],
+    bindNo: dash(p.erpProductionOrderNo),
+  }));
+
+  // 池三：ERP 采购 / 入库 / 检验单（聚合 materialBatches + devices + plans）
+  const piiSrc = [];
+  batches.forEach((b) => {
+    if (b.erpPurchaseOrderNo) piiSrc.push({ type: '采购单', no: b.erpPurchaseOrderNo, related: `${b.batchNo} · ${dash(b.supplier)}`, extra: dash(b.model) });
+    if (b.erpArrivalNo) piiSrc.push({ type: '到货单', no: b.erpArrivalNo, related: `${b.batchNo} · ${dash(b.supplier)}`, extra: dash(b.warehouse) });
+  });
+  devices.forEach((d) => {
+    if (d.erpInboundNo) piiSrc.push({ type: '入库单', no: d.erpInboundNo, related: d.sn, extra: dash(d.erpStockStatus) });
+    if (d.erpInspectionNo) piiSrc.push({ type: '检验单', no: d.erpInspectionNo, related: d.sn, extra: dash(d.erpInspectionStatus) });
+  });
+  wpp.forEach((p) => {
+    if (p.erpInboundNo) piiSrc.push({ type: '入库单', no: p.erpInboundNo, related: p.name, extra: dash(p.erpStockStatus) });
+    if (p.erpInspectionNo) piiSrc.push({ type: '检验单', no: p.erpInspectionNo, related: p.name, extra: dash(p.erpInspectionStatus ?? p.erpStockStatus) });
+  });
+  const purchaseRows = piiSrc.map((r, i) => ({
+    id: `erp-pii-${i}`,
+    type: r.type,
+    search: `${r.no} ${r.related} ${r.type}`,
+    cells: [<Chip>{r.type}</Chip>, mono(r.no), r.related, dash(r.extra)],
+    detail: [['单据类型', r.type], ['ERP 单号', r.no], ['关联对象', r.related], ['状态 / 备注', dash(r.extra)]],
+    bindNo: r.no,
+  }));
+
+  // 池四：ERP 出库 / 领料单（materialBatches.erpDeliveryNo + deliveryPlans.erpOutboundNo）
+  const outSrc = [];
+  batches.forEach((b) => {
+    if (b.erpDeliveryNo) outSrc.push({ type: '生产领料单', no: b.erpDeliveryNo, related: `${b.batchNo}${b.planId ? ` · ${b.planId}` : ''}`, extra: b.overIssued ? '超额领料' : dash(b.warehouse) });
+  });
+  deliveryPlans.forEach((dp) => {
+    if (dp.erpOutboundNo) outSrc.push({ type: '销售出库单', no: dp.erpOutboundNo, related: `${dp.batchNo || dp.name} · ${projName(dp.projectId)}`, extra: deliveryPlanStatus(dp) });
+  });
+  const outboundRows = outSrc.map((r, i) => ({
+    id: `erp-out-${i}`,
+    type: r.type,
+    search: `${r.no} ${r.related} ${r.type}`,
+    cells: [<Chip>{r.type}</Chip>, mono(r.no), r.related, dash(r.extra)],
+    detail: [['单据类型', r.type], ['ERP 单号', r.no], ['关联对象', r.related], ['状态 / 仓库', dash(r.extra)]],
+    bindNo: r.no,
+  }));
+
+  const openDetail = (poolTitle, r) => setDetail({ title: `${poolTitle} · 详情`, items: r.detail });
+  const openBind = (r) => setBindInfo({ no: r.bindNo });
+
+  return (
+    <Page>
+      <PageHeader title="ERP 表单" description="项目、生产计划、设备、售后工单、换件记录的选择与绑定数据来源。" />
+
+      <Card className="border-amber-200 bg-amber-50">
+        <div className="flex items-start gap-2.5">
+          <svg className="mt-0.5 text-amber-600 flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+          <div className="text-[13px]">
+            <div className="font-medium text-amber-800">只读同步自 ERP，平台不新增 / 编辑 / 删除 ERP 单据</div>
+            <div className="text-amber-700 mt-0.5">本页汇总项目、生产、采购入库检验、出库领料等 ERP 单据，仅作为各业务模块选择与绑定的数据来源；所有单据均为只读。</div>
+          </div>
+        </div>
+      </Card>
+
+      <ErpPool
+        title="ERP 项目单"
+        subtitle="来源：ERP 项目主数据"
+        columns={['ERP 项目号', '项目名称', '客户', '项目类型']}
+        rows={projectRows}
+        onView={(r) => openDetail('ERP 项目单', r)}
+        onBind={openBind}
+      />
+      <ErpPool
+        title="ERP 生产工单（MO）"
+        subtitle="来源：ERP 生产制造订单"
+        columns={['ERP 生产工单号', '生产计划名称', '关联项目', '状态（只读）']}
+        rows={moRows}
+        onView={(r) => openDetail('ERP 生产工单', r)}
+        onBind={openBind}
+      />
+      <ErpPool
+        title="ERP 采购 / 入库 / 检验单"
+        subtitle="来源：ERP 采购、到货、入库与质量检验单据"
+        columns={['单据类型', 'ERP 单号', '关联对象', '状态 / 备注']}
+        rows={purchaseRows}
+        typeOptions={['采购单', '到货单', '入库单', '检验单']}
+        onView={(r) => openDetail('ERP 采购 / 入库 / 检验单', r)}
+        onBind={openBind}
+      />
+      <ErpPool
+        title="ERP 出库 / 领料单"
+        subtitle="来源：ERP 生产领料与销售出库单据"
+        columns={['单据类型', 'ERP 单号', '关联对象', '状态 / 仓库']}
+        rows={outboundRows}
+        typeOptions={['生产领料单', '销售出库单']}
+        onView={(r) => openDetail('ERP 出库 / 领料单', r)}
+        onBind={openBind}
+      />
+
+      <Modal isOpen={!!detail} onClose={() => setDetail(null)} title={detail?.title || 'ERP 单据详情'}>
+        {detail && (
+          <div className="space-y-4">
+            <DescList items={detail.items} cols={2} />
+            <div className="bg-gray-50 border border-[#ececec] rounded-md p-3 text-xs text-gray-500">只读视图，数据同步自 ERP，平台不修改 ERP 单据。</div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal isOpen={!!bindInfo} onClose={() => setBindInfo(null)} title="选择绑定（只读）">
+        {bindInfo && (
+          <div className="space-y-3 text-[13px] text-gray-600">
+            <p>ERP 单号 <span className="font-mono text-gray-800">{bindInfo.no}</span> 可在对应业务模块（项目 / 生产计划 / 设备 / 售后工单 / 换件记录）中作为绑定来源被引用。</p>
+            <p className="text-gray-500">平台仅引用该 ERP 单据用于关联，不会新增或修改 ERP 单据本身。</p>
+            <div className="flex justify-end"><Btn variant="primary" onClick={() => setBindInfo(null)}>知道了</Btn></div>
+          </div>
+        )}
+      </Modal>
+    </Page>
   );
 }
 
@@ -803,18 +968,13 @@ export default function ProjectsCenter() {
   const [searchParams] = useSearchParams();
   const tab = searchParams.get('tab') || 'list';
   const activeTab = TABS.some((t) => t.key === tab) ? tab : 'list';
-  const activeLabel = TABS.find((t) => t.key === activeTab)?.label || '';
 
   return (
-    <div>
-      <div className="px-6 pt-5 pb-4 bg-white border-b border-gray-100">
-        <div className="text-xs text-gray-400">项目中心 / {activeLabel}</div>
-      </div>
-      <div className="p-6">
-        {activeTab === 'list' && <ProjectListTab />}
-        {activeTab === 'production' && <ProductionPlanTab />}
-        {activeTab === 'delivery' && <DeliveryPlanTab />}
-      </div>
-    </div>
+    <>
+      {activeTab === 'list' && <ProjectListTab />}
+      {activeTab === 'production' && <ProductionPlanTab />}
+      {activeTab === 'delivery' && <DeliveryPlanTab />}
+      {activeTab === 'erp' && <ErpFormsTab />}
+    </>
   );
 }
