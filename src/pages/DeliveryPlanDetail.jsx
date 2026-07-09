@@ -10,7 +10,7 @@ import { isPass, deliveryPlanStatus, TODAY } from '../utils/status';
 
 // 交付计划详情（只读追溯视图）
 // 分区：交付基础信息 / 设备列表 / 交付子工单（前置准备 + 设备部署两组）/
-//       交付材料 / 验收记录 / 关联售后工单 / 操作日志。
+//       交付资料 / 附件 / 验收记录 / 关联售后工单 / 操作日志。
 // 交付子工单只保留两类：前置准备（舱体进场及水电部署）、机器人 / 设备部署。
 // 培训与验收合并进「设备部署子工单」的检查项 / 上传材料。
 // 交付异常转售后为流程分支（非独立菜单）：子工单内只读展示生成 / 已绑定售后工单入口。
@@ -189,17 +189,24 @@ export default function DeliveryPlanDetail() {
   const planStatus = deliveryPlanStatus(plan);
   const overdue = !!plan.dueDate && plan.dueDate < TODAY && !['未开始', '已验收', '已作废'].includes(planStatus);
   const acceptedPass = acceptRecs.filter(isPass).length;
+  const deployedCount = (recs.siteInstall || []).filter(isPass).length; // 现场安装调试完成（Pass）
   const openWO = allWO.filter((w) => !['已关闭', '已作废', '已完成'].includes(w.status)).length;
   const targetCount = plan.targetCount ?? 0;
-  const repType = boundDevices[0] ? typeName(boundDevices[0].deviceTypeId) : '机器人整机';
 
-  // 交付材料清单（原型占位：交付涉及物料 / 随机附件）。
-  const deliveryMaterials = [
-    { name: '舱体主体结构', spec: '定制舱体', qty: 1, status: '已发货' },
-    { name: '水电接入套件', spec: '标准配电 / 给排水', qty: 1, status: '待进场' },
-    { name: `机器人整机（${repType}）`, spec: '整机', qty: targetCount || boundDevices.length || '—', status: '待部署' },
-    { name: '随机附件包', spec: '充电桩 / 线缆 / 工具', qty: targetCount || boundDevices.length || '—', status: '待部署' },
-    { name: '交付验收单', spec: '纸质 + 电子', qty: 1, status: '待签署' },
+  // 交付资料 / 附件（原型占位样例）：现场照片 / 设备摆放 / 流程测试视频 / 培训与交付验收单 / 施工·水电确认材料等交付过程资料。
+  // 注意：非 ERP 物料 / 发货物料，正式物料出库 / 领料 / 发货属 ERP 或线下协同，不在此。
+  const firstSN = boundDevices[0]?.sn || '—';
+  const lastSN = boundDevices[boundDevices.length - 1]?.sn || firstSN;
+  const preOrderId = preOrders[0]?.id || '—';
+  const deployOrderId = deployOrders[0]?.id || '—';
+  const docUploader = plan.owner || '现场工程师';
+  const siteDate = plan.siteInstallDate || plan.factoryDate || null;
+  const deliveryDocs = [
+    { name: '现场进场环境照片', type: '现场照片', order: preOrderId, sn: '—', uploader: docUploader, time: siteDate ? `${siteDate} 09:20` : '—', file: 'site_env.jpg', note: '舱体进场前现场环境记录' },
+    { name: '施工·水电确认材料', type: '施工·水电确认材料', order: preOrderId, sn: '—', uploader: docUploader, time: siteDate ? `${siteDate} 15:00` : '—', file: 'utility_check.pdf', note: '水电施工完成确认' },
+    { name: '设备摆放照片', type: '设备摆放照片', order: deployOrderId, sn: firstSN, uploader: docUploader, time: siteDate ? `${siteDate} 16:30` : '—', file: `layout_${firstSN}.jpg`, note: '按点位完成设备摆放' },
+    { name: '工作流程测试视频', type: '工作流程测试视频', order: deployOrderId, sn: firstSN, uploader: docUploader, time: siteDate ? `${siteDate} 17:10` : '—', file: `workflow_${firstSN}.mp4`, note: '现场全流程联调录像' },
+    { name: '交付验收单', type: '交付验收单图片', order: deployOrderId, sn: lastSN, uploader: '客户', time: plan.acceptanceDate ? `${plan.acceptanceDate} 15:00` : '—', file: `accept_${lastSN}.pdf`, note: '客户签署交付验收单' },
   ];
 
   const woTypeLabel = (w) => w.woClass || (w.type === 'delivery' ? '交付工单' : '售后工单');
@@ -225,10 +232,10 @@ export default function DeliveryPlanDetail() {
       </div>
 
       <StatGrid cols={4}>
-        <StatCard label="计划交付" value={targetCount || '—'} />
-        <StatCard label="已绑定设备" value={boundDevices.length} />
-        <StatCard label="已验收设备" value={acceptedPass} tone="success" />
-        <StatCard label="未结售后工单" value={openWO} tone={openWO ? 'warning' : 'default'} />
+        <StatCard label="交付设备数" value={boundDevices.length} hint="已关联/已绑定，非已部署或验收" />
+        <StatCard label="已部署设备数" value={deployedCount} hint="现场安装调试完成（Pass）" />
+        <StatCard label="验收通过设备数" value={acceptedPass} tone="success" hint="客户验收通过（Pass）" />
+        <StatCard label="未结售后工单数" value={openWO} tone={openWO ? 'warning' : 'default'} hint="关联未关闭交付/售后工单" />
       </StatGrid>
 
       <Section title="交付基础信息">
@@ -240,7 +247,7 @@ export default function DeliveryPlanDetail() {
             ['所属项目', project ? <Link to={`/projects/${project.id}`} className="ui-link">{project.name}</Link> : '—'],
             ['负责人', plan.owner],
             ['计划交付数', targetCount ? `${targetCount} 台` : '—'],
-            ['已绑定设备', `${boundDevices.length} 台`],
+            ['交付设备数（已关联）', `${boundDevices.length} 台`],
             ['当前节点', plan.currentNode],
             ['计划出厂', plan.factoryDate],
             ['计划现场安装调试', plan.siteInstallDate],
@@ -252,10 +259,10 @@ export default function DeliveryPlanDetail() {
         />
       </Section>
 
-      <Section title="设备列表" subtitle={`本交付计划绑定设备 ${boundDevices.length} 台`} bodyClassName="p-0">
+      <Section title="设备列表" subtitle={`本交付计划交付设备 ${boundDevices.length} 台（已关联/已绑定）`} bodyClassName="p-0">
         <Table
           head={['设备SN', '机器人型号', '当前状态', '现场点位', '更新时间']}
-          empty="暂无已绑定设备"
+          empty="暂无交付设备（未关联设备）"
           footer={<Pagination page={devPaged.page} total={devPaged.total} totalPages={devPaged.totalPages} onChange={devPaged.setPage} />}
         >
           {devPaged.pageItems.map((d) => (
@@ -325,14 +332,18 @@ export default function DeliveryPlanDetail() {
         </div>
       </Section>
 
-      <Section title="交付材料" subtitle="交付涉及的物料 / 随机附件清单（原型占位，随 ERP 出库单与现场清单接入补齐）" bodyClassName="p-0">
-        <Table head={['材料名称', '规格', '数量', '状态']} empty="暂无交付材料">
-          {deliveryMaterials.map((m) => (
+      <Section title="交付资料 / 附件" subtitle="现场照片 / 设备摆放 / 流程测试视频 / 培训与交付验收单 / 施工·水电确认材料等交付过程资料（原型占位样例，随现场系统 / 附件库接入补齐）。非 ERP 物料 / 发货物料。" bodyClassName="p-0">
+        <Table head={['资料名称', '资料类型', '关联子工单', '关联设备SN', '上传人', '上传时间', '文件/图片/视频', '备注']} empty="暂无交付资料">
+          {deliveryDocs.map((m) => (
             <tr key={m.name} className="hover:bg-[#fafafa]">
               <td className="px-3 py-2 whitespace-nowrap text-gray-700">{m.name}</td>
-              <td className="px-3 py-2 whitespace-nowrap text-gray-600">{m.spec}</td>
-              <td className="px-3 py-2 text-gray-600">{m.qty}</td>
-              <td className="px-3 py-2"><StatusBadge status={m.status} /></td>
+              <td className="px-3 py-2 whitespace-nowrap"><Chip tone="outline">{m.type}</Chip></td>
+              <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600">{m.order}</td>
+              <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600">{m.sn}</td>
+              <td className="px-3 py-2 whitespace-nowrap text-gray-600">{m.uploader}</td>
+              <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{m.time}</td>
+              <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600">{m.file}</td>
+              <td className="px-3 py-2 text-xs text-gray-500 max-w-xs"><div className="truncate">{m.note}</div></td>
             </tr>
           ))}
         </Table>

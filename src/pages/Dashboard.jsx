@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import StatusBadge from '../components/StatusBadge';
 import { Pagination, usePaged } from '../components/Pagination';
 import { Page, PageHeader, Section, Toolbar, Select, StatCard, StatGrid, Table, LinkAction } from '../components/ui';
-import { productionPlanStatus, deliveryPlanStatus, deviceLifecycleStatus, isPass, isNG } from '../utils/status';
+import { productionPlanStatus, deliveryPlanStatus, deviceLifecycleStatus, isPass, isNG, TODAY } from '../utils/status';
 
 // 看板中心：总览 / 项目 / 质量 / 交付 / 售后 五个看板。
 // SaaS dashboard 风格（非大屏）：紧凑指标卡 + 分区卡片 + 紧凑表格，看板只做聚合与跳转，不承载业务流程。
@@ -275,14 +275,23 @@ function DeliveryBoard({ state }) {
   });
 
   // 交付风险清单（仅看板聚合，不是新的业务流程）
+  // 风险类型对齐口径：延期 / 节点超时 / 现场条件未满足 / 验收不通过 / 已转售后 / 其他（有数据才展示，均取 StatusBadge 内置配色）
   const risks = [];
   deliveryPlans.forEach((dp) => {
-    if (deliveryPlanStatus(dp) === '已延期') risks.push({ type: '延期交付', target: dp.batchNo || dp.name, project: projName(dp.projectId), detail: `计划验收 ${dp.acceptanceDate || dp.dueDate || '—'}`, to: `/delivery-plans/${dp.id}` });
-    (dp.records?.factoryInspection || []).filter(isNG).forEach((r) => risks.push({ type: '出厂检验NG', target: r.deviceSN || r.deviceId, project: projName(dp.projectId), detail: r.notes || '出厂检验未通过', to: `/delivery-plans/${dp.id}?node=factoryInspection` }));
-    (dp.records?.siteInstall || []).filter(isNG).forEach((r) => risks.push({ type: '现场安装NG', target: r.deviceSN || r.deviceId, project: projName(dp.projectId), detail: r.notes || '现场安装调试异常', to: `/delivery-plans/${dp.id}?node=siteInstall` }));
-    (dp.records?.customerAccept || []).filter(isNG).forEach((r) => risks.push({ type: '验收异常', target: r.deviceSN || r.deviceId, project: projName(dp.projectId), detail: r.notes || '客户验收未通过', to: `/delivery-plans/${dp.id}?node=customerAccept` }));
+    const status = deliveryPlanStatus(dp);
+    if (status === '已延期') risks.push({ type: '延期', target: dp.batchNo || dp.name, project: projName(dp.projectId), detail: `计划验收 ${dp.acceptanceDate || dp.dueDate || '—'}`, to: `/delivery-plans/${dp.id}` });
+    if (status === '交付中') {
+      const bound = (dp.boundDeviceIds || []).length;
+      const siPass = (dp.records?.siteInstall || []).filter(isPass).length;
+      const fiPass = (dp.records?.factoryInspection || []).filter(isPass).length;
+      if (dp.currentNode === '现场安装调试' && dp.siteInstallDate && dp.siteInstallDate < TODAY && siPass < bound) risks.push({ type: '节点超时', target: dp.batchNo || dp.name, project: projName(dp.projectId), detail: `现场安装调试滞后（计划 ${dp.siteInstallDate}）`, to: `/delivery-plans/${dp.id}?node=siteInstall` });
+      else if (dp.currentNode === '出厂检验' && dp.factoryDate && dp.factoryDate < TODAY && fiPass < bound) risks.push({ type: '节点超时', target: dp.batchNo || dp.name, project: projName(dp.projectId), detail: `出厂检验滞后（计划出厂 ${dp.factoryDate}）`, to: `/delivery-plans/${dp.id}?node=factoryInspection` });
+    }
+    (dp.records?.factoryInspection || []).filter(isNG).forEach((r) => risks.push({ type: '其他', target: r.deviceSN || r.deviceId, project: projName(dp.projectId), detail: `出厂检验NG：${r.notes || '出厂检验未通过'}`, to: `/delivery-plans/${dp.id}?node=factoryInspection` }));
+    (dp.records?.siteInstall || []).filter(isNG).forEach((r) => risks.push({ type: '现场条件未满足', target: r.deviceSN || r.deviceId, project: projName(dp.projectId), detail: r.notes || '现场安装调试异常', to: `/delivery-plans/${dp.id}?node=siteInstall` }));
+    (dp.records?.customerAccept || []).filter(isNG).forEach((r) => risks.push({ type: '验收不通过', target: r.deviceSN || r.deviceId, project: projName(dp.projectId), detail: r.notes || '客户验收未通过', to: `/delivery-plans/${dp.id}?node=customerAccept` }));
   });
-  dwo.filter((w) => !WO_CLOSED.includes(w.status)).forEach((w) => risks.push({ type: '交付工单未关闭', target: w.deviceSN || w.id, project: projName(w.projectId), detail: w.description || '', to: '/after-sales?tab=orders' }));
+  dwo.filter((w) => !WO_CLOSED.includes(w.status)).forEach((w) => risks.push({ type: '已转售后', target: w.deviceSN || w.id, project: projName(w.projectId), detail: `${w.id}｜${w.description || '交付异常已转售后工单'}`, to: '/after-sales?tab=orders' }));
   const riskRows = risks.filter((r) => !projectId || r.project === projName(projectId));
 
   return (
@@ -297,11 +306,11 @@ function DeliveryBoard({ state }) {
         <StatCard label="已验收计划" value={accepted} tone="success" />
         <StatCard label="已延期计划" value={delayed} tone={delayed ? 'danger' : 'default'} />
         <StatCard label="待客户验收设备" value={awaitingAccept} tone={awaitingAccept ? 'warning' : 'default'} />
-        <StatCard label="累计已验收设备" value={acceptedDevices} tone="success" />
+        <StatCard label="累计验收通过设备" value={acceptedDevices} tone="success" />
       </StatGrid>
 
       <Section title="交付计划进展" bodyClassName="p-0">
-        <Table head={['项目', '交付计划', '目标数', '已绑定', '出厂通过', '现场完成', '已验收', '当前节点', '状态', '处理入口']}>
+        <Table head={['项目', '交付计划', '目标数', '交付设备数', '出厂通过', '已部署', '验收通过', '当前节点', '状态', '处理入口']}>
           {planRows.map(({ dp, bind, fiPass, siPass, caPass, status }) => (
             <tr key={dp.id} className="hover:bg-[#fafafa]">
               <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{projName(dp.projectId)}</td>
@@ -323,7 +332,7 @@ function DeliveryBoard({ state }) {
         <Table head={['风险类型', '关联对象', '项目', '说明', '处理入口']} empty="暂无交付风险">
           {riskRows.map((r, i) => (
             <tr key={i} className="hover:bg-[#fafafa]">
-              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={r.type.includes('NG') || r.type.includes('异常') || r.type.includes('延期') ? '严重' : '轻微'} dot /><span className="ml-2 text-gray-700 text-xs">{r.type}</span></td>
+              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={r.type} /></td>
               <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{r.target}</td>
               <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{r.project}</td>
               <td className="px-3 py-2 text-gray-500 text-xs max-w-xs truncate">{r.detail}</td>
