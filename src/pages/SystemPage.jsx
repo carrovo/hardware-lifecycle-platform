@@ -1,21 +1,21 @@
 import { useState, useRef } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
 import {
   Page, PageHeader, Section, Table, Btn, LinkAction, Chip,
-  Input, Select, SearchInput, StatCard, StatGrid,
+  Input, Select, SearchInput, StatCard, StatGrid, DescList,
 } from '../components/ui';
 import {
   ROLES_LIST, ROLE_ACTION_PERMISSIONS, FEISHU_USERS,
   ROBOT_MODELS, PROJECT_TYPES, CORE_PART_TYPES,
 } from '../data/mockData';
 
-// 系统管理：9 个二级 tab（角色权限 / 流程模板 / 节点字段 / 故障原因 / 机器人型号 /
-// 项目类型 / 模块部件 / 通知规则 / 状态字典）。页面自带横向 tab 条，读 ?tab= 深链；
-// 兼容旧 key（permissions/logs → roles，已下线的 labels/stations 回退默认）。
+// 系统管理：9 个二级配置页（角色权限 / 流程模板 / 节点字段 / 故障原因 / 机器人型号 /
+// 项目类型 / 模块部件 / 通知规则 / 状态字典）。二级菜单在左侧侧边栏，页面本身不再重复横向 tab 条，
+// 仅读 ?tab= 深链决定渲染哪个子页；兼容旧 key（permissions/logs → roles）。
 const TODAY = new Date().toISOString().slice(0, 10);
 
 const TABS = [
@@ -34,7 +34,7 @@ const TAB_DESC = {
   roles: '维护用户、角色，以及各角色的导航可见性与操作权限。',
   workflow: '维护生产、交付、售后等业务流程模板，供各业务模块引用。',
   fields: '按业务节点配置采集字段、字段类型与必填规则。',
-  faults: '维护三级故障原因树，供售后工单与质量问题选择。',
+  faults: '维护故障原因字典（一级 / 二级 / 三级），统一服务质量测试 NG、问题池预处理与售后工单分类。',
   models: '维护机器人型号字典，供设备类型与生产计划引用。',
   projectTypes: '维护项目类型 / 业务场景字典，供项目与看板筛选引用。',
   modules: '维护模块 / 核心部件字典，供来料、装配与换件引用。',
@@ -92,12 +92,83 @@ const ALL_ACTIONS = [...new Set(Object.values(ROLE_ACTION_PERMISSIONS).flat())];
 const ACTION_ROWS = ALL_ACTIONS.map((a) => [a, ACTION_LABELS[a] || a]);
 
 /* ─────── 字典数据（原型示例，本地维护，不改 mockData） ─────── */
-const WORKFLOW_ROWS = [
-  { id: 'WF-1', name: '标准生产流程', scope: '通用', nodeCount: 6, enabled: true, updatedAt: '2026-06-20' },
-  { id: 'WF-2', name: '智魔方交付流程', scope: '智魔方', nodeCount: 4, enabled: true, updatedAt: '2026-06-18' },
-  { id: 'WF-3', name: '机场交付流程', scope: '机场', nodeCount: 5, enabled: true, updatedAt: '2026-06-15' },
-  { id: 'WF-4', name: '售后维修流程', scope: '售后', nodeCount: 5, enabled: true, updatedAt: '2026-06-12' },
-  { id: 'WF-5', name: '遥操数采交付流程', scope: '遥操数采', nodeCount: 4, enabled: false, updatedAt: '2026-05-30' },
+// 流程模板（预设 4 套，含节点表；一期为展示 + 基础信息编辑占位，非低代码编排器）。
+const wfNode = (name, o = {}) => ({
+  name,
+  type: o.type || '操作节点',
+  role: o.role || '—',
+  required: o.required || '—',
+  attachment: o.attachment || '无',
+  skip: !!o.skip,
+  terminal: !!o.terminal,
+  timeout: o.timeout || '无',
+});
+const WORKFLOW_TYPE_OPTIONS = ['生产测试', '交付部署', '售后', '通用'];
+const WORKFLOW_BUSINESS_OPTIONS = ['生产', '交付', '售后', '通用'];
+const WORKFLOW_SCOPE_OPTIONS = ['全部', ...PROJECT_TYPES, '通用（机场 / 工业等）'];
+const WORKFLOW_TEMPLATES = [
+  {
+    id: 'WF-1', name: '生产测试流程模板', type: '生产测试', projectScope: '全部', business: '生产', enabled: true, updatedAt: '2026-06-20',
+    nodes: [
+      wfNode('设备识别', { type: '系统节点', role: '装配工', required: 'SN / 型号' }),
+      wfNode('整机装配', { role: '装配工', required: '装配批次号 / 用料清单', attachment: '装配照片' }),
+      wfNode('模块绑定', { role: '装配工', required: '模块 SN' }),
+      wfNode('半成品检验', { type: '测试节点', role: '质检员', required: '检验结论', timeout: '24 小时' }),
+      wfNode('初测', { type: '测试节点', role: '测试员', required: '初测结论', timeout: '24 小时' }),
+      wfNode('中测', { type: '测试节点', role: '测试员', required: '中测结论', timeout: '48 小时' }),
+      wfNode('OQT', { type: '测试节点', role: '测试员 / 质检员', required: '终测报告', attachment: '终测报告', timeout: '48 小时' }),
+      wfNode('生产返修', { role: '维修工程师', required: '返修原因', skip: true }),
+      wfNode('复测', { type: '测试节点', role: '测试员', required: '复测结论', skip: true, timeout: '24 小时' }),
+      wfNode('测试完成', { type: '终态节点', role: '系统', terminal: true }),
+    ],
+  },
+  {
+    id: 'WF-2', name: '智魔方交付流程模板', type: '交付部署', projectScope: '智魔方', business: '交付', enabled: true, updatedAt: '2026-06-18',
+    nodes: [
+      wfNode('生成交付计划', { type: '系统节点', role: '项目负责人', required: '交付计划信息' }),
+      wfNode('前置准备子工单', { type: '子工单节点', role: '项目负责人', required: '准备清单' }),
+      wfNode('舱体发货确认', { role: '运维工程师', required: '发货单号', attachment: '发货单', timeout: '48 小时' }),
+      wfNode('现场进场条件确认', { type: '审核节点', role: '项目负责人', required: '进场确认' }),
+      wfNode('舱体到场 / 卸货完成', { role: '运维工程师', required: '到场确认', attachment: '现场照片' }),
+      wfNode('水电施工完成', { role: '运维工程师', required: '施工验收', attachment: '现场照片', skip: true }),
+      wfNode('设备部署条件确认', { type: '审核节点', role: '运维工程师', required: '条件确认' }),
+      wfNode('机器人 / 设备部署子工单', { type: '子工单节点', role: '运维工程师', required: '部署清单' }),
+      wfNode('部署 / 调试 / 测试', { role: '运维工程师', required: '调试结论', attachment: '调试记录', timeout: '72 小时' }),
+      wfNode('上传验收材料', { role: '项目负责人', required: '验收材料', attachment: '验收单' }),
+      wfNode('验收通过 / 生成售后工单', { type: '终态节点', role: '项目负责人', required: '验收结论', terminal: true }),
+    ],
+  },
+  {
+    id: 'WF-3', name: '通用部署流程模板', type: '交付部署', projectScope: '通用（机场 / 工业等）', business: '交付', enabled: true, updatedAt: '2026-06-15',
+    nodes: [
+      wfNode('生成交付计划', { type: '系统节点', role: '项目负责人', required: '交付计划信息' }),
+      wfNode('机器人 / 设备部署子工单', { type: '子工单节点', role: '项目负责人', required: '部署清单' }),
+      wfNode('子工单分派', { type: '分派节点', role: '项目负责人 / leader', timeout: '24 小时' }),
+      wfNode('工程师接单', { type: '接单节点', role: '运维工程师', timeout: '24 小时' }),
+      wfNode('工程师上门', { role: '运维工程师', attachment: '现场照片', timeout: '48 小时' }),
+      wfNode('部署 / 调试 / 测试', { role: '运维工程师', required: '调试结论', attachment: '调试记录', timeout: '72 小时' }),
+      wfNode('上传验收材料', { role: '运维工程师', required: '验收材料', attachment: '验收单' }),
+      wfNode('部署完成 / 生成售后工单', { type: '终态节点', role: '项目负责人', required: '验收结论', terminal: true }),
+    ],
+  },
+  {
+    id: 'WF-4', name: '售后处理流程模板', type: '售后', projectScope: '全部', business: '售后', enabled: true, updatedAt: '2026-06-12',
+    nodes: [
+      wfNode('问题进入问题池', { type: '系统节点', role: '运维工程师', required: '问题描述' }),
+      wfNode('技术客服预处理', { role: '技术客服', required: '预处理结论 / 故障分类', timeout: '24 小时' }),
+      wfNode('判断是否可远程关闭', { type: '条件节点', role: '技术客服' }),
+      wfNode('远程关闭', { role: '技术客服', required: '关闭说明', skip: true }),
+      wfNode('生成售后工单', { type: '系统节点', role: '技术客服', required: '工单信息' }),
+      wfNode('leader 分派', { type: '分派节点', role: 'leader', timeout: '24 小时' }),
+      wfNode('工程师接单', { type: '接单节点', role: '维修工程师', timeout: '24 小时' }),
+      wfNode('工程师上门', { role: '维修工程师', attachment: '现场照片', timeout: '48 小时' }),
+      wfNode('是否换件', { type: '条件节点', role: '维修工程师' }),
+      wfNode('ERP 领料', { role: '维修工程师 / ERP 协同角色', required: '领料单', skip: true }),
+      wfNode('记录旧件 / 新件 SN', { role: '维修工程师', required: '旧件 SN / 新件 SN', skip: true }),
+      wfNode('上传现场资料', { role: '维修工程师', required: '现场资料', attachment: '现场照片' }),
+      wfNode('工程师关单', { type: '终态节点', role: '维修工程师', required: '关单结论', terminal: true }),
+    ],
+  },
 ];
 
 const NODE_OPTIONS = ['整机装配', '初测', '中测', 'OQT终测', '出厂检验', '现场安装调试', '客户验收'];
@@ -112,16 +183,24 @@ const FIELD_ROWS = [
   { id: 'FLD-7', node: '客户验收', field: '验收备注', type: '文本', required: false, enabled: false },
 ];
 
-const L1_OPTIONS = ['硬件故障', '软件故障', '外部因素', '人为操作'];
-const SCOPE_OPTIONS = ['全部', ...PROJECT_TYPES];
+// 故障原因字典：一级固定 6 类；二级示例为核心部件维度；三级留空（待业务补充），不预置具体原因。
+// 同一套口径服务质量测试 NG、问题池预处理与售后工单分类。
+const L1_OPTIONS = ['硬件', '软件', '生产', '结构', '使用', '其他'];
+const L2_OPTIONS = ['机械臂', '夹爪', '灵巧手', '控制器', '网络·通信', '传感器', '其他核心部件', '待业务补充'];
+const FAULT_SCOPE_OPTIONS = ['全部', '质量测试', '问题池', '售后工单'];
 const FAULT_ROWS = [
-  { id: 'FA-1', l1: '硬件故障', l2: '机械臂', l3: '关节电机异常', scope: '全部', enabled: true },
-  { id: 'FA-2', l1: '硬件故障', l2: '夹爪', l3: '夹持力不足', scope: '全部', enabled: true },
-  { id: 'FA-3', l1: '硬件故障', l2: '控制器', l3: '主板通信中断', scope: '全部', enabled: true },
-  { id: 'FA-4', l1: '软件故障', l2: '导航系统', l3: '定位漂移', scope: '智魔方', enabled: true },
-  { id: 'FA-5', l1: '软件故障', l2: '感知系统', l3: '点云数据丢失', scope: '机场', enabled: true },
-  { id: 'FA-6', l1: '外部因素', l2: '环境干扰', l3: '地面湿滑打滑', scope: '机场', enabled: false },
-  { id: 'FA-7', l1: '人为操作', l2: '现场操作', l3: '误触急停', scope: '全部', enabled: true },
+  { id: 'FA-1', l1: '硬件', l2: '机械臂', l3: '待业务补充', scope: '全部', enabled: true, updatedAt: '2026-06-20' },
+  { id: 'FA-2', l1: '硬件', l2: '夹爪', l3: '待业务补充', scope: '全部', enabled: true, updatedAt: '2026-06-20' },
+  { id: 'FA-3', l1: '硬件', l2: '灵巧手', l3: '待业务补充', scope: '全部', enabled: true, updatedAt: '2026-06-20' },
+  { id: 'FA-4', l1: '硬件', l2: '控制器', l3: '待业务补充', scope: '全部', enabled: true, updatedAt: '2026-06-20' },
+  { id: 'FA-5', l1: '硬件', l2: '网络·通信', l3: '待业务补充', scope: '售后工单', enabled: true, updatedAt: '2026-06-20' },
+  { id: 'FA-6', l1: '硬件', l2: '传感器', l3: '待业务补充', scope: '质量测试', enabled: true, updatedAt: '2026-06-20' },
+  { id: 'FA-7', l1: '硬件', l2: '其他核心部件', l3: '待业务补充', scope: '全部', enabled: true, updatedAt: '2026-06-20' },
+  { id: 'FA-8', l1: '软件', l2: '待业务补充', l3: '待业务补充', scope: '问题池', enabled: true, updatedAt: '2026-06-20' },
+  { id: 'FA-9', l1: '生产', l2: '待业务补充', l3: '待业务补充', scope: '质量测试', enabled: true, updatedAt: '2026-06-20' },
+  { id: 'FA-10', l1: '结构', l2: '待业务补充', l3: '待业务补充', scope: '全部', enabled: true, updatedAt: '2026-06-20' },
+  { id: 'FA-11', l1: '使用', l2: '待业务补充', l3: '待业务补充', scope: '售后工单', enabled: true, updatedAt: '2026-06-20' },
+  { id: 'FA-12', l1: '其他', l2: '待业务补充', l3: '待业务补充', scope: '全部', enabled: true, updatedAt: '2026-06-20' },
 ];
 
 const MODEL_DESC = {
@@ -221,19 +300,6 @@ const nameDescFields = (nameLabel) => [
   { key: 'desc', label: '说明', type: 'text' },
 ];
 
-const WORKFLOW_COLUMNS = [
-  { key: 'name', label: '模板名', render: (r) => <span className="font-medium text-gray-800">{r.name}</span> },
-  { key: 'scope', label: '适用业务' },
-  { key: 'nodeCount', label: '节点数' },
-  { key: 'enabled', label: '状态', render: (r) => <EnabledBadge on={r.enabled} /> },
-  { key: 'updatedAt', label: '更新时间', render: (r) => <span className="text-gray-500 text-xs">{r.updatedAt}</span> },
-];
-const WORKFLOW_FIELDS = [
-  { key: 'name', label: '模板名称', type: 'text', required: true, placeholder: '如：标准生产流程' },
-  { key: 'scope', label: '适用业务', type: 'select', options: ['通用', ...PROJECT_TYPES, '售后'] },
-  { key: 'nodeCount', label: '节点数', type: 'text', placeholder: '如：6' },
-];
-
 const FIELD_COLUMNS = [
   { key: 'node', label: '业务节点' },
   { key: 'field', label: '字段名', render: (r) => <span className="font-medium text-gray-800">{r.field}</span> },
@@ -249,17 +315,18 @@ const FIELD_FIELDS = [
 ];
 
 const FAULT_COLUMNS = [
-  { key: 'l1', label: '一级原因', render: (r) => <span className="font-medium text-gray-800">{r.l1}</span> },
-  { key: 'l2', label: '二级原因' },
-  { key: 'l3', label: '三级原因' },
-  { key: 'scope', label: '适用范围' },
-  { key: 'enabled', label: '启用', render: (r) => <EnabledBadge on={r.enabled} /> },
+  { key: 'l1', label: '一级故障原因', render: (r) => <span className="font-medium text-gray-800">{r.l1}</span> },
+  { key: 'l2', label: '二级故障原因', render: (r) => <span className={r.l2 && r.l2 !== '待业务补充' ? 'text-gray-700' : 'text-gray-400'}>{r.l2 || '待业务补充'}</span> },
+  { key: 'l3', label: '三级故障原因', render: (r) => <span className={r.l3 && r.l3 !== '待业务补充' ? 'text-gray-700' : 'text-gray-400'}>{r.l3 || '待业务补充'}</span> },
+  { key: 'scope', label: '适用场景', render: (r) => <Chip>{r.scope}</Chip> },
+  { key: 'enabled', label: '是否启用', render: (r) => <EnabledBadge on={r.enabled} /> },
+  { key: 'updatedAt', label: '最近更新时间', render: (r) => <span className="text-gray-500 text-xs">{r.updatedAt}</span> },
 ];
 const FAULT_FIELDS = [
-  { key: 'l1', label: '一级原因', type: 'select', options: L1_OPTIONS },
-  { key: 'l2', label: '二级原因', type: 'text', required: true },
-  { key: 'l3', label: '三级原因', type: 'text' },
-  { key: 'scope', label: '适用范围', type: 'select', options: SCOPE_OPTIONS },
+  { key: 'l1', label: '一级故障原因', type: 'select', options: L1_OPTIONS },
+  { key: 'l2', label: '二级故障原因', type: 'select', options: L2_OPTIONS },
+  { key: 'l3', label: '三级故障原因', type: 'text', placeholder: '留空则默认「待业务补充」，不预置具体原因' },
+  { key: 'scope', label: '适用场景', type: 'select', options: FAULT_SCOPE_OPTIONS },
 ];
 
 const NOTIF_COLUMNS = [
@@ -281,22 +348,6 @@ function EnabledBadge({ on }) {
       <span className={`w-1.5 h-1.5 rounded-full ${on ? 'bg-green-500' : 'bg-gray-300'}`} />
       {on ? '启用' : '停用'}
     </span>
-  );
-}
-
-function TabNav({ active }) {
-  return (
-    <div className="border-b border-[#ececec] flex items-center gap-1 overflow-x-auto">
-      {TABS.map((t) => (
-        <Link
-          key={t.key}
-          to={`/system?tab=${t.key}`}
-          className={`px-3 py-2 text-[13px] whitespace-nowrap border-b-2 -mb-px transition-colors ${active === t.key ? 'border-gray-900 text-gray-900 font-medium' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
-        >
-          {t.label}
-        </Link>
-      ))}
-    </div>
   );
 }
 
@@ -427,6 +478,136 @@ function DictionaryTab({ title, entity, columns, fields, initial, defaults = {},
   );
 }
 
+/* ═════════ 2. 流程模板（预设模板展示 + 节点表 + 基础编辑占位） ═════════ */
+function WorkflowTab() {
+  const [rows, setRows] = useState(WORKFLOW_TEMPLATES);
+  const [viewId, setViewId] = useState(null);
+  const [edit, setEdit] = useState(null); // null | { mode: 'add' } | { mode: 'edit', id }
+  const [form, setForm] = useState({});
+  const seq = useRef(0);
+  const viewing = rows.find((r) => r.id === viewId) || null;
+  const setF = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
+
+  const openAdd = () => { setForm({ name: '', type: '生产测试', projectScope: '全部', business: '生产', enabled: true }); setEdit({ mode: 'add' }); };
+  const openEdit = (row) => { setForm({ name: row.name, type: row.type, projectScope: row.projectScope, business: row.business, enabled: row.enabled }); setEdit({ mode: 'edit', id: row.id }); };
+  const closeEdit = () => setEdit(null);
+  const canSave = !!String(form.name || '').trim();
+  const save = () => {
+    if (!canSave) return;
+    if (edit.mode === 'add') {
+      seq.current += 1;
+      setRows((r) => [{ id: `WF-${Date.now()}-${seq.current}`, nodes: [], updatedAt: TODAY, ...form }, ...r]);
+    } else {
+      setRows((r) => r.map((x) => (x.id === edit.id ? { ...x, ...form, updatedAt: TODAY } : x)));
+    }
+    closeEdit();
+  };
+  const toggle = (id) => setRows((r) => r.map((x) => (x.id === id ? { ...x, enabled: !x.enabled } : x)));
+
+  return (
+    <Section
+      title="流程模板"
+      subtitle="维护生产、交付、售后等业务流程模板；模板节点、适用角色、必填项与超时规则供对应业务模块引用。"
+      right={<Btn variant="primary" size="sm" onClick={openAdd}>+ 新增模板</Btn>}
+      bodyClassName="p-0"
+    >
+      <Table head={['模板名称', '模板类型', '适用项目类型 / 业务场景', '适用业务', '节点数量', '是否启用', '最近更新时间', '操作']}>
+        {rows.map((row) => (
+          <tr key={row.id} className="hover:bg-[#fafafa]">
+            <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{row.name}</td>
+            <td className="px-3 py-2 whitespace-nowrap"><Chip>{row.type}</Chip></td>
+            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{row.projectScope}</td>
+            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{row.business}</td>
+            <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.nodes.length}</td>
+            <td className="px-3 py-2 whitespace-nowrap"><EnabledBadge on={row.enabled} /></td>
+            <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{row.updatedAt}</td>
+            <td className="px-3 py-2 whitespace-nowrap">
+              <div className="flex items-center gap-3">
+                <LinkAction onClick={() => setViewId(row.id)}>查看</LinkAction>
+                <LinkAction onClick={() => openEdit(row)}>编辑</LinkAction>
+                <LinkAction onClick={() => toggle(row.id)}>{row.enabled ? '停用' : '启用'}</LinkAction>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </Table>
+
+      <Modal isOpen={!!viewing} onClose={() => setViewId(null)} title={viewing ? `${viewing.name} · 节点配置` : ''} size="xl">
+        {viewing && (
+          <div className="space-y-4">
+            <DescList
+              cols={3}
+              items={[
+                ['模板类型', viewing.type],
+                ['适用项目类型 / 业务场景', viewing.projectScope],
+                ['适用业务', viewing.business],
+                ['节点数量', `${viewing.nodes.length} 个`],
+                ['是否启用', <EnabledBadge key="e" on={viewing.enabled} />],
+                ['最近更新时间', viewing.updatedAt],
+              ]}
+            />
+            <Table head={['节点顺序', '节点名称', '节点类型', '适用角色', '必填字段', '附件要求', '是否允许跳过', '是否终态', '超时规则', '下一个节点']}>
+              {viewing.nodes.map((n, i) => (
+                <tr key={i} className="hover:bg-[#fafafa]">
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{i + 1}</td>
+                  <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{n.name}</td>
+                  <td className="px-3 py-2 whitespace-nowrap"><Chip>{n.type}</Chip></td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{n.role}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{n.required}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{n.attachment}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{n.skip ? '是' : '否'}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{n.terminal ? '是' : '否'}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{n.timeout}</td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{n.terminal ? '—（终态）' : (viewing.nodes[i + 1]?.name ?? '—')}</td>
+                </tr>
+              ))}
+            </Table>
+          </div>
+        )}
+      </Modal>
+
+      <Modal isOpen={!!edit} onClose={closeEdit} title={`${edit?.mode === 'edit' ? '编辑' : '新增'}流程模板`}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">模板名称 *</label>
+            <Input className="w-full" value={form.name ?? ''} placeholder="如：生产测试流程模板" onChange={setF('name')} />
+          </div>
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">模板类型</label>
+            <Select className="w-full" value={form.type ?? ''} onChange={setF('type')}>
+              {WORKFLOW_TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </Select>
+          </div>
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">适用项目类型 / 业务场景</label>
+            <Select className="w-full" value={form.projectScope ?? ''} onChange={setF('projectScope')}>
+              {WORKFLOW_SCOPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </Select>
+          </div>
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">适用业务</label>
+            <Select className="w-full" value={form.business ?? ''} onChange={setF('business')}>
+              {WORKFLOW_BUSINESS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </Select>
+          </div>
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">是否启用</label>
+            <Select className="w-full" value={String(form.enabled ?? true)} onChange={(e) => setForm((s) => ({ ...s, enabled: e.target.value === 'true' }))}>
+              <option value="true">启用</option>
+              <option value="false">停用</option>
+            </Select>
+          </div>
+          <p className="text-xs text-gray-400">一期支持模板基础信息维护与节点表展示；完整节点编排（增删节点、连线、超时策略）后续迭代。</p>
+          <div className="flex justify-end gap-2 pt-1">
+            <Btn variant="secondary" onClick={closeEdit}>取消</Btn>
+            <Btn variant="primary" onClick={save} disabled={!canSave}>保存</Btn>
+          </div>
+        </div>
+      </Modal>
+    </Section>
+  );
+}
+
 /* ═════════ 1. 角色权限 ═════════ */
 function RolesTab() {
   const { currentRole, navPermissions, updateNavPermission, actionPermissions, updateActionPermission } = useRole();
@@ -498,7 +679,7 @@ function RolesTab() {
         <PermMatrix rows={ACTION_ROWS} perms={actionPermissions} onToggle={updateActionPermission} editable={isAdmin} firstColLabel="操作" />
       </Section>
 
-      <Section title="操作日志" subtitle="平台操作留痕，支撑追溯与审计（最近 20 条）。" bodyClassName="p-0">
+      <Section title="审计 / 操作日志查看" subtitle="操作留痕的审计查看能力（底层能力，非业务导航模块），支撑追溯（最近 20 条）。" bodyClassName="p-0">
         <Table head={['操作时间', '操作人', '模块', '操作类型', '操作对象', '说明']} empty="暂无操作日志">
           {logs.map((log) => (
             <tr key={log.id} className="hover:bg-[#fafafa]">
@@ -591,11 +772,10 @@ export default function SystemPage() {
         description={TAB_DESC[activeTab]}
         breadcrumb={<div className="text-xs text-gray-400 mb-1">系统管理 / {activeLabel}</div>}
       />
-      <TabNav active={activeTab} />
       {activeTab === 'roles' && <RolesTab />}
-      {activeTab === 'workflow' && <DictionaryTab title="流程模板" entity="模板" idPrefix="WF" columns={WORKFLOW_COLUMNS} fields={WORKFLOW_FIELDS} initial={WORKFLOW_ROWS} defaults={{ updatedAt: TODAY }} />}
+      {activeTab === 'workflow' && <WorkflowTab />}
       {activeTab === 'fields' && <DictionaryTab title="节点字段配置" entity="字段" idPrefix="FLD" columns={FIELD_COLUMNS} fields={FIELD_FIELDS} initial={FIELD_ROWS} />}
-      {activeTab === 'faults' && <DictionaryTab title="故障原因字典" entity="故障原因" idPrefix="FA" columns={FAULT_COLUMNS} fields={FAULT_FIELDS} initial={FAULT_ROWS} />}
+      {activeTab === 'faults' && <DictionaryTab title="故障原因字典" entity="故障原因" idPrefix="FA" columns={FAULT_COLUMNS} fields={FAULT_FIELDS} initial={FAULT_ROWS} defaults={{ updatedAt: TODAY }} />}
       {activeTab === 'models' && <DictionaryTab title="机器人型号字典" entity="型号" idPrefix="RM" columns={nameDescColumns('型号')} fields={nameDescFields('型号')} initial={MODEL_ROWS} />}
       {activeTab === 'projectTypes' && <DictionaryTab title="项目类型 / 业务场景字典" entity="类型" idPrefix="PT" columns={nameDescColumns('类型名')} fields={nameDescFields('类型名')} initial={PROJECT_TYPE_ROWS} />}
       {activeTab === 'modules' && <DictionaryTab title="模块 / 核心部件字典" entity="部件" idPrefix="MOD" columns={nameDescColumns('部件类型')} fields={nameDescFields('部件类型')} initial={MODULE_ROWS} />}
