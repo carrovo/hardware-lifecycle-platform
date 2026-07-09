@@ -2,15 +2,13 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import StatusBadge from '../components/StatusBadge';
 import { Pagination, usePaged } from '../components/Pagination';
-import { Section, Toolbar, Select, SearchInput, StatCard, StatGrid, Table, LinkAction } from '../components/ui';
-import { MATERIAL_CATEGORIES, moduleInstances as MODULE_INSTANCES } from '../data/mockData';
+import { PageHeader, Section, Toolbar, Select, SearchInput, StatCard, StatGrid, Table, LinkAction } from '../components/ui';
+import { moduleInstances as MODULE_INSTANCES } from '../data/mockData';
 
 // 物料与部件台账：两个只读台账区块。
 //  区块1 物料信息       —— 供应商来料物料条目，入库 / 库存 / 同步时间以 ERP 为准（平台只读同步）。
 //  区块2 核心部件追溯   —— SN 级核心部件（moduleInstances），追踪批次来源、装配绑定、换件与返修。
 // 平台不新增 / 编辑 / 删除 ERP 正式单据，本页为只读台账视图。
-
-const MODULE_STATUSES = ['在库可用', '已锁定生产计划', '已装配', '维修中', '已报废', '退货换货'];
 
 export default function Materials() {
   const { state } = useApp();
@@ -22,10 +20,22 @@ export default function Materials() {
   const replacements = state.moduleReplacements || [];
   const moduleInstances = MODULE_INSTANCES || [];
 
-  const [q, setQ] = useState('');
-  const [category, setCategory] = useState('');
-  const [supplier, setSupplier] = useState('');
-  const [status, setStatus] = useState('');
+  // 两区块各自独立的模糊搜索 + 下拉筛选状态。
+  const [matQ, setMatQ] = useState('');
+  const [matCategory, setMatCategory] = useState('');
+  const [matSupplier, setMatSupplier] = useState('');
+  const [matInbound, setMatInbound] = useState('');
+  const [matStock, setMatStock] = useState('');
+  const [matBatch, setMatBatch] = useState('');
+
+  const [partQ, setPartQ] = useState('');
+  const [partType, setPartType] = useState('');
+  const [partStatus, setPartStatus] = useState('');
+  const [partBound, setPartBound] = useState('');
+  const [partReplaced, setPartReplaced] = useState('');
+  const [partRepaired, setPartRepaired] = useState('');
+  const [partSupplier, setPartSupplier] = useState('');
+  const [partBatch, setPartBatch] = useState('');
 
   const batchOf = (id) => batches.find((b) => b.id === id);
   const typeName = (id) => moduleTypes.find((m) => m.id === id)?.name || id || '—';
@@ -37,28 +47,38 @@ export default function Materials() {
     const dt = deviceTypes.find((t) => t.id === device.deviceTypeId);
     return dt?.slots?.find((s) => s.moduleTypeId === moduleTypeId)?.slotName || '—';
   };
-
-  const suppliers = [...new Set([...materials.map((m) => m.supplier), ...batches.map((b) => b.supplier)].filter(Boolean))];
-  const kw = q.trim().toLowerCase();
+  // 下拉选项动态去重（剔除空值与 '—' 占位）；是否类筛选用 全部/是/否。
+  const uniq = (arr) => [...new Set(arr.filter((v) => v && v !== '—'))];
+  const yesNoMatch = (v, actual) => v === '' || (v === '是' ? !!actual : !actual);
 
   // 概览
   const boundCount = moduleInstances.filter((m) => m.boundDeviceId).length;
   const repairingCount = moduleInstances.filter((m) => /维修|返修/.test(m.status || '')).length;
 
   /* ── 区块1：物料信息 ── */
-  const materialRows = materials.map((m) => ({
+  const materialRowsAll = materials.map((m) => ({
     ...m,
     name: `${m.category} ${m.model}`.trim(),
     erpInbound: m.erpInboundStatus ?? '已入库',
     erpStock: m.erpStockStatus ?? (m.inspectionResult === '不合格' ? '不合格' : '合格可用'),
     syncAt: m.updatedAt ?? m.inspectionTime ?? '—',
-  })).filter((m) => (!category || m.category === category)
-    && (!supplier || m.supplier === supplier)
-    && (!kw || m.id.toLowerCase().includes(kw) || (m.model || '').toLowerCase().includes(kw) || (m.name || '').toLowerCase().includes(kw) || (m.batchNo || '').toLowerCase().includes(kw)));
+  }));
+  const matCategoryOpts = uniq(materialRowsAll.map((m) => m.category));
+  const matSupplierOpts = uniq(materialRowsAll.map((m) => m.supplier));
+  const matInboundOpts = uniq(materialRowsAll.map((m) => m.erpInbound));
+  const matStockOpts = uniq(materialRowsAll.map((m) => m.erpStock));
+  const matBatchOpts = uniq(materialRowsAll.map((m) => m.batchNo));
+  const matKw = matQ.trim().toLowerCase();
+  const materialRows = materialRowsAll.filter((m) => (!matCategory || m.category === matCategory)
+    && (!matSupplier || m.supplier === matSupplier)
+    && (!matInbound || m.erpInbound === matInbound)
+    && (!matStock || m.erpStock === matStock)
+    && (!matBatch || m.batchNo === matBatch)
+    && (!matKw || m.id.toLowerCase().includes(matKw) || (m.name || '').toLowerCase().includes(matKw) || (m.model || '').toLowerCase().includes(matKw) || (m.batchNo || '').toLowerCase().includes(matKw)));
   const matPaged = usePaged(materialRows, 8);
 
   /* ── 区块2：核心部件追溯 ── */
-  const partRows = moduleInstances.map((mi) => {
+  const partRowsAll = moduleInstances.map((mi) => {
     const batch = batchOf(mi.sourceBatchId);
     const device = mi.boundDeviceId ? deviceOf(mi.boundDeviceId) : null;
     return {
@@ -76,16 +96,31 @@ export default function Materials() {
       repaired: /维修|返修/.test(mi.status || ''),
       syncAt: mi.updatedAt ?? batch?.inspectionTime ?? '—',
     };
-  }).filter((p) => (!category || p.category === category)
-    && (!supplier || p.supplierName === supplier)
-    && (!status || p.status === status)
-    && (!kw || (p.sn || '').toLowerCase().includes(kw) || (p.id || '').toLowerCase().includes(kw) || (p.model || '').toLowerCase().includes(kw) || (p.batchNo || '').toLowerCase().includes(kw)));
+  });
+  const partTypeOpts = uniq(partRowsAll.map((p) => p.partType));
+  const partStatusOpts = uniq(partRowsAll.map((p) => p.status));
+  const partSupplierOpts = uniq(partRowsAll.map((p) => p.supplierName));
+  const partBatchOpts = uniq(partRowsAll.map((p) => p.batchNo));
+  const partKw = partQ.trim().toLowerCase();
+  const partRows = partRowsAll.filter((p) => (!partType || p.partType === partType)
+    && (!partStatus || p.status === partStatus)
+    && yesNoMatch(partBound, p.bound)
+    && yesNoMatch(partReplaced, p.replaced)
+    && yesNoMatch(partRepaired, p.repaired)
+    && (!partSupplier || p.supplierName === partSupplier)
+    && (!partBatch || p.batchNo === partBatch)
+    && (!partKw || (p.sn || '').toLowerCase().includes(partKw) || (p.id || '').toLowerCase().includes(partKw) || (p.device?.sn || '').toLowerCase().includes(partKw) || (p.materialCode || '').toLowerCase().includes(partKw) || (p.name || '').toLowerCase().includes(partKw)));
   const partPaged = usePaged(partRows, 8);
 
   const yesNo = (v) => (v ? <span className="text-gray-700">是</span> : <span className="text-gray-300">否</span>);
 
   return (
     <div className="space-y-5">
+      <PageHeader
+        title="物料与部件台账"
+        description="物料信息与核心部件 SN 级追溯。入库 / 库存 / 同步时间只读同步自 ERP，本页为只读台账视图。"
+      />
+
       <StatGrid cols={4}>
         <StatCard label="物料条目" value={materials.length} />
         <StatCard label="核心部件总数" value={moduleInstances.length} />
@@ -93,15 +128,17 @@ export default function Materials() {
         <StatCard label="维修中部件" value={repairingCount} tone={repairingCount ? 'warning' : 'default'} />
       </StatGrid>
 
-      <Toolbar right={<span className="text-xs text-gray-400">数据只读同步自 ERP</span>}>
-        <SearchInput placeholder="搜索物料编码 / 型号 / 批次 / 模块 SN" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
-        <Select value={category} onChange={(e) => setCategory(e.target.value)}><option value="">全部分类</option>{MATERIAL_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select>
-        <Select value={supplier} onChange={(e) => setSupplier(e.target.value)}><option value="">全部供应商</option>{suppliers.map((s) => <option key={s}>{s}</option>)}</Select>
-        <Select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">全部部件状态</option>{MODULE_STATUSES.map((s) => <option key={s}>{s}</option>)}</Select>
-      </Toolbar>
-
       {/* 区块1 物料信息 */}
-      <Section title="物料信息" subtitle={`共 ${materialRows.length} 条 · 入库 / 库存 / 同步时间只读同步自 ERP`} bodyClassName="p-0">
+      <div className="space-y-3">
+        <Toolbar right={<span className="text-xs text-gray-400">共 {materialRows.length} 条 · 只读同步自 ERP</span>}>
+          <SearchInput placeholder="搜索物料编码 / 名称 / 型号 / 批次号" value={matQ} onChange={(e) => setMatQ(e.target.value)} className="w-60" />
+          <Select value={matCategory} onChange={(e) => setMatCategory(e.target.value)}><option value="">全部分类</option>{matCategoryOpts.map((c) => <option key={c}>{c}</option>)}</Select>
+          <Select value={matSupplier} onChange={(e) => setMatSupplier(e.target.value)}><option value="">全部供应商</option>{matSupplierOpts.map((s) => <option key={s}>{s}</option>)}</Select>
+          <Select value={matInbound} onChange={(e) => setMatInbound(e.target.value)}><option value="">全部入库状态</option>{matInboundOpts.map((s) => <option key={s}>{s}</option>)}</Select>
+          <Select value={matStock} onChange={(e) => setMatStock(e.target.value)}><option value="">全部库存状态</option>{matStockOpts.map((s) => <option key={s}>{s}</option>)}</Select>
+          <Select value={matBatch} onChange={(e) => setMatBatch(e.target.value)}><option value="">全部批次号</option>{matBatchOpts.map((s) => <option key={s}>{s}</option>)}</Select>
+        </Toolbar>
+        <Section title="物料信息" subtitle={`共 ${materialRows.length} 条 · 入库 / 库存 / 同步时间只读同步自 ERP`} bodyClassName="p-0">
         <Table
           head={['物料编码', '物料名称', '规格型号', '物料分类', '供应商', '批次号', 'ERP 入库状态', 'ERP 库存状态', '最近同步时间']}
           empty="暂无物料"
@@ -121,10 +158,23 @@ export default function Materials() {
             </tr>
           ))}
         </Table>
-      </Section>
+        </Section>
+      </div>
 
       {/* 区块2 核心部件追溯 */}
-      <Section title="核心部件追溯" subtitle={`共 ${partRows.length} 个核心部件 · 追踪 SN、批次来源、装配绑定、换件与返修`} bodyClassName="p-0">
+      <div className="space-y-3">
+        <p className="text-xs text-gray-400">用于根据模块 SN / 内部 ID 追溯来源、批次、绑定设备、槽位、换件与返修记录。</p>
+        <Toolbar right={<span className="text-xs text-gray-400">共 {partRows.length} 个核心部件</span>}>
+          <SearchInput placeholder="搜索模块 SN / 内部 ID / 绑定设备 SN / 物料编码 / 名称" value={partQ} onChange={(e) => setPartQ(e.target.value)} className="w-72" />
+          <Select value={partType} onChange={(e) => setPartType(e.target.value)}><option value="">全部核心部件类型</option>{partTypeOpts.map((t) => <option key={t}>{t}</option>)}</Select>
+          <Select value={partStatus} onChange={(e) => setPartStatus(e.target.value)}><option value="">全部当前状态</option>{partStatusOpts.map((s) => <option key={s}>{s}</option>)}</Select>
+          <Select value={partSupplier} onChange={(e) => setPartSupplier(e.target.value)}><option value="">全部供应商</option>{partSupplierOpts.map((s) => <option key={s}>{s}</option>)}</Select>
+          <Select value={partBatch} onChange={(e) => setPartBatch(e.target.value)}><option value="">全部批次号</option>{partBatchOpts.map((s) => <option key={s}>{s}</option>)}</Select>
+          <Select value={partBound} onChange={(e) => setPartBound(e.target.value)}><option value="">是否绑定设备</option><option value="是">已绑定</option><option value="否">未绑定</option></Select>
+          <Select value={partReplaced} onChange={(e) => setPartReplaced(e.target.value)}><option value="">是否发生换件</option><option value="是">是</option><option value="否">否</option></Select>
+          <Select value={partRepaired} onChange={(e) => setPartRepaired(e.target.value)}><option value="">是否发生返修</option><option value="是">是</option><option value="否">否</option></Select>
+        </Toolbar>
+        <Section title="核心部件追溯" subtitle={`共 ${partRows.length} 个核心部件 · 追踪 SN、批次来源、装配绑定、换件与返修`} bodyClassName="p-0">
         <Table
           head={['模块 SN / 内部 ID', '核心部件类型', '关联物料编码', '物料名称', '规格型号', '供应商', '批次号', '当前状态', '是否已绑定设备', '绑定设备 SN', '绑定槽位', '是否发生换件', '是否发生返修', '最近更新时间']}
           empty="暂无核心部件"
@@ -152,7 +202,8 @@ export default function Materials() {
             </tr>
           ))}
         </Table>
-      </Section>
+        </Section>
+      </div>
     </div>
   );
 }

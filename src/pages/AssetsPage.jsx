@@ -5,7 +5,6 @@ import { useRole } from '../context/RoleContext';
 import Materials from './Materials';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
-import TertiaryTabs from '../components/TertiaryTabs';
 import { Pagination, usePaged } from '../components/Pagination';
 import { Page, PageHeader, Toolbar, Select, SearchInput, StatCard, StatGrid, Table, Btn, LinkAction } from '../components/ui';
 import { deviceLifecycleStatus } from '../utils/status';
@@ -66,33 +65,24 @@ function DrawerSection({ title, children }) {
   );
 }
 function AlertDrawer({ alert, state, dispatch, currentRole, currentUser, onClose }) {
-  const { devices, projects, workOrders, deviceTypes = [], locations = [] } = state;
-  const [showUpdate, setShowUpdate] = useState(false);
-  const [notes, setNotes] = useState('');
+  const { devices, projects, workOrders, deviceTypes = [], locations = [], qualityIssues = [] } = state;
 
   const device = devices.find(d => d.id === alert.deviceId);
   const deviceType = device ? deviceTypes.find(t => t.id === device.deviceTypeId) : null;
   const project = projects.find(p => p.id === alert.projectId);
   const location = device?.locationId ? locations.find(l => l.id === device.locationId) : null;
   const linkedWO = alert.workOrderId ? workOrders.find(w => w.id === alert.workOrderId) : null;
-  const online = device ? (device.online === true || device.status === '在线运营') : false;
+  const linkedQI = qualityIssues.find(q => q.sourceAlertId === alert.id) || null;
+  const onlineState = device ? onlineStateOf(device) : '未知';
 
   const now = nowStamp;
   const roleOK = ['运维工程师', '维修工程师', '厂长', '管理员'].includes(currentRole);
   const closed = ['已解决', '已关闭'].includes(alert.status);
-  const canUpdate = roleOK && alert.severity === '轻微' && ['待处理', '处理中'].includes(alert.status);
-  const canGenerateWO = roleOK && alert.severity === '严重' && !alert.workOrderId && !closed;
-  const canGenerateQI = roleOK && !closed && device?.status === '在线运营';
+  // 告警不等于售后工单：未关闭且未生成时可分别生成问题池记录 / 售后工单。
+  const canGenerateWO = roleOK && !closed && !alert.workOrderId;
+  const canGenerateQI = roleOK && !closed && !linkedQI;
   const canClose = roleOK && !closed;
-  const nextStatus = alert.status === '待处理' ? '处理中' : alert.status === '处理中' ? '已解决' : null;
 
-  const handleUpdateStatus = () => {
-    if (!notes.trim() || !nextStatus) return;
-    const t = now();
-    const newLog = { operator: currentUser, time: t, fromStatus: alert.status, toStatus: nextStatus, notes };
-    dispatch({ type: 'UPDATE_ALERT', payload: { id: alert.id, status: nextStatus, processLogs: [...(alert.processLogs || []), newLog] } });
-    setNotes(''); setShowUpdate(false);
-  };
   const handleGenerateWorkOrder = () => {
     const t = now();
     const woId = genId('WO');
@@ -114,7 +104,6 @@ function AlertDrawer({ alert, state, dispatch, currentRole, currentUser, onClose
     onClose();
   };
 
-  const inp = 'w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-gray-500';
   const field = (label, val) => (
     <div><span className="text-gray-400 text-xs">{label}：</span><span className="text-gray-700">{val ?? '—'}</span></div>
   );
@@ -137,25 +126,41 @@ function AlertDrawer({ alert, state, dispatch, currentRole, currentUser, onClose
               <div><span className="text-gray-400 text-xs">严重程度：</span><StatusBadge status={alert.severity} /></div>
               <div><span className="text-gray-400 text-xs">当前状态：</span><StatusBadge status={alert.status} /></div>
             </div>
-            <div className="mt-2 text-sm text-gray-800">{alert.description}</div>
+            <div className="mt-3">
+              <div className="text-gray-400 text-xs mb-1">告警描述</div>
+              <div className="text-sm text-gray-800">{alert.description}</div>
+            </div>
           </DrawerSection>
 
           <DrawerSection title="关联设备">
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <div><span className="text-gray-400 text-xs">设备SN：</span>{device ? <Link to={`/devices/${device.id}`} className="ui-link">{device.sn}</Link> : (alert.deviceSN || '—')}</div>
+              <div><span className="text-gray-400 text-xs">关联设备SN：</span>{device ? <Link to={`/devices/${device.id}`} className="ui-link">{device.sn}</Link> : (alert.deviceSN || '—')}</div>
               {field('机器人型号', deviceType?.name)}
               <div><span className="text-gray-400 text-xs">所属项目：</span>{project ? <Link to={`/projects/${project.id}`} className="ui-link">{project.name}</Link> : '—'}</div>
               {field('所属点位', location?.name)}
-              <div><span className="text-gray-400 text-xs">在线状态：</span>{online ? <span className="text-emerald-600 font-medium">在线</span> : <span className="text-gray-400">离线</span>}</div>
+              <div><span className="text-gray-400 text-xs">在线状态：</span><StatusBadge status={onlineState} /></div>
             </div>
-            {alert.workOrderId && (
-              <div className="flex items-center gap-2 text-sm mt-2">
-                <span className="text-gray-500">关联工单：</span>
-                <span className="inline-flex items-center gap-1 bg-orange-50 text-orange-600 border border-orange-200 text-xs px-2 py-0.5 rounded-full font-medium">
-                  {alert.workOrderId}{linkedWO && <span className="ml-1 text-gray-400">({linkedWO.status})</span>}
-                </span>
+          </DrawerSection>
+
+          <DrawerSection title="关联记录">
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-gray-400 text-xs">关联问题编号：</span>
+                {linkedQI
+                  ? <LinkAction to="/after-sales?tab=issues">查看问题（{linkedQI.id}）</LinkAction>
+                  : canGenerateQI
+                    ? <Btn variant="secondary" size="sm" onClick={handleGenerateQualityIssue}>生成问题记录</Btn>
+                    : <span className="text-gray-400">未生成</span>}
               </div>
-            )}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-gray-400 text-xs">关联售后工单号：</span>
+                {alert.workOrderId
+                  ? <LinkAction to="/after-sales?tab=orders">查看售后工单（{alert.workOrderId}{linkedWO ? ` · ${linkedWO.status}` : ''}）</LinkAction>
+                  : canGenerateWO
+                    ? <Btn variant="secondary" size="sm" onClick={handleGenerateWorkOrder}>生成售后工单</Btn>
+                    : <span className="text-gray-400">未生成</span>}
+              </div>
+            </div>
           </DrawerSection>
 
           <DrawerSection title="飞书通知记录">
@@ -205,26 +210,17 @@ function AlertDrawer({ alert, state, dispatch, currentRole, currentUser, onClose
           </DrawerSection>
         </div>
 
-        <div className="border-t border-[#ececec] px-5 py-3 space-y-2 bg-gray-50">
-          {showUpdate && canUpdate && (
-            <div className="space-y-2">
-              <textarea rows={2} className={inp} value={notes} onChange={e => setNotes(e.target.value)} placeholder="请填写处理备注 *" />
-              <div className="flex gap-2">
-                <Btn variant="primary" size="sm" onClick={handleUpdateStatus} disabled={!notes.trim()}>确认更新 → {nextStatus}</Btn>
-                <Btn variant="secondary" size="sm" onClick={() => setShowUpdate(false)}>取消</Btn>
-              </div>
-            </div>
-          )}
+        <div className="border-t border-[#ececec] px-5 py-3 bg-gray-50">
           <div className="flex flex-wrap gap-2">
-            {canUpdate && !showUpdate
-              ? <Btn variant="primary" size="sm" onClick={() => setShowUpdate(true)}>更新状态</Btn>
-              : !showUpdate && <span className="px-2.5 h-7 inline-flex items-center text-xs text-gray-300 border border-gray-200 rounded-md cursor-not-allowed" title={closed ? '告警已关闭' : '仅轻微告警可更新状态'}>更新状态</span>}
-            {canGenerateWO
-              ? <Btn variant="danger" size="sm" onClick={handleGenerateWorkOrder}>生成工单</Btn>
-              : <span className="px-2.5 h-7 inline-flex items-center text-xs text-gray-300 border border-gray-200 rounded-md cursor-not-allowed" title={alert.workOrderId ? `已生成工单 ${alert.workOrderId}` : closed ? '告警已关闭' : '仅严重告警可生成工单'}>生成工单</span>}
+            {device
+              ? <Btn as="link" to={`/devices/${device.id}`} variant="secondary" size="sm">查看设备详情</Btn>
+              : <span className="px-2.5 h-7 inline-flex items-center text-xs text-gray-300 border border-gray-200 rounded-md cursor-not-allowed">查看设备详情</span>}
             {canGenerateQI
-              ? <Btn variant="secondary" size="sm" onClick={handleGenerateQualityIssue}>生成质量问题</Btn>
-              : <span className="px-2.5 h-7 inline-flex items-center text-xs text-gray-300 border border-gray-200 rounded-md cursor-not-allowed" title={closed ? '告警已关闭' : '仅在线运营设备可生成质量问题'}>生成质量问题</span>}
+              ? <Btn variant="secondary" size="sm" onClick={handleGenerateQualityIssue}>生成问题记录</Btn>
+              : <span className="px-2.5 h-7 inline-flex items-center text-xs text-gray-300 border border-gray-200 rounded-md cursor-not-allowed" title={linkedQI ? `已生成问题 ${linkedQI.id}` : closed ? '告警已关闭' : '无生成权限'}>生成问题记录</span>}
+            {canGenerateWO
+              ? <Btn variant="danger" size="sm" onClick={handleGenerateWorkOrder}>生成售后工单</Btn>
+              : <span className="px-2.5 h-7 inline-flex items-center text-xs text-gray-300 border border-gray-200 rounded-md cursor-not-allowed" title={alert.workOrderId ? `已生成工单 ${alert.workOrderId}` : closed ? '告警已关闭' : '无生成权限'}>生成售后工单</span>}
             {canClose
               ? <Btn variant="secondary" size="sm" onClick={handleCloseAlert}>关闭告警</Btn>
               : <span className="px-2.5 h-7 inline-flex items-center text-xs text-gray-300 border border-gray-200 rounded-md cursor-not-allowed" title="告警已关闭">关闭告警</span>}
@@ -502,6 +498,10 @@ function DevicesTab() {
 
   return (
     <div className="space-y-5">
+      <PageHeader
+        title="设备台账"
+        description="按设备 SN 记录履历与在线状态；健康告警记录在线运营异常，可生成问题记录或售后工单。平台只读同步各业务模块数据。"
+      />
       <Segmented
         tabs={[{ key: 'all', label: '全部设备' }, { key: 'alerts', label: '健康告警', badge: pendingAlerts }]}
         value={activeSubTab}
@@ -516,24 +516,14 @@ function DevicesTab() {
 
 /* ─────────── Main ─────────── */
 export default function AssetsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  // 二级菜单（左侧）通过 ?tab= 切换两块台账，页面内不再重复渲染横向 Tab；
+  // 各块自带 PageHeader 标题/说明。
+  const [searchParams] = useSearchParams();
   const tab = searchParams.get('tab') || 'devices';
   const activeTab = TABS.some(t => t.key === tab) ? tab : 'devices';
 
-  const setTab = (key) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('tab', key);
-    if (key !== 'devices') { next.delete('subtab'); next.delete('alertSN'); }
-    setSearchParams(next);
-  };
-
   return (
     <Page>
-      <PageHeader
-        title="资产管理"
-        description="设备台账与物料 / 核心部件台账。平台只读同步 ERP 与各业务模块数据，围绕设备与部件 SN 记录履历。"
-      />
-      <TertiaryTabs tabs={TABS} activeTab={activeTab} onChange={setTab} />
       {activeTab === 'materials' && <Materials />}
       {activeTab === 'devices' && <DevicesTab />}
     </Page>
