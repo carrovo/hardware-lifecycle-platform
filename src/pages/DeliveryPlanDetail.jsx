@@ -118,6 +118,50 @@ function DeployOrderDetail({ order }) {
   );
 }
 
+// 交付资料预览占位：按资料类型 / 文件名判定 图片 / 视频 / 文档，展示占位块（原型不加载真实文件）。
+function docPreviewKind(m) {
+  const f = (m.file || '').toLowerCase();
+  if (m.type.includes('视频') || f.endsWith('.mp4') || f.endsWith('.mov')) return 'video';
+  if (m.type.includes('照片') || f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')) return 'image';
+  return 'doc';
+}
+
+function DocPreview({ kind, file }) {
+  const conf = {
+    image: { label: '图片预览', desc: '灰底图占位', icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></> },
+    video: { label: '视频预览', desc: '视频播放占位', icon: <><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m10 9 5 3-5 3z" /></> },
+    doc: { label: '文档 / 单据预览', desc: 'PDF / 单据占位', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8M8 17h8" /></> },
+  }[kind] || {};
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[#ddd] bg-[#fafafa] h-48 text-gray-400">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{conf.icon}</svg>
+      <div className="text-xs text-gray-500">{conf.label} · {file}</div>
+      <div className="text-[11px] text-gray-300">原型环境 · {conf.desc}，不加载真实文件</div>
+    </div>
+  );
+}
+
+function DocDetail({ doc }) {
+  return (
+    <div className="space-y-4">
+      <DescList
+        cols={2}
+        items={[
+          ['资料名称', doc.name],
+          ['资料类型', <Chip tone="outline">{doc.type}</Chip>],
+          ['关联子工单', <span className="font-mono text-xs">{doc.order}</span>],
+          ['关联设备 SN', <span className="font-mono text-xs">{doc.sn}</span>],
+          ['上传人', doc.uploader],
+          ['上传时间', doc.time],
+          ['文件名', <span className="font-mono text-xs">{doc.file}</span>],
+          ['备注', doc.note],
+        ]}
+      />
+      <DocPreview kind={docPreviewKind(doc)} file={doc.file} />
+    </div>
+  );
+}
+
 export default function DeliveryPlanDetail() {
   const { id } = useParams();
   const { state } = useApp();
@@ -130,6 +174,10 @@ export default function DeliveryPlanDetail() {
   const locName = (lid) => locations.find((l) => l.id === lid)?.name || '—';
 
   const recs = plan?.records || {};
+  const project = (state.projects || []).find((p) => p.id === plan?.projectId);
+  // 前置准备子工单（舱体进场及水电部署）只适用智魔方；机场 / 工业场景 / 遥操数采不展示前置准备。
+  const isZhimofang = project?.projectType === '智魔方';
+  const templateName = plan?.templateName || (isZhimofang ? '智魔方交付流程模板' : '通用部署流程模板');
   const boundIds = plan ? getBoundDeviceIds(plan) : [];
   const preLocMap = Object.fromEntries((recs.binding || []).map((b) => [b.deviceId, b.preAssignedLocationId]));
   const boundDevices = boundIds
@@ -143,7 +191,7 @@ export default function DeliveryPlanDetail() {
   const allWO = [...afterSales, ...relatedWO];
   const planLogs = plan ? (state.operationLogs || []).filter((l) => l.deliveryPlanId === plan.id || boundIds.includes(l.deviceId)) : [];
 
-  const preOrders = plan ? [buildPreOrder(plan, recs)] : [];
+  const preOrders = plan && isZhimofang ? [buildPreOrder(plan, recs)] : [];
   const deployOrders = boundDevices.map((d) => {
     const fi = (recs.factoryInspection || []).find((r) => r.deviceId === d.id);
     const si = (recs.siteInstall || []).find((r) => r.deviceId === d.id);
@@ -185,7 +233,6 @@ export default function DeliveryPlanDetail() {
     );
   }
 
-  const project = (state.projects || []).find((p) => p.id === plan.projectId);
   const planStatus = deliveryPlanStatus(plan);
   const overdue = !!plan.dueDate && plan.dueDate < TODAY && !['未开始', '已验收', '已作废'].includes(planStatus);
   const acceptedPass = acceptRecs.filter(isPass).length;
@@ -202,8 +249,11 @@ export default function DeliveryPlanDetail() {
   const docUploader = plan.owner || '现场工程师';
   const siteDate = plan.siteInstallDate || plan.factoryDate || null;
   const deliveryDocs = [
-    { name: '现场进场环境照片', type: '现场照片', order: preOrderId, sn: '—', uploader: docUploader, time: siteDate ? `${siteDate} 09:20` : '—', file: 'site_env.jpg', note: '舱体进场前现场环境记录' },
-    { name: '施工·水电确认材料', type: '施工·水电确认材料', order: preOrderId, sn: '—', uploader: docUploader, time: siteDate ? `${siteDate} 15:00` : '—', file: 'utility_check.pdf', note: '水电施工完成确认' },
+    // 前置准备相关资料仅智魔方项目展示（不为非智魔方项目硬造前置准备数据）。
+    ...(isZhimofang ? [
+      { name: '现场进场环境照片', type: '现场照片', order: preOrderId, sn: '—', uploader: docUploader, time: siteDate ? `${siteDate} 09:20` : '—', file: 'site_env.jpg', note: '舱体进场前现场环境记录' },
+      { name: '施工·水电确认材料', type: '施工·水电确认材料', order: preOrderId, sn: '—', uploader: docUploader, time: siteDate ? `${siteDate} 15:00` : '—', file: 'utility_check.pdf', note: '水电施工完成确认' },
+    ] : []),
     { name: '设备摆放照片', type: '设备摆放照片', order: deployOrderId, sn: firstSN, uploader: docUploader, time: siteDate ? `${siteDate} 16:30` : '—', file: `layout_${firstSN}.jpg`, note: '按点位完成设备摆放' },
     { name: '工作流程测试视频', type: '工作流程测试视频', order: deployOrderId, sn: firstSN, uploader: docUploader, time: siteDate ? `${siteDate} 17:10` : '—', file: `workflow_${firstSN}.mp4`, note: '现场全流程联调录像' },
     { name: '交付验收单', type: '交付验收单图片', order: deployOrderId, sn: lastSN, uploader: '客户', time: plan.acceptanceDate ? `${plan.acceptanceDate} 15:00` : '—', file: `accept_${lastSN}.pdf`, note: '客户签署交付验收单' },
@@ -245,6 +295,8 @@ export default function DeliveryPlanDetail() {
             ['交付计划编号', plan.id],
             ['交付批次', plan.batchNo],
             ['所属项目', project ? <Link to={`/projects/${project.id}`} className="ui-link">{project.name}</Link> : '—'],
+            ['当前项目类型', project?.projectType ? <Chip>{project.projectType}</Chip> : '—'],
+            ['使用流程模板', templateName],
             ['负责人', plan.owner],
             ['计划交付数', targetCount ? `${targetCount} 台` : '—'],
             ['交付设备数（已关联）', `${boundDevices.length} 台`],
@@ -279,9 +331,12 @@ export default function DeliveryPlanDetail() {
 
       <Section
         title="交付子工单"
-        subtitle="两类：前置准备（舱体进场及水电部署）与机器人 / 设备部署。培训与验收合并进设备部署子工单的检查项与上传材料。"
+        subtitle={isZhimofang
+          ? '两类：前置准备（舱体进场及水电部署）与机器人 / 设备部署。培训与验收合并进设备部署子工单的检查项与上传材料。'
+          : '本项目类型不含前置准备（舱体进场及水电部署），直接从机器人 / 设备部署子工单开始。培训与验收合并进设备部署子工单的检查项与上传材料。'}
         bodyClassName="p-4 space-y-6"
       >
+        {isZhimofang && (
         <div>
           <div className="flex items-center gap-2 mb-2">
             <h3 className="text-[13px] font-semibold text-gray-800">前置准备子工单 · 舱体进场及水电部署</h3>
@@ -300,6 +355,7 @@ export default function DeliveryPlanDetail() {
             ))}
           </Table>
         </div>
+        )}
 
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -333,7 +389,7 @@ export default function DeliveryPlanDetail() {
       </Section>
 
       <Section title="交付资料 / 附件" subtitle="现场照片 / 设备摆放 / 流程测试视频 / 培训与交付验收单 / 施工·水电确认材料等交付过程资料（原型占位样例，随现场系统 / 附件库接入补齐）。非 ERP 物料 / 发货物料。" bodyClassName="p-0">
-        <Table head={['资料名称', '资料类型', '关联子工单', '关联设备SN', '上传人', '上传时间', '文件/图片/视频', '备注']} empty="暂无交付资料">
+        <Table head={['资料名称', '资料类型', '关联子工单', '关联设备SN', '上传人', '上传时间', '文件/图片/视频', '备注', '操作']} empty="暂无交付资料">
           {deliveryDocs.map((m) => (
             <tr key={m.name} className="hover:bg-[#fafafa]">
               <td className="px-3 py-2 whitespace-nowrap text-gray-700">{m.name}</td>
@@ -344,6 +400,13 @@ export default function DeliveryPlanDetail() {
               <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{m.time}</td>
               <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600">{m.file}</td>
               <td className="px-3 py-2 text-xs text-gray-500 max-w-xs"><div className="truncate">{m.note}</div></td>
+              <td className="px-3 py-2 whitespace-nowrap">
+                <div className="flex items-center gap-3">
+                  <LinkAction onClick={() => setDetail({ type: 'doc', doc: m })}>查看</LinkAction>
+                  <LinkAction onClick={() => setDetail({ type: 'doc', doc: m })}>预览</LinkAction>
+                  <LinkAction onClick={() => alert(`原型环境，模拟下载 ${m.file}`)}>下载</LinkAction>
+                </div>
+              </td>
             </tr>
           ))}
         </Table>
@@ -396,11 +459,12 @@ export default function DeliveryPlanDetail() {
       <Modal
         isOpen={!!detail}
         onClose={() => setDetail(null)}
-        title={detail?.type === 'pre' ? '前置准备子工单详情' : '设备部署子工单详情'}
+        title={detail?.type === 'pre' ? '前置准备子工单详情' : detail?.type === 'doc' ? '交付资料 / 附件详情' : '设备部署子工单详情'}
         size="lg"
       >
         {detail?.type === 'pre' && <PreOrderDetail order={detail.order} />}
         {detail?.type === 'deploy' && <DeployOrderDetail order={detail.order} />}
+        {detail?.type === 'doc' && <DocDetail doc={detail.doc} />}
       </Modal>
     </Page>
   );
