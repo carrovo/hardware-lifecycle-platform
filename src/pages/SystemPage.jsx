@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
+import { assemblyTemplateFor } from '../utils/status';
 import {
   Page, PageHeader, Section, Table, Btn, LinkAction, Chip,
   Input, Select, SearchInput, StatCard, StatGrid, DescList,
@@ -208,6 +209,9 @@ const MODEL_DESC = {
   AlphaBot2: '第二代服务机器人，增强导航与感知，适用于机场 / 工业等复杂场景',
 };
 const MODEL_ROWS = ROBOT_MODELS.map((m, i) => ({ id: `RM-${i + 1}`, name: m, desc: MODEL_DESC[m] || '', enabled: true }));
+// 型号名 → 设备类型 name 关键字（用于从 useApp() state 的 deviceTypes 派生装配模板）与适用项目类型。
+const MODEL_DT_KEY = { AlphaBot1: 'AlphaBot 1', AlphaBot2: 'AlphaBot 2' };
+const MODEL_SCOPE = { AlphaBot1: '全部', AlphaBot2: '机场 · 工业场景 · 遥操数采' };
 
 const PROJECT_TYPE_DESC = {
   智魔方: '商场 / 零售场景的智能服务机器人项目',
@@ -468,6 +472,117 @@ function DictionaryTab({ title, entity, columns, fields, initial, defaults = {},
               )}
             </div>
           ))}
+          <div className="flex justify-end gap-2 pt-1">
+            <Btn variant="secondary" onClick={close}>取消</Btn>
+            <Btn variant="primary" onClick={save} disabled={!canSave}>保存</Btn>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+/* ═════════ 5. 机器人型号字典（列表 + 查看 → 装配模板 Modal，模板由 useApp() state 派生） ═════════ */
+function ModelsTab() {
+  const { state } = useApp();
+  const [rows, setRows] = useState(MODEL_ROWS);
+  const [viewId, setViewId] = useState(null);
+  const [modal, setModal] = useState(null); // null | { mode: 'add' } | { mode: 'edit', id }
+  const [form, setForm] = useState({});
+  const seq = useRef(0);
+
+  const viewing = rows.find((r) => r.id === viewId) || null;
+  // AlphaBot1 → name 含 'AlphaBot 1' 的 DT（DT-001 先于 AlphaBot 1S，find 命中基础款）；AlphaBot2 → 'AlphaBot 2'。
+  const deviceType = viewing
+    ? state.deviceTypes.find((t) => (t.name || '').includes(MODEL_DT_KEY[viewing.name] || viewing.name))
+    : null;
+  const template = assemblyTemplateFor(deviceType, state.moduleTypes);
+
+  const openAdd = () => { setForm({ name: '', desc: '' }); setModal({ mode: 'add' }); };
+  const openEdit = (row) => { setForm({ name: row.name, desc: row.desc }); setModal({ mode: 'edit', id: row.id }); };
+  const close = () => setModal(null);
+  const canSave = !!String(form.name || '').trim();
+  const save = () => {
+    if (!canSave) return;
+    if (modal.mode === 'add') {
+      seq.current += 1;
+      setRows((r) => [{ id: `RM-${Date.now()}-${seq.current}`, enabled: true, desc: '', ...form }, ...r]);
+    } else {
+      setRows((r) => r.map((x) => (x.id === modal.id ? { ...x, ...form } : x)));
+    }
+    close();
+  };
+  const toggle = (id) => setRows((r) => r.map((x) => (x.id === id ? { ...x, enabled: !x.enabled } : x)));
+  const remove = (id) => setRows((r) => r.filter((x) => x.id !== id));
+
+  return (
+    <>
+      <Section title="机器人型号字典" right={<Btn variant="primary" size="sm" onClick={openAdd}>+ 新增型号</Btn>} bodyClassName="p-0">
+        <Table head={['型号', '说明', '启用', '操作']}>
+          {rows.map((row) => (
+            <tr key={row.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 align-middle whitespace-nowrap"><span className="font-medium text-gray-800">{row.name}</span></td>
+              <td className="px-3 py-2 align-middle text-gray-600">{row.desc || '—'}</td>
+              <td className="px-3 py-2 align-middle whitespace-nowrap"><EnabledBadge on={row.enabled} /></td>
+              <td className="px-3 py-2 whitespace-nowrap">
+                <div className="flex items-center gap-3">
+                  <LinkAction onClick={() => setViewId(row.id)}>查看</LinkAction>
+                  <LinkAction onClick={() => openEdit(row)}>编辑</LinkAction>
+                  <LinkAction onClick={() => toggle(row.id)}>{row.enabled ? '停用' : '启用'}</LinkAction>
+                  <LinkAction onClick={() => remove(row.id)}>删除</LinkAction>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
+
+      <Modal isOpen={!!viewing} onClose={() => setViewId(null)} title={viewing ? `${viewing.name} · 型号详情` : ''} size="xl">
+        {viewing && (
+          <div className="space-y-5">
+            <div>
+              <div className="text-[13px] font-semibold text-gray-700 mb-2">型号基础信息</div>
+              <DescList
+                cols={2}
+                items={[
+                  ['型号名称', viewing.name],
+                  ['适用项目类型', MODEL_SCOPE[viewing.name] || '全部'],
+                  ['说明', viewing.desc || '—'],
+                  ['是否启用', <EnabledBadge key="e" on={viewing.enabled} />],
+                ]}
+              />
+            </div>
+            <div>
+              <div className="text-[13px] font-semibold text-gray-700 mb-2">装配模板</div>
+              <Table head={['排序', '槽位名称', '核心部件类型', '是否必装', '数量', '是否需要 SN / 内部ID', '是否支持换件', '备注']} empty="该型号暂无装配模板槽位">
+                {template.map((s) => (
+                  <tr key={s.order} className="hover:bg-[#fafafa]">
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{s.order}</td>
+                    <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{s.slotName}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{s.corePartType}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{s.required ? '是' : '否'}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{s.quantity}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{s.needSN ? '是' : '否'}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{s.replaceable ? '是' : '否'}</td>
+                    <td className="px-3 py-2 text-gray-500">{s.bindRule || '—'}</td>
+                  </tr>
+                ))}
+              </Table>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal isOpen={!!modal} onClose={close} title={`${modal?.mode === 'edit' ? '编辑' : '新增'}型号`}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">型号 *</label>
+            <Input className="w-full" value={form.name ?? ''} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">说明</label>
+            <Input className="w-full" value={form.desc ?? ''} onChange={(e) => setForm((s) => ({ ...s, desc: e.target.value }))} />
+          </div>
           <div className="flex justify-end gap-2 pt-1">
             <Btn variant="secondary" onClick={close}>取消</Btn>
             <Btn variant="primary" onClick={save} disabled={!canSave}>保存</Btn>
@@ -776,7 +891,7 @@ export default function SystemPage() {
       {activeTab === 'workflow' && <WorkflowTab />}
       {activeTab === 'fields' && <DictionaryTab title="节点字段配置" entity="字段" idPrefix="FLD" columns={FIELD_COLUMNS} fields={FIELD_FIELDS} initial={FIELD_ROWS} />}
       {activeTab === 'faults' && <DictionaryTab title="故障原因字典" entity="故障原因" idPrefix="FA" columns={FAULT_COLUMNS} fields={FAULT_FIELDS} initial={FAULT_ROWS} defaults={{ updatedAt: TODAY }} />}
-      {activeTab === 'models' && <DictionaryTab title="机器人型号字典" entity="型号" idPrefix="RM" columns={nameDescColumns('型号')} fields={nameDescFields('型号')} initial={MODEL_ROWS} />}
+      {activeTab === 'models' && <ModelsTab />}
       {activeTab === 'projectTypes' && <DictionaryTab title="项目类型 / 业务场景字典" entity="类型" idPrefix="PT" columns={nameDescColumns('类型名')} fields={nameDescFields('类型名')} initial={PROJECT_TYPE_ROWS} />}
       {activeTab === 'modules' && <DictionaryTab title="模块 / 核心部件字典" entity="部件" idPrefix="MOD" columns={nameDescColumns('部件类型')} fields={nameDescFields('部件类型')} initial={MODULE_ROWS} />}
       {activeTab === 'notifications' && <NotificationsTab />}
