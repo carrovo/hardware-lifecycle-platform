@@ -187,6 +187,35 @@ export function Table({ head, children, empty = '暂无数据', footer, classNam
   );
 }
 
+/* ── 横向流程步骤条（stepper） ─────────────────────── */
+// steps: [{ key, label }]，current = 当前步骤 key（或 index）；done 数组可选标记已完成。
+export function Stepper({ steps, current, className = '' }) {
+  const curIdx = typeof current === 'number' ? current : steps.findIndex((s) => (s.key || s.label) === current);
+  return (
+    <div className={`flex items-center overflow-x-auto ${className}`}>
+      {steps.map((s, i) => {
+        const state = i < curIdx ? 'done' : i === curIdx ? 'current' : 'todo';
+        const circle = state === 'done'
+          ? 'bg-gray-900 text-white border-gray-900'
+          : state === 'current'
+            ? 'bg-white text-gray-900 border-gray-900'
+            : 'bg-white text-gray-400 border-gray-200';
+        return (
+          <div key={s.key || s.label} className="flex items-center flex-shrink-0">
+            <div className="flex flex-col items-center gap-1.5 min-w-[76px] px-1">
+              <div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-semibold ${circle}`}>
+                {state === 'done' ? '✓' : i + 1}
+              </div>
+              <span className={`text-[11px] text-center leading-tight ${state === 'todo' ? 'text-gray-400' : 'text-gray-700 font-medium'}`}>{s.label}</span>
+            </div>
+            {i < steps.length - 1 && <div className={`h-px w-8 sm:w-10 flex-shrink-0 -mt-4 ${i < curIdx ? 'bg-gray-900' : 'bg-gray-200'}`} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // 表格单元格快捷类（可选使用）
 export const Td = ({ children, className = '', ...rest }) => (
   <td className={`px-3 py-2 text-gray-700 align-middle ${className}`} {...rest}>{children}</td>

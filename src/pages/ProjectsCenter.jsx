@@ -762,7 +762,6 @@ function DeliveryPlanTab() {
   const paged = usePaged(filtered, 10);
 
   const stop = (e) => e.stopPropagation();
-  const NODE_KEY = { 绑定设备: 'binding', 出厂检验: 'factoryInspection', 现场安装调试: 'siteInstall', 客户验收: 'customerAccept' };
   const delayedCount = enriched.filter((p) => p.status === '已延期').length;
 
   return (
@@ -817,14 +816,14 @@ function DeliveryPlanTab() {
             <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{plan.owner}</td>
             <td className="px-3 py-2 text-xs whitespace-nowrap" onClick={stop}>
               <div className="flex items-center gap-x-3">
-                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}`)}>查看</LinkAction>
-                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}?node=${NODE_KEY[plan.currentNode] || 'binding'}`)}>进入当前节点</LinkAction>
-                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}?node=binding`)}>选择设备</LinkAction>
+                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}`)}>查看详情</LinkAction>
+                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}?node=devices`)}>管理设备</LinkAction>
+                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}?node=subOrders`)}>管理子工单</LinkAction>
                 <LinkAction onClick={() => setPlaceholder({ title: '编辑交付计划', text: `编辑「${plan.name || plan.id}」的入口已保留，后续接入表单与校验。` })}>编辑</LinkAction>
                 {!['已验收', '已作废'].includes(plan.status) && (
                   <LinkAction onClick={() => setPlaceholder({ title: '作废交付计划', text: `作废「${plan.name || plan.id}」的入口已保留，后续接入审批流程。` })}>作废</LinkAction>
                 )}
-                <LinkAction onClick={() => navigate(`/projects/${plan.projectId}`)}>查看日志</LinkAction>
+                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}?node=logs`)}>查看日志</LinkAction>
               </div>
             </td>
           </tr>
