@@ -924,29 +924,91 @@ function replacementView(state, mr) {
   };
 }
 
+// 核心部件追溯（原型占位）：只读展示旧件 / 新件模块信息，并提供前往部件台账。
+function ModuleTraceModal({ title, material, fallbackSN, onClose }) {
+  return (
+    <Modal isOpen onClose={onClose} title={title}>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2"><Chip>原型占位</Chip><span className="text-xs text-gray-400">核心部件追溯（只读）</span></div>
+        <DescList items={[
+          ['部件 SN', material?.sn || fallbackSN],
+          ['核心部件类型', material?.category],
+          ['型号', material?.model],
+          ['批次号', material?.batchNo],
+          ['来源 / 供应商', material?.supplier],
+          ['当前状态', material?.status ? <StatusBadge status={material.status} /> : '—'],
+        ]} />
+        <div className="flex items-center justify-between pt-1">
+          <LinkAction to="/assets?tab=materials">前往资产 · 核心部件追溯 →</LinkAction>
+          <Btn variant="secondary" onClick={onClose}>关闭</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ERP 领料单只读详情（原型占位）：平台不写 ERP，仅展示同步字段。
+function ErpPickingModal({ mr, deviceSN, onClose }) {
+  return (
+    <Modal isOpen onClose={onClose} title="ERP 领料单 · 只读详情">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2"><Chip>ERP 只读</Chip><span className="text-xs text-gray-400">由 ERP 同步，平台不可编辑</span></div>
+        <DescList items={[
+          ['领料单号 / 出库申请单号', mr.erpPickingNo],
+          ['ERP 领料状态', mr.erpPickingStatus ? <StatusBadge status={mr.erpPickingStatus} /> : '—'],
+          ['关联售后工单', mr.workOrderId],
+          ['设备 SN', deviceSN],
+          ['换件时间', mr.timestamp],
+          ['操作人', mr.operator],
+        ]} />
+        <Card className="bg-[#fafafa] text-xs text-gray-500">领料 / 出库明细以 ERP 为准，此处为原型占位只读视图，不做库存增减。</Card>
+        <div className="flex justify-end"><Btn variant="secondary" onClick={onClose}>关闭</Btn></div>
+      </div>
+    </Modal>
+  );
+}
+
+// 换件记录详情跳转：能定位到对象则可点，否则灰显不可点。
+function JumpLink({ enabled, to, onClick, children, hint }) {
+  if (enabled) return to ? <LinkAction to={to}>{children}</LinkAction> : <LinkAction onClick={onClick}>{children}</LinkAction>;
+  return <span className="text-[13px] text-gray-300 cursor-not-allowed" title={hint || '暂无可跳转对象'}>{children}</span>;
+}
+
 function ReplacementDetailDrawer({ id, state, onClose }) {
+  const [modal, setModal] = useState(null);
   const mr = (state.moduleReplacements || []).find((r) => r.id === id);
   if (!mr) return null;
   const v = replacementView(state, mr);
   const logs = [{ time: mr.timestamp, operator: mr.operator, notes: mr.notes || '完成换件' }];
+  const deviceSN = v.device?.sn || mr.deviceId;
+  const woLink = mr.workOrderId ? `/after-sales?tab=orders&highlight=${mr.workOrderId}` : undefined;
   return (
     <Drawer open onClose={onClose} title={mr.id} subtitle="换件记录（只读）"
       chips={<>
         <Chip>{v.coreType}</Chip>
-        {mr.workOrderId && <LinkAction to="/after-sales?tab=orders">售后工单 {mr.workOrderId}</LinkAction>}
+        {mr.workOrderId && <LinkAction to={woLink}>售后工单 {mr.workOrderId}</LinkAction>}
         {v.sourceQI && <span className="text-xs text-gray-500">来源问题 {v.sourceQI}</span>}
       </>}>
       <Card className="bg-[#fafafa] text-xs text-gray-500 leading-relaxed">
         换件记录为只读，源于售后工单的换件动作与 ERP 领料 / 出库申请。此处不新增或扣减库存，如需处理请前往关联售后工单。
       </Card>
+      <DrawerSection title="关联跳转">
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          <JumpLink enabled={!!mr.workOrderId} to={woLink} hint="无关联售后工单">查看售后工单</JumpLink>
+          <JumpLink enabled={!!v.device?.id} to={v.device?.id ? `/devices/${v.device.id}` : undefined} hint="无关联设备">查看设备详情</JumpLink>
+          <JumpLink enabled={!!v.removed} onClick={() => setModal('old')} hint="无旧件模块信息">查看旧件模块详情</JumpLink>
+          <JumpLink enabled={!!v.added} onClick={() => setModal('new')} hint="无新件模块信息">查看新件模块详情</JumpLink>
+          <JumpLink enabled={!!mr.erpPickingNo} onClick={() => setModal('erp')} hint="无 ERP 领料单">查看 ERP 领料单</JumpLink>
+        </div>
+      </DrawerSection>
       <DrawerSection title="关联对象">
         <DescList items={[
           ['换件记录编号', <span className="font-mono">{mr.id}</span>],
-          ['售后工单号', mr.workOrderId ? <LinkAction to="/after-sales?tab=orders">{mr.workOrderId}</LinkAction> : '—'],
+          ['售后工单号', mr.workOrderId ? <LinkAction to={woLink}>{mr.workOrderId}</LinkAction> : '—'],
           ['来源问题编号', v.sourceQI || '—'],
           ['项目名称', v.project?.name],
           ['客户名称', v.project?.client],
-          ['设备 SN', v.device?.sn || mr.deviceId],
+          ['设备 SN', deviceSN],
           ['点位 / 地址', locLabel(v.location)],
         ]} />
       </DrawerSection>
@@ -971,6 +1033,10 @@ function ReplacementDetailDrawer({ id, state, onClose }) {
         ]} />
       </DrawerSection>
       <DrawerSection title="操作日志"><LogTimeline logs={logs} /></DrawerSection>
+
+      {modal === 'old' && <ModuleTraceModal title="旧件模块详情" material={v.removed} fallbackSN={v.oldSN} onClose={() => setModal(null)} />}
+      {modal === 'new' && <ModuleTraceModal title="新件模块详情" material={v.added} fallbackSN={v.newSN} onClose={() => setModal(null)} />}
+      {modal === 'erp' && <ErpPickingModal mr={mr} deviceSN={deviceSN} onClose={() => setModal(null)} />}
     </Drawer>
   );
 }
@@ -1021,7 +1087,7 @@ function ReplacementsTab({ state }) {
 
       <Table
         className="text-[12px]"
-        head={['换件记录编号', '售后工单号', '来源问题编号', '项目名称', '客户名称', '设备 SN', '点位 / 地址', '核心部件类型', '旧件 SN', '旧件状态', '新件 SN', '新件来源', 'ERP 领料单号 / 出库申请单号', 'ERP 领料状态', '换件原因', '换件说明', '换件时间', '操作人', '现场照片 / log', '操作日志']}
+        head={['换件记录编号', '售后工单号', '来源问题编号', '项目名称', '客户名称', '设备 SN', '点位 / 地址', '核心部件类型', '旧件 SN', '旧件状态', '新件 SN', '新件来源', 'ERP 领料单号 / 出库申请单号', 'ERP 领料状态', '换件原因', '换件说明', '换件时间', '操作人', '现场照片 / log', '操作日志', '操作']}
         empty="暂无换件记录"
         footer={<Pagination page={pager.page} total={pager.total} totalPages={pager.totalPages} onChange={pager.setPage} />}
       >
@@ -1030,7 +1096,7 @@ function ReplacementsTab({ state }) {
           return (
             <tr key={mr.id} className="hover:bg-[#fafafa] transition-colors">
               <td className="px-3 py-2 font-mono whitespace-nowrap"><LinkAction onClick={() => setDetail(mr.id)}>{mr.id}</LinkAction></td>
-              <td className="px-3 py-2 whitespace-nowrap">{mr.workOrderId ? <LinkAction to="/after-sales?tab=orders">{mr.workOrderId}</LinkAction> : '—'}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{mr.workOrderId ? <LinkAction to={`/after-sales?tab=orders&highlight=${mr.workOrderId}`}>{mr.workOrderId}</LinkAction> : '—'}</td>
               <td className="px-3 py-2 font-mono text-gray-500 whitespace-nowrap">{r.sourceQI || '—'}</td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.project?.name || '—'}</td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.project?.client || '—'}</td>
@@ -1049,6 +1115,7 @@ function ReplacementsTab({ state }) {
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{mr.operator || '—'}</td>
               <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{mr.photo || mr.logFile || '—'}</td>
               <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{mr.operator ? `${mr.operator} · ${mr.timestamp}` : '—'}</td>
+              <td className="px-3 py-2 whitespace-nowrap"><LinkAction onClick={() => setDetail(mr.id)}>查看详情</LinkAction></td>
             </tr>
           );
         })}
