@@ -19,8 +19,8 @@ import { FEISHU_USERS } from '../data/mockData';
 
 const ISSUE_TYPES = ['使用问题', '设备质量问题'];
 const WO_STATUS_LIST = ['待分派', '待接单', '待上门', '现场处理中', '已关单', '已取消'];
-const QI_STATUS_LIST = ['待处理', '处理中', '已关闭'];
-const QI_SOURCES = ['扫码上报', '手动录入', '工单转入'];
+const QI_STATUS_LIST = ['待处理', '处理中', '已远程关闭', '已转售后工单', '已关闭'];
+const QI_SOURCES = ['扫码上报', '手动录入', '系统告警', '问题平台上报'];
 const SEVERITIES = ['高', '中', '低'];
 
 const nowText = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -730,7 +730,7 @@ function IssueDetailDrawer({ id, state, dispatch, currentUser, canDo, onClose })
       chips={<>
         <StatusBadge status={qi.status} />
         <StatusBadge status={qi.severity || '中'} />
-        <Chip>{displayIssueType(qi)}</Chip>
+        <StatusBadge status={displayIssueType(qi)} />
         <span className="text-xs text-gray-500">预处理人：{qi.owner || '—'}</span>
       </>}>
       <Section title="当前可执行操作" bodyClassName="p-3">
@@ -754,8 +754,8 @@ function IssueDetailDrawer({ id, state, dispatch, currentUser, canDo, onClose })
       <DrawerSection title="基础信息">
         <DescList items={[
           ['问题编号', <span className="font-mono">{qi.id}</span>],
-          ['问题来源', qi.source],
-          ['问题类型', displayIssueType(qi)],
+          ['问题来源', qi.source ? <StatusBadge status={qi.source} /> : '—'],
+          ['问题类型', <StatusBadge status={displayIssueType(qi)} />],
           ['当前状态', <StatusBadge status={qi.status} />],
           ['严重程度', <StatusBadge status={qi.severity || '中'} />],
           ['问题来源阶段', qi.sourceStage || '在线运营'],
@@ -777,8 +777,10 @@ function IssueDetailDrawer({ id, state, dispatch, currentUser, canDo, onClose })
 
       <DrawerSection title="故障归因与处理">
         <DescList items={[
-          ['一级故障原因', qi.faultCause1],
-          ['二级故障原因', qi.faultCause2],
+          ['一级故障原因', qi.faultL1 ? <StatusBadge status={qi.faultL1} /> : '—'],
+          ['二级故障原因', qi.faultL2],
+          ['三级故障原因', qi.faultL3],
+          ['处理方案', qi.solution],
           ['预处理人', qi.owner],
           ['是否可远程关闭', qi.remoteClosable == null ? '—' : (qi.remoteClosable ? '是' : '否')],
           ['是否转售后工单', linked ? '是' : '否'],
@@ -876,8 +878,8 @@ function IssuesTab({ state, dispatch, currentUser, canDo }) {
           return (
             <tr key={qi.id} className="hover:bg-[#fafafa] transition-colors">
               <td className="px-3 py-2 font-mono text-gray-700 whitespace-nowrap">{qi.id}</td>
-              <td className="px-3 py-2 whitespace-nowrap"><Chip>{qi.source || '—'}</Chip></td>
-              <td className="px-3 py-2 whitespace-nowrap text-gray-600">{displayIssueType(qi)}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{qi.source ? <StatusBadge status={qi.source} /> : '—'}</td>
+              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={displayIssueType(qi)} /></td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{project?.client || '—'}</td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{project?.name || '—'}</td>
               <td className="px-3 py-2 font-mono text-gray-800 whitespace-nowrap">{qi.deviceSN || '—'}</td>
@@ -885,8 +887,8 @@ function IssuesTab({ state, dispatch, currentUser, canDo }) {
               <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{qi.reportTime || '—'}</td>
               <td className="px-3 py-2 text-gray-600 max-w-[200px]"><div className="truncate" title={qi.issueDesc}>{qi.issueDesc || '—'}</div></td>
               <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={qi.status} /></td>
-              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{qi.faultCause1 || '—'}</td>
-              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{qi.faultCause2 || '—'}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{qi.faultL1 ? <StatusBadge status={qi.faultL1} /> : '—'}</td>
+              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{qi.faultL2 || '—'}</td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{qi.owner || '—'}</td>
               <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{qi.remoteClosable == null ? '—' : (qi.remoteClosable ? '是' : '否')}</td>
               <td className="px-3 py-2 whitespace-nowrap">{hasWO(qi) ? <span className="text-gray-700">是</span> : <span className="text-gray-400">否</span>}</td>
@@ -905,6 +907,16 @@ function IssuesTab({ state, dispatch, currentUser, canDo }) {
 }
 
 /* ═════════════════════════ 换件记录 Tab ═════════════════════════ */
+// 旧件状态展示映射：只用 待返修 / 返修中 / 已返修 / 已停用（报废等一律归为已停用）。
+function displayOldPartStatus(raw) {
+  const s = String(raw || '');
+  if (!s || s === '—') return '—';
+  if (s.includes('报废') || s.includes('停用')) return '已停用';
+  if (s.includes('已返修')) return '已返修';
+  if (s.includes('返修中') || s.includes('维修中')) return '返修中';
+  return '待返修'; // 待返修 / 待评估 等待处理态
+}
+
 // 换件记录只读：源自售后工单的换件动作 + ERP 领料 / 出库申请，不做独立库存流程。
 function replacementView(state, mr) {
   const wo = allWorkOrders(state).find((w) => w.id === mr.workOrderId) || null;
@@ -918,7 +930,7 @@ function replacementView(state, mr) {
     location: locationOfDevice(state, device),
     coreType: removed?.category || added?.category || '—',
     oldSN: removed?.sn || '—',
-    oldStatus: mr.removedDisposition || removed?.status || '—',
+    oldStatus: displayOldPartStatus(mr.removedDisposition || removed?.status),
     newSN: added?.sn || '—',
     newSource: added?.supplier || '—',
   };
@@ -1016,7 +1028,7 @@ function ReplacementDetailDrawer({ id, state, onClose }) {
         <DescList items={[
           ['核心部件类型', v.coreType],
           ['旧件 SN', v.oldSN],
-          ['旧件状态', v.oldStatus],
+          ['旧件状态', v.oldStatus && v.oldStatus !== '—' ? <StatusBadge status={v.oldStatus} /> : '—'],
           ['新件 SN', v.newSN],
           ['新件来源', v.newSource],
           ['ERP 领料单号 / 出库申请单号', mr.erpPickingNo],
