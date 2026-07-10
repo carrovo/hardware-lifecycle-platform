@@ -594,8 +594,7 @@ function ProductionPlanTab() {
   const paged = usePaged(filtered, 10);
 
   const stop = (e) => e.stopPropagation();
-  const NODE_KEY = { 来料准备: 'materialPrep', 整机装配: 'assembly', 质量测试: 'quality', 整机入库: 'warehouse' };
-  const enterCurrentNode = (plan) => navigate(`/production-plans/${plan.id}?node=${NODE_KEY[plan.currentNode] || 'materialPrep'}`);
+  // 生产计划已取消唯一当前节点，列表不再提供"进入当前节点"操作。
   const delayedCount = enriched.filter((p) => p.delayed).length;
 
   return (
@@ -651,7 +650,6 @@ function ProductionPlanTab() {
             <td className="px-3 py-2 text-xs whitespace-nowrap" onClick={stop}>
               <div className="flex items-center gap-x-3">
                 <LinkAction onClick={() => navigate(`/production-plans/${plan.id}`)}>查看</LinkAction>
-                <LinkAction onClick={() => enterCurrentNode(plan)}>进入当前节点</LinkAction>
                 <LinkAction onClick={() => setEditPlan(plan)}>编辑</LinkAction>
                 {!['已完成', '已作废'].includes(plan.status) && (
                   <LinkAction onClick={() => setPlaceholder({ title: '作废生产计划', text: `作废「${plan.name || plan.id}」的入口已保留，后续接入审批流程。` })}>作废</LinkAction>

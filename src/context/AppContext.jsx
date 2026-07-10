@@ -23,6 +23,7 @@ import {
   workflowProductionPlans as initWorkflowProductionPlans,
   locations as initLocations,
   qualityIssues as initQualityIssues,
+  moduleInstances as initModuleInstances,
   FEISHU_USERS,
 } from '../data/mockData';
 
@@ -51,6 +52,7 @@ const initialState = {
   workflowProductionPlans: initWorkflowProductionPlans,
   locations: initLocations,
   qualityIssues: initQualityIssues,
+  moduleInstances: initModuleInstances,
   currentUser: '张三',
   currentUserId: 'u1',
 };

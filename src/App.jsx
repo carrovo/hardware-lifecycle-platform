@@ -14,6 +14,7 @@ import DeviceDetail from './pages/DeviceDetail';
 import AfterSalesPage from './pages/AfterSalesPage';
 import SystemPage from './pages/SystemPage';
 import MobileReportPage from './pages/MobileReportPage';
+import MobileAssemblyPage from './pages/MobileAssemblyPage';
 
 function RequireAuth({ children }) {
   const location = useLocation();
@@ -67,6 +68,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/mobile/report" element={<MobileReportPage />} />
+          <Route path="/mobile/assembly" element={<MobileAssemblyPage />} />
             <Route path="/*" element={<RequireAuth><AppRoutes /></RequireAuth>} />
           </Routes>
         </AppProvider>

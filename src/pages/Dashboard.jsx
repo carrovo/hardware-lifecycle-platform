@@ -33,7 +33,7 @@ const STATUS_HEX = {
 const sHex = (s) => STATUS_HEX[s] || C.gray;
 const LIFE_HEX = {
   生产中: C.blue, 待入库: '#cbd5e1', 待交付: C.gray, 交付中: C.purple, 在线运营: C.green,
-  维修中: C.amber, 售后中: C.red, 已停用: C.slate, 已报废: '#475569', 退役: C.slate,
+  维修中: C.amber, 售后中: C.red, 已停用: C.slate,
 };
 
 const WO_CLOSED = ['已关闭', '已关单', '已作废', '已取消'];
@@ -106,7 +106,7 @@ function OverviewBoard({ state }) {
   const delayed = deliveryPlans.filter((p) => deliveryPlanStatus(p) === '已延期').length;
 
   // 生命周期阶段分布（饼图）
-  const lifeOrder = ['生产中', '待入库', '待交付', '交付中', '在线运营', '维修中', '售后中', '已停用', '已报废'];
+  const lifeOrder = ['生产中', '待入库', '待交付', '交付中', '在线运营', '维修中', '售后中', '已停用'];
   const lifeData = lifeOrder
     .map((k) => ({ name: k, value: devices.filter((d) => deviceLifecycleStatus(d) === k).length, color: LIFE_HEX[k] || C.gray }))
     .filter((d) => d.value > 0);

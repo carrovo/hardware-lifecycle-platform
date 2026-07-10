@@ -122,8 +122,8 @@ export function acceptStageStatus(record) {
 // 生命周期状态只用：生产中 / 待入库 / 待交付 / 交付中 / 在线运营 / 维修中 / 已作废
 export function deviceLifecycleStatus(device) {
   const s = device.status;
-  if (s === '已报废') return '已报废';
-  if (['已停用', '退役', '已作废'].includes(s)) return '已停用';
+  // 平台不做退役/报废流程：退役 / 已报废 / 已作废 统一归为已停用
+  if (['已报废', '报废', '退役', '已退役', '已作废', '已停用'].includes(s)) return '已停用';
   if (s === '售后中') return '售后中';
   if (['维修中'].includes(s)) return '维修中';
   if (s === '在线运营') return '在线运营';
@@ -172,9 +172,23 @@ export function assemblyTemplateFor(deviceType, moduleTypes = []) {
   });
 }
 
-// 某设备的模块绑定明细：基于其型号装配模板 + 已绑定模块实例 + 换件记录，逐槽位给出绑定状态。
+// 模块 / 核心部件「平台占用状态」（区别于 ERP 状态）。仅保留：
+// 在库可用 / 已绑定设备 / 绑定异常 / 已更换 / 旧件待返修 / 已返修
+const PLATFORM_STATUS_MAP = {
+  在库可用: '在库可用', 已锁定生产计划: '在库可用', 已装配: '已绑定设备', 已绑定设备: '已绑定设备',
+  绑定异常: '绑定异常', 已更换: '已更换', 旧件待返修: '旧件待返修', 维修中: '旧件待返修',
+  已返修: '已返修', 已报废: '已返修', 退货换货: '绑定异常',
+};
+export function platformOccupancyStatus(mi) {
+  if (!mi) return '在库可用';
+  if (mi.platformStatus) return mi.platformStatus;
+  return PLATFORM_STATUS_MAP[mi.status] || '在库可用';
+}
+
+// 某设备的模块绑定明细：基于其型号装配模板 + 已绑定模块实例 + 换件记录，逐槽位给出绑定状态与
+// 平台占用状态 + ERP/物料信息（供生产计划单机记录、设备详情、台账复用）。
 // 绑定状态：待绑定 / 已绑定 / 异常 / 已更换
-export function deviceModuleBindings(device, deviceTypes = [], moduleTypes = [], moduleInstances = [], moduleReplacements = []) {
+export function deviceModuleBindings(device, deviceTypes = [], moduleTypes = [], moduleInstances = [], moduleReplacements = [], materialBatches = []) {
   if (!device) return [];
   const dt = deviceTypes.find((t) => t.id === device.deviceTypeId);
   const template = assemblyTemplateFor(dt, moduleTypes);
@@ -182,22 +196,31 @@ export function deviceModuleBindings(device, deviceTypes = [], moduleTypes = [],
   const replacedSlots = new Set(moduleReplacements.filter((r) => r.deviceId === device.id).map((r) => r.slotName));
   const used = new Set();
   return template.map((slot) => {
-    const inst = bound.find((mi) => mi.moduleTypeId === slot.moduleTypeId && !used.has(mi.id));
+    const inst = bound.find((mi) => (mi.boundSlot ? mi.boundSlot === slot.slotName : mi.moduleTypeId === slot.moduleTypeId) && !used.has(mi.id));
     if (inst) used.add(inst.id);
+    const platform = inst ? platformOccupancyStatus(inst) : '在库可用';
     let bindStatus;
     if (replacedSlots.has(slot.slotName)) bindStatus = '已更换';
+    else if (inst && platform === '绑定异常') bindStatus = '异常';
     else if (inst) bindStatus = '已绑定';
     else bindStatus = '待绑定';
+    const batch = inst ? materialBatches.find((b) => b.id === inst.sourceBatchId) : null;
     return {
       slotName: slot.slotName,
       corePartType: slot.corePartType,
       moduleTypeName: slot.moduleTypeName,
       moduleSN: inst?.sn || '—',
       moduleId: inst?.id || null,
+      moduleInstance: inst || null,
+      platformStatus: bindStatus === '待绑定' ? '—' : platform,
+      materialCode: inst?.materialCode || (batch ? batch.id : '—'),
+      materialName: inst?.materialName || (batch ? `${batch.category} ${batch.model}` : '—'),
+      batchNo: inst?.batchNo || batch?.batchNo || '—',
+      erpStockStatus: inst?.erpStockStatus || (batch ? '合格可用' : '—'),
       bindStatus,
-      bindTime: inst || bindStatus === '已更换' ? (device.assemblyTime || '—') : '—',
-      operator: inst || bindStatus === '已更换' ? (device.assembler || '—') : '—',
-      exception: bindStatus === '待绑定' ? '未绑定' : '',
+      bindTime: inst?.bindTime || (inst || bindStatus === '已更换' ? (device.assemblyTime || '—') : '—'),
+      operator: inst?.binder || (inst || bindStatus === '已更换' ? (device.assembler || '—') : '—'),
+      exception: bindStatus === '异常' ? (inst?.exceptionNote || '绑定异常') : (bindStatus === '待绑定' ? '未绑定' : ''),
     };
   });
 }
