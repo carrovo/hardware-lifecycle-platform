@@ -81,7 +81,6 @@ const ACTION_LABELS = {
   void_project: '作废项目',
   manage_locations: '点位管理',
   add_production_plan: '新增生产计划',
-  add_retirement: '设备退役',
   add_device_type: '新增整机类型',
   add_module_type: '新增模块类型',
   edit_device_type: '编辑整机类型',

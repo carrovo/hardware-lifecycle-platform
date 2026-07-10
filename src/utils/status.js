@@ -145,10 +145,10 @@ const DEVICE_NODE_MAP = {
   待入库: '整机入库', 已入库: '整机入库', 待分配项目: '整机入库',
   已分配项目: '出厂检验', 出厂检验中: '出厂检验',
   现场安装调试中: '现场安装调试', 客户验收中: '客户验收', 在线运营: '在线运营',
-  售后中: '在线运营', 已停用: '退役',
+  售后中: '在线运营', 已停用: '已停用',
 };
 export function deviceBusinessNode(device) {
-  if (['退役', '已作废', '已报废'].includes(device.status)) return '退役';
+  if (['退役', '已退役', '已作废', '已报废', '报废', '已停用'].includes(device.status)) return '已停用';
   return DEVICE_NODE_MAP[device.status] || '整机装配';
 }
 
