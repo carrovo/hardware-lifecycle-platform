@@ -14,15 +14,15 @@ const genId = (prefix) => `${prefix}-${Date.now().toString().slice(-6)}`;
 
 // 交付异常字段容错读取：并行任务补 state.deliveryExceptions，字段名可能有出入，逐个回退。
 const EX_KEYS = {
-  sourceOrder: ['sourceOrderId', 'sourceSubOrderId', 'sourceWorkOrderId', 'sourceOrder'],
+  sourceOrder: ['subOrderId', 'sourceOrderId', 'sourceSubOrderId', 'sourceWorkOrderId', 'sourceOrder'],
   node: ['sourceNode', 'sourceStage', 'node'],
   sn: ['deviceSN', 'deviceSn', 'sn'],
   type: ['exceptionType', 'type'],
   desc: ['description', 'desc', 'exceptionDesc'],
-  occurredAt: ['occurredAt', 'occurTime', 'occurredTime', 'happenedAt'],
-  recordedAt: ['recordedAt', 'recordTime', 'recordedTime', 'createdAt'],
+  occurredAt: ['occurTime', 'occurredAt', 'occurredTime', 'happenedAt'],
+  recordedAt: ['recordTime', 'recordedAt', 'recordedTime', 'createdAt'],
   recorder: ['recorder', 'recordedBy', 'reporterName', 'reporter', 'operator'],
-  submittedAt: ['submittedAt', 'submitTime', 'submittedToSupportAt'],
+  submittedAt: ['submitCSTime', 'submittedAt', 'submitTime', 'submittedToSupportAt'],
 };
 function exField(e, keys) {
   for (const k of keys) {
@@ -78,7 +78,7 @@ function ExProcessLogs({ logs }) {
 // 交付异常详情（Modal）：全字段 + 附件 + 处理日志。
 function ExceptionDetail({ ex }) {
   const submittedAt = exField(ex, EX_KEYS.submittedAt);
-  const submitted = ex.submittedToSupport ?? ex.submitted ?? (!!submittedAt || !!ex.linkedIssueId);
+  const submitted = ex.submittedToCS ?? ex.submittedToSupport ?? ex.submitted ?? (!!submittedAt || !!ex.linkedIssueId);
   const attList = ex.attachments || ex.files || [];
   return (
     <div className="space-y-4">
@@ -607,7 +607,7 @@ export default function DeliveryPlanDetail() {
         >
           {exPaged.pageItems.map((e) => {
             const submittedAt = exField(e, EX_KEYS.submittedAt);
-            const submitted = e.submittedToSupport ?? e.submitted ?? (!!submittedAt || !!e.linkedIssueId);
+            const submitted = e.submittedToCS ?? e.submittedToSupport ?? e.submitted ?? (!!submittedAt || !!e.linkedIssueId);
             const canSubmit = !submitted && !['已转售后工单', '已关闭', '已远程解决'].includes(e.status);
             return (
               <tr key={e.id} className="hover:bg-[#fafafa]">

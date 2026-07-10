@@ -24,6 +24,7 @@ import {
   locations as initLocations,
   qualityIssues as initQualityIssues,
   moduleInstances as initModuleInstances,
+  deliveryExceptions as initDeliveryExceptions,
   FEISHU_USERS,
 } from '../data/mockData';
 
@@ -53,6 +54,7 @@ const initialState = {
   locations: initLocations,
   qualityIssues: initQualityIssues,
   moduleInstances: initModuleInstances,
+  deliveryExceptions: initDeliveryExceptions,
   currentUser: '张三',
   currentUserId: 'u1',
 };
