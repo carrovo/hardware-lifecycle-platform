@@ -247,49 +247,110 @@ const TEMPLATE_PREVIEWS = [
   '【终测通过】SN-DEV-018 已通过 OQT 终测，可分配项目。@蔡八（项目负责人）',
 ];
 
-/* ─────── 状态字典（tone 与 StatusBadge 实际渲染一致） ─────── */
-const TONE_META = {
-  neutral: { label: '中性', dot: 'bg-gray-400' },
-  info: { label: '进行中', dot: 'bg-blue-500' },
-  success: { label: '成功', dot: 'bg-green-500' },
-  warning: { label: '警告', dot: 'bg-amber-500' },
-  danger: { label: '异常', dot: 'bg-red-500' },
-  purple: { label: '强调', dot: 'bg-purple-500' },
-};
+/* ─────── 状态字典（颜色统一走 StatusBadge，本表只存枚举 / 语义 / 终态口径） ───────
+   kind: 'status' → 有生命周期终态；'value' → 纯枚举取值（终态不适用，展示 —）。
+   items 元组：[状态名称, 状态说明, 是否终态?, 是否启用?(缺省 true)]。 */
 const STATUS_DICT = [
-  { object: '设备生命周期', items: [
-    ['生产中', 'info', '整机在生产 / 测试流程中'],
-    ['待入库', 'neutral', '已完成生产，等待入库'],
-    ['待交付', 'neutral', '已入库并分配项目，等待交付'],
-    ['交付中', 'info', '处于出厂 / 安装 / 验收交付过程'],
-    ['在线运营', 'success', '已验收并在点位在线运营'],
-    ['维修中', 'neutral', '因故障返厂 / 现场维修'],
-    ['已作废', 'neutral', '设备退役 / 报废，终态'],
+  { object: '生产计划', kind: 'status', items: [
+    ['待排产', '生产计划已创建，等待排产', false],
+    ['已排产', '已排入生产队列', false],
+    ['生产中', '整机在生产 / 测试流程中', false],
+    ['已完成', '生产计划全部完工，终态', true],
+    ['已取消', '计划作废，终态', true],
   ] },
-  { object: '在线状态', items: [
-    ['在线', 'neutral', '设备联网且心跳正常'],
-    ['离线', 'neutral', '曾接入但当前失联'],
-    ['未接入', 'neutral', '尚未接入监控平台'],
-    ['未知', 'neutral', '无有效心跳数据'],
+  { object: '生产设备', kind: 'status', items: [
+    ['生产中', '整机在生产 / 测试流程中', false],
+    ['待交付', '已入库并分配项目，等待交付', false],
+    ['交付中', '处于出厂 / 安装 / 验收交付过程', false],
+    ['在线运营', '已验收并在点位在线运营', false],
+    ['售后中', '因故障进入售后处理', false],
+    ['已停用', '设备停用，终态', true],
   ] },
-  { object: '售后工单', items: [
-    ['待分派', 'warning', '工单已创建，待分派处理人'],
-    ['待接单', 'neutral', '已分派，待工程师接单'],
-    ['待上门', 'neutral', '已接单，待现场上门'],
-    ['现场处理中', 'info', '工程师现场处理中'],
-    ['已关单', 'success', '问题已解决并关单'],
-    ['已取消', 'neutral', '工单取消，终态'],
+  { object: '模块·核心部件', kind: 'status', items: [
+    ['在库可用', '在库且可绑定使用', false],
+    ['已绑定设备', '已绑定到整机设备', false],
+    ['绑定异常', '绑定关系校验异常', false],
+    ['已更换', '已从设备上更换下线，终态', true],
+    ['旧件待返修', '换下旧件待返修', false],
+    ['已返修', '旧件返修完成可复用', false],
   ] },
-  { object: '交付计划', items: [
-    ['未开始', 'neutral', '交付计划尚未启动'],
-    ['交付中', 'info', '交付执行中'],
-    ['已验收', 'success', '客户验收通过'],
-    ['已延期', 'danger', '超出计划验收时间未完成'],
+  { object: 'ERP 同步', kind: 'status', items: [
+    ['已同步', '与 ERP 数据一致', false],
+    ['同步中', '正在与 ERP 同步', false],
+    ['同步异常', '同步失败 / 数据冲突', false],
+    ['待同步', '待触发 ERP 同步', false],
+    ['只读同步', '仅从 ERP 只读拉取', false],
   ] },
-  { object: '质量问题', items: [
-    ['待处理', 'warning', '问题已上报，待处理'],
-    ['处理中', 'info', '问题处理中'],
-    ['已关闭', 'neutral', '问题已闭环，终态'],
+  { object: '交付计划', kind: 'status', items: [
+    ['未开始', '交付计划尚未启动', false],
+    ['交付中', '交付执行中', false],
+    ['已验收', '客户验收通过，终态', true],
+    ['已延期', '超出计划验收时间未完成', false],
+  ] },
+  { object: '交付子工单', kind: 'status', items: [
+    ['未开始', '子工单尚未启动', false],
+    ['待分派', '待分派处理人', false],
+    ['待接单', '已分派，待工程师接单', false],
+    ['待上门', '已接单，待现场上门', false],
+    ['进行中', '现场执行中', false],
+    ['阻塞', '现场条件不满足被阻塞', false],
+    ['已完成', '子工单完成，终态', true],
+  ] },
+  { object: '问题池', kind: 'status', items: [
+    ['待处理', '问题已上报，待处理', false],
+    ['处理中', '问题远程处理中', false],
+    ['已远程关闭', '远程闭环处理完成，终态', true],
+    ['已转售后工单', '已转生成售后工单，终态', true],
+    ['已关闭', '问题闭环，终态', true],
+  ] },
+  { object: '售后工单', kind: 'status', items: [
+    ['待分派', '工单已创建，待分派处理人', false],
+    ['待接单', '已分派，待工程师接单', false],
+    ['待上门', '已接单，待现场上门', false],
+    ['现场处理中', '工程师现场处理中', false],
+    ['已关单', '问题已解决并关单，终态', true],
+    ['已取消', '工单取消，终态', true],
+  ] },
+  { object: '换件记录', kind: 'status', items: [
+    ['已换件', '新件已完成更换上线，终态', true],
+    ['旧件待返修', '换下旧件待返修', false],
+    ['已返修', '旧件返修完成可复用，终态', true],
+  ] },
+  { object: '健康告警', kind: 'status', items: [
+    ['待处理', '告警已产生，待处理', false],
+    ['已生成工单', '已据告警生成维修工单', false],
+    ['已解决', '告警已恢复 / 处理完成，终态', true],
+    ['已忽略', '人工确认忽略，终态', true],
+  ] },
+  { object: 'ERP 单据类型', kind: 'value', items: [
+    ['ERP 项目单', 'ERP 项目主单据'],
+    ['生产订单', 'ERP 生产订单'],
+    ['ERP 工单', 'ERP 生产工单'],
+    ['采购单', '物料采购单'],
+    ['到货单', '供应商到货单'],
+    ['入库单', '仓库入库单'],
+    ['检验单', '来料 / 成品检验单'],
+    ['生产领料单', '生产领料出库单'],
+    ['销售出库单', '销售出库单'],
+    ['出库申请单', '出库申请单'],
+  ] },
+  { object: '问题来源', kind: 'value', items: [
+    ['扫码上报', '现场扫码上报'],
+    ['手动录入', '人工手动录入'],
+    ['系统告警', '健康监控系统告警触发'],
+    ['问题平台上报', '外部问题平台同步上报'],
+  ] },
+  { object: '问题类型', kind: 'value', items: [
+    ['使用问题', '使用 / 操作类问题'],
+    ['设备质量问题', '设备硬件质量问题'],
+  ] },
+  { object: '故障原因', kind: 'value', items: [
+    ['硬件', '硬件类故障'],
+    ['软件', '软件类故障'],
+    ['生产', '生产工艺类故障'],
+    ['结构', '结构 / 机械类故障'],
+    ['使用', '使用 / 操作不当'],
+    ['其他', '其他未分类原因'],
   ] },
 ];
 
@@ -849,28 +910,45 @@ function NotificationsTab() {
 }
 
 /* ═════════ 9. 状态字典 ═════════ */
+// 各业务对象的状态枚举 / 取值统一在此维护；「状态颜色」列直接用 StatusBadge 走全站统一配色。
 function StatusesTab() {
   return (
-    <>
-      {STATUS_DICT.map((group) => (
-        <Section key={group.object} title={group.object} bodyClassName="p-0">
-          <Table head={['状态值', '语义色', '说明']}>
-            {group.items.map(([status, tone, desc]) => (
-              <tr key={status} className="hover:bg-[#fafafa]">
-                <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={status} /></td>
-                <td className="px-3 py-2 whitespace-nowrap">
-                  <span className="inline-flex items-center gap-1.5 text-gray-600 text-xs">
-                    <span className={`w-2 h-2 rounded-full ${TONE_META[tone].dot}`} />
-                    {TONE_META[tone].label}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-gray-600">{desc}</td>
-              </tr>
-            ))}
-          </Table>
-        </Section>
-      ))}
-    </>
+    <Section
+      title="状态字典"
+      subtitle="集中维护各业务对象的状态枚举、语义色与终态口径，颜色统一由 StatusBadge 渲染"
+      bodyClassName="p-0"
+      right={<Btn size="sm" disabled title="原型占位，暂不支持新增">新增状态</Btn>}
+    >
+      <Table head={['对象类型', '状态名称', '状态说明', '状态颜色', '是否终态', '是否启用', '最近更新时间', '操作']}>
+        {STATUS_DICT.flatMap((group) =>
+          group.items.map(([name, desc, terminal, enabled = true], idx) => (
+            <tr
+              key={`${group.object}-${name}`}
+              className={`hover:bg-[#fafafa] ${idx === 0 ? 'border-t-2 border-[#ececec]' : 'border-t border-[#f5f5f5]'}`}
+            >
+              <td className="px-3 py-2 whitespace-nowrap align-top">
+                {idx === 0 && <span className="font-medium text-gray-800">{group.object}</span>}
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap text-gray-700">{name}</td>
+              <td className="px-3 py-2 text-gray-600">{desc}</td>
+              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={name} /></td>
+              <td className="px-3 py-2 whitespace-nowrap">
+                {group.kind === 'value'
+                  ? <span className="text-gray-300">—</span>
+                  : terminal
+                    ? <Chip>终态</Chip>
+                    : <span className="text-gray-400 text-xs">否</span>}
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap"><EnabledBadge on={enabled} /></td>
+              <td className="px-3 py-2 whitespace-nowrap text-gray-500 text-xs">{TODAY}</td>
+              <td className="px-3 py-2 whitespace-nowrap">
+                <LinkAction>编辑</LinkAction>
+              </td>
+            </tr>
+          )),
+        )}
+      </Table>
+    </Section>
   );
 }
 
