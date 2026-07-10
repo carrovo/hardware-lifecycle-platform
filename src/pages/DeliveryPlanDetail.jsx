@@ -5,8 +5,115 @@ import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
 import OperationLog from '../components/OperationLog';
 import { Pagination, usePaged } from '../components/Pagination';
-import { Page, PageHeader, Section, DescList, Table, StatCard, StatGrid, Chip, Btn, LinkAction, EmptyState } from '../components/ui';
+import { Page, PageHeader, Section, DescList, Table, StatCard, StatGrid, Chip, Btn, LinkAction, EmptyState, Stepper } from '../components/ui';
 import { isPass, deliveryPlanStatus, TODAY } from '../utils/status';
+
+// 原型占位工具（不引入外部依赖）。
+const nowText = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
+const genId = (prefix) => `${prefix}-${Date.now().toString().slice(-6)}`;
+
+// 交付异常字段容错读取：并行任务补 state.deliveryExceptions，字段名可能有出入，逐个回退。
+const EX_KEYS = {
+  sourceOrder: ['sourceOrderId', 'sourceSubOrderId', 'sourceWorkOrderId', 'sourceOrder'],
+  node: ['sourceNode', 'sourceStage', 'node'],
+  sn: ['deviceSN', 'deviceSn', 'sn'],
+  type: ['exceptionType', 'type'],
+  desc: ['description', 'desc', 'exceptionDesc'],
+  occurredAt: ['occurredAt', 'occurTime', 'occurredTime', 'happenedAt'],
+  recordedAt: ['recordedAt', 'recordTime', 'recordedTime', 'createdAt'],
+  recorder: ['recorder', 'recordedBy', 'reporterName', 'reporter', 'operator'],
+  submittedAt: ['submittedAt', 'submitTime', 'submittedToSupportAt'],
+};
+function exField(e, keys) {
+  for (const k of keys) {
+    const v = e[k];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return null;
+}
+
+// 交付流程节点定义（含设备绑定）。智魔方多一个「前置准备」节点。
+function deliveryStepDefs(isZhimofang) {
+  const base = isZhimofang
+    ? ['计划创建', '设备绑定', '前置准备', '设备部署', '现场安装调试', '客户验收', '交付完成']
+    : ['计划创建', '设备绑定', '设备部署', '现场安装调试', '客户验收', '交付完成'];
+  return base.map((s) => ({ key: s, label: s }));
+}
+// 当前节点推导：优先按记录 / 计划状态派生，回退 plan.currentNode。
+function deliveryStepCurrent(plan, recs, planStatus, boundCount) {
+  const has = (k) => (recs[k] || []).length > 0;
+  if (planStatus === '已验收') return '交付完成';
+  if (has('customerAccept') || plan.currentNode === '客户验收') return '客户验收';
+  if (has('siteInstall') || plan.currentNode === '现场安装调试') return '现场安装调试';
+  if (has('factoryInspection') || plan.currentNode === '出厂检验') return '设备部署';
+  if (has('binding') || boundCount) return '设备绑定';
+  return '计划创建';
+}
+
+// 交付异常处理日志时间线（processLogs：{ time, operator, fromStatus, toStatus, notes }）。
+function ExProcessLogs({ logs }) {
+  if (!logs || logs.length === 0) return <div className="text-xs text-gray-400">暂无处理日志</div>;
+  return (
+    <ol className="space-y-3">
+      {logs.map((log, i) => (
+        <li key={i} className="flex gap-3">
+          <div className="flex flex-col items-center pt-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" />
+            {i < logs.length - 1 && <span className="w-px flex-1 bg-[#ececec] mt-1" />}
+          </div>
+          <div className="pb-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-400">
+              <span>{log.time ?? '—'}</span>
+              {log.operator && <span className="font-medium text-gray-600">{log.operator}</span>}
+              {log.fromStatus && <><StatusBadge status={log.fromStatus} /><span className="text-gray-300">→</span><StatusBadge status={log.toStatus} /></>}
+            </div>
+            {log.notes && <div className="text-[13px] text-gray-700 mt-1">{log.notes}</div>}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// 交付异常详情（Modal）：全字段 + 附件 + 处理日志。
+function ExceptionDetail({ ex }) {
+  const submittedAt = exField(ex, EX_KEYS.submittedAt);
+  const submitted = ex.submittedToSupport ?? ex.submitted ?? (!!submittedAt || !!ex.linkedIssueId);
+  const attList = ex.attachments || ex.files || [];
+  return (
+    <div className="space-y-4">
+      <DescList
+        cols={2}
+        items={[
+          ['异常编号', ex.id],
+          ['当前处理状态', <StatusBadge status={ex.status} />],
+          ['来源交付子工单', exField(ex, EX_KEYS.sourceOrder)],
+          ['来源节点', exField(ex, EX_KEYS.node)],
+          ['关联设备 SN', exField(ex, EX_KEYS.sn)],
+          ['异常类型', exField(ex, EX_KEYS.type) ? <Chip tone="outline">{exField(ex, EX_KEYS.type)}</Chip> : '—'],
+          ['异常发生时间', exField(ex, EX_KEYS.occurredAt)],
+          ['异常记录时间', exField(ex, EX_KEYS.recordedAt)],
+          ['记录人', exField(ex, EX_KEYS.recorder)],
+          ['是否提交技术客服', submitted ? '是' : '否'],
+          ['提交技术客服时间', submittedAt],
+          ['关联问题编号', ex.linkedIssueId ? <Link to="/after-sales?tab=issues" className="ui-link font-mono text-xs">{ex.linkedIssueId}</Link> : '—'],
+          ['关联售后工单号', ex.linkedWorkOrderId ? <Link to="/after-sales?tab=orders" className="ui-link font-mono text-xs">{ex.linkedWorkOrderId}</Link> : '—'],
+          ['异常描述', exField(ex, EX_KEYS.desc)],
+        ]}
+      />
+      <div>
+        <div className="text-xs text-gray-400 mb-1.5">附件</div>
+        {attList.length
+          ? <div className="flex flex-wrap gap-2">{attList.map((a, i) => <Chip key={i} tone="outline">{typeof a === 'string' ? a : (a.name || a.file || a.fileName || '附件')}</Chip>)}</div>
+          : <div className="text-xs text-gray-400">暂无附件</div>}
+      </div>
+      <div>
+        <div className="text-xs text-gray-400 mb-1.5">处理日志</div>
+        <ExProcessLogs logs={ex.processLogs || ex.logs || []} />
+      </div>
+    </div>
+  );
+}
 
 // 交付计划详情（只读追溯视图）
 // 分区：交付基础信息 / 设备列表 / 交付子工单（前置准备 + 设备部署两组）/
@@ -76,7 +183,7 @@ function PreOrderDetail({ order }) {
   );
 }
 
-function DeployOrderDetail({ order }) {
+function DeployOrderDetail({ order, onSubmitPreprocess }) {
   const o = order;
   const acceptBadge = o.acceptResult === 'Pass' || o.acceptResult === 'NG' ? <StatusBadge status={o.acceptResult} /> : '—';
   return (
@@ -108,10 +215,25 @@ function DeployOrderDetail({ order }) {
       />
       <div className={`rounded-lg border px-3 py-2.5 text-xs ${o.wo || o.exception ? 'bg-amber-50 border-amber-100 text-amber-700' : 'bg-gray-50 border-[#eee] text-gray-500'}`}>
         {o.wo
-          ? <>已绑定售后工单 <Link to="/after-sales?tab=orders" className="ui-link font-medium">{o.wo.id}</Link>。交付异常时生成售后工单并绑定原交付子工单（流程分支，非独立菜单）。</>
+          ? <>已关联售后工单 <Link to="/after-sales?tab=orders" className="ui-link font-medium">{o.wo.id}</Link>（只读追溯）。售后工单由问题池经技术客服预处理后生成，交付子工单不直接转售后。</>
           : o.exception
-            ? <>存在交付异常，可生成售后工单并绑定本交付子工单。<Link to="/after-sales?tab=orders" className="ui-link">前往售后工单</Link>。交付异常转售后为流程分支，非独立菜单。</>
+            ? <>存在交付异常。交付侧阻塞（物流 / 现场条件 / 水电 / 客户未准备 / 施工未完成）在本子工单内处理；设备 / 软件 / 使用 / 质量问题请「提交技术客服预处理」生成问题池记录，由技术客服预处理后再决定是否转售后。</>
             : '暂无交付异常。'}
+      </div>
+      <div className="rounded-lg border border-[#eee] bg-[#fafafa] px-3 py-2.5">
+        <div className="text-xs text-gray-500 mb-2">交付子工单操作（原型占位，多数为轻提示）</div>
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          <LinkAction onClick={() => alert('原型环境：分派 / 改派交付工程师')}>分派 · 改派交付工程师</LinkAction>
+          <LinkAction onClick={() => alert('原型环境：工程师接单')}>工程师接单</LinkAction>
+          <LinkAction onClick={() => alert('原型环境：记录上门 · 到场')}>记录上门 · 到场</LinkAction>
+          <LinkAction onClick={() => alert('原型环境：更新部署进度')}>更新部署进度</LinkAction>
+          <LinkAction onClick={() => alert('原型环境：上传交付资料')}>上传交付资料</LinkAction>
+          <LinkAction onClick={() => alert('原型环境：记录交付异常（写入「交付异常记录」区）')}>记录交付异常</LinkAction>
+          <LinkAction onClick={() => onSubmitPreprocess?.(o)}>提交技术客服预处理</LinkAction>
+          <LinkAction to="/after-sales?tab=issues">查看关联问题</LinkAction>
+          <LinkAction to="/after-sales?tab=orders">查看关联售后工单</LinkAction>
+          <LinkAction onClick={() => alert('原型环境：查看日志（见交付计划「操作日志」区）')}>查看日志</LinkAction>
+        </div>
       </div>
       <div className="text-xs text-gray-400">操作日志：见交付计划「操作日志」区（按设备 SN 追溯）。培训 / 验收字段与部分记录为原型占位，随 ERP / 现场系统接入补齐。</div>
     </div>
@@ -164,7 +286,7 @@ function DocDetail({ doc }) {
 
 export default function DeliveryPlanDetail() {
   const { id } = useParams();
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const [detail, setDetail] = useState(null);
 
   const plan = (state.deliveryPlans || []).find((p) => p.id === id);
@@ -190,6 +312,9 @@ export default function DeliveryPlanDetail() {
   const relatedWO = plan ? (state.workOrders || []).filter((w) => boundIds.includes(w.deviceId)) : [];
   const allWO = [...afterSales, ...relatedWO];
   const planLogs = plan ? (state.operationLogs || []).filter((l) => l.deliveryPlanId === plan.id || boundIds.includes(l.deviceId)) : [];
+  // 交付异常记录（并行任务补 state.deliveryExceptions）与该计划关联问题池记录。
+  const deliveryExceptions = plan ? (state.deliveryExceptions || []).filter((e) => e.deliveryPlanId === plan.id) : [];
+  const relatedIssues = plan ? (state.qualityIssues || []).filter((q) => q.deliveryPlanId === plan.id || boundIds.includes(q.deviceId)) : [];
 
   const preOrders = plan && isZhimofang ? [buildPreOrder(plan, recs)] : [];
   const deployOrders = boundDevices.map((d) => {
@@ -223,6 +348,36 @@ export default function DeliveryPlanDetail() {
   const deployPaged = usePaged(deployOrders, 8);
   const acceptPaged = usePaged(acceptRecs, 8);
   const woPaged = usePaged(allWO, 8);
+  const exPaged = usePaged(deliveryExceptions, 8);
+  const issuePaged = usePaged(relatedIssues, 8);
+
+  // 提交技术客服预处理：生成问题池记录并带入来源快照（原型占位 + 轻提示）。转售后只发生在问题池详情。
+  const submitPreprocess = (snap) => {
+    dispatch({
+      type: 'ADD_QUALITY_ISSUE',
+      payload: {
+        id: genId('QI'),
+        deviceId: snap.deviceId || null,
+        deviceSN: snap.deviceSN || '—',
+        projectId: plan?.projectId || null,
+        issueDesc: snap.desc || '交付环节提交技术客服预处理',
+        faultL1: '待业务补充', faultL2: '待业务补充', faultL3: '待业务补充',
+        status: '待预处理',
+        source: '交付异常',
+        sourceStage: snap.node || plan?.currentNode || '交付',
+        issueType: snap.type || '设备质量问题',
+        severity: snap.severity || '中',
+        owner: state.currentUser, reporterName: state.currentUser, reportTime: nowText(),
+        linkedWorkOrder: false,
+        deliveryPlanId: plan?.id || null,
+        sourceDeliveryOrderId: snap.orderId || null,
+        sourceDeliveryExceptionId: snap.exceptionId || null,
+        processLogs: [],
+      },
+    });
+    alert('已生成问题池记录，带入来源快照（来源交付子工单 / 来源节点 / 关联设备SN / 异常描述），等待技术客服预处理。转售后工单只发生在问题池详情、由技术客服预处理后触发。');
+    setDetail(null);
+  };
 
   if (!plan) {
     return (
@@ -234,6 +389,8 @@ export default function DeliveryPlanDetail() {
   }
 
   const planStatus = deliveryPlanStatus(plan);
+  const deliverySteps = deliveryStepDefs(isZhimofang);
+  const deliveryCurrentStep = deliveryStepCurrent(plan, recs, planStatus, boundIds.length);
   const overdue = !!plan.dueDate && plan.dueDate < TODAY && !['未开始', '已验收', '已作废'].includes(planStatus);
   const acceptedPass = acceptRecs.filter(isPass).length;
   const deployedCount = (recs.siteInstall || []).filter(isPass).length; // 现场安装调试完成（Pass）
@@ -287,6 +444,13 @@ export default function DeliveryPlanDetail() {
         <StatCard label="验收通过设备数" value={acceptedPass} tone="success" hint="客户验收通过（Pass）" />
         <StatCard label="未结售后工单数" value={openWO} tone={openWO ? 'warning' : 'default'} hint="关联未关闭交付/售后工单" />
       </StatGrid>
+
+      <Section
+        title="交付流程进度"
+        subtitle={`按项目类型（${project?.projectType || (isZhimofang ? '智魔方' : '通用')}）展示交付流程节点，含设备绑定。当前节点：${deliveryCurrentStep}`}
+      >
+        <Stepper steps={deliverySteps} current={deliveryCurrentStep} />
+      </Section>
 
       <Section title="交付基础信息">
         <DescList
@@ -383,7 +547,8 @@ export default function DeliveryPlanDetail() {
         </div>
 
         <div className="rounded-lg border border-[#eee] bg-[#fafafa] px-3 py-2.5 text-xs text-gray-500">
-          交付异常时生成售后工单并绑定原交付子工单（流程分支，非独立菜单）。可在子工单详情内查看 / 跳转
+          交付子工单不直接转售后工单。交付侧阻塞（物流 / 现场条件 / 水电 / 客户未准备 / 施工未完成）在子工单内处理；设备 / 软件 / 使用 / 质量问题「提交技术客服预处理」生成
+          <Link to="/after-sales?tab=issues" className="ui-link mx-1">问题池记录</Link>，由技术客服预处理后再触发转
           <Link to="/after-sales?tab=orders" className="ui-link mx-1">售后工单</Link>。
         </div>
       </Section>
@@ -431,6 +596,73 @@ export default function DeliveryPlanDetail() {
         </Table>
       </Section>
 
+      <Section title="交付异常记录" subtitle="交付过程中记录的异常（state.deliveryExceptions），按当前交付计划过滤。" bodyClassName="p-4 space-y-3">
+        <div className="rounded-lg border border-[#eee] bg-[#fafafa] px-3 py-2.5 text-xs text-gray-500">
+          交付侧阻塞（物流 / 现场条件 / 水电 / 客户未准备 / 施工未完成）留在交付子工单内处理；设备 / 软件 / 使用 / 质量问题提交技术客服预处理，生成问题池记录。
+        </div>
+        <Table
+          head={['异常编号', '来源交付子工单', '来源节点', '关联设备SN', '异常类型', '异常描述', '异常发生时间', '异常记录时间', '记录人', '当前处理状态', '是否提交技术客服', '提交技术客服时间', '关联问题编号', '关联售后工单号', '操作']}
+          empty="暂无交付异常记录"
+          footer={<Pagination page={exPaged.page} total={exPaged.total} totalPages={exPaged.totalPages} onChange={exPaged.setPage} />}
+        >
+          {exPaged.pageItems.map((e) => {
+            const submittedAt = exField(e, EX_KEYS.submittedAt);
+            const submitted = e.submittedToSupport ?? e.submitted ?? (!!submittedAt || !!e.linkedIssueId);
+            const canSubmit = !submitted && !['已转售后工单', '已关闭', '已远程解决'].includes(e.status);
+            return (
+              <tr key={e.id} className="hover:bg-[#fafafa]">
+                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-gray-700">{e.id}</td>
+                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-gray-600">{exField(e, EX_KEYS.sourceOrder) ?? '—'}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{exField(e, EX_KEYS.node) ?? '—'}</td>
+                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-gray-600">{exField(e, EX_KEYS.sn) ?? '—'}</td>
+                <td className="px-3 py-2 whitespace-nowrap"><Chip tone="outline">{exField(e, EX_KEYS.type) ?? '—'}</Chip></td>
+                <td className="px-3 py-2 text-xs text-gray-600 max-w-xs"><div className="truncate">{exField(e, EX_KEYS.desc) ?? '—'}</div></td>
+                <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{exField(e, EX_KEYS.occurredAt) ?? '—'}</td>
+                <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{exField(e, EX_KEYS.recordedAt) ?? '—'}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{exField(e, EX_KEYS.recorder) ?? '—'}</td>
+                <td className="px-3 py-2"><StatusBadge status={e.status} /></td>
+                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{submitted ? '是' : '否'}</td>
+                <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{submittedAt ?? '—'}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-xs">{e.linkedIssueId ? <LinkAction to="/after-sales?tab=issues">{e.linkedIssueId}</LinkAction> : <span className="text-gray-300">—</span>}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-xs">{e.linkedWorkOrderId ? <LinkAction to="/after-sales?tab=orders">{e.linkedWorkOrderId}</LinkAction> : <span className="text-gray-300">—</span>}</td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <LinkAction onClick={() => setDetail({ type: 'ex', ex: e })}>查看详情</LinkAction>
+                    {canSubmit && <LinkAction onClick={() => submitPreprocess({ deviceId: e.deviceId, deviceSN: exField(e, EX_KEYS.sn), node: exField(e, EX_KEYS.node), desc: exField(e, EX_KEYS.desc), type: exField(e, EX_KEYS.type), exceptionId: e.id })}>提交技术客服预处理</LinkAction>}
+                    {e.linkedIssueId && <LinkAction to="/after-sales?tab=issues">查看关联问题</LinkAction>}
+                    {e.linkedWorkOrderId && <LinkAction to="/after-sales?tab=orders">查看关联售后工单</LinkAction>}
+                    {e.status !== '已关闭' && <LinkAction onClick={() => alert('原型环境：关闭异常（写入状态「已关闭」）')}>关闭异常</LinkAction>}
+                    <LinkAction onClick={() => setDetail({ type: 'exlog', ex: e })}>查看日志</LinkAction>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </Table>
+      </Section>
+
+      <Section title="关联问题池记录" subtitle="该交付计划关联设备产生的问题池记录（qualityIssues）。设备 / 软件 / 使用 / 质量问题经技术客服预处理后决定是否转售后。" bodyClassName="p-0">
+        <Table
+          head={['问题编号', '关联设备SN', '问题描述', '来源节点', '问题类型', '严重程度', '状态', '关联售后工单', '操作']}
+          empty="暂无关联问题池记录"
+          footer={<Pagination page={issuePaged.page} total={issuePaged.total} totalPages={issuePaged.totalPages} onChange={issuePaged.setPage} />}
+        >
+          {issuePaged.pageItems.map((q) => (
+            <tr key={q.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 whitespace-nowrap"><LinkAction to="/after-sales?tab=issues"><span className="font-mono text-xs">{q.id}</span></LinkAction></td>
+              <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-gray-600">{q.deviceSN ?? '—'}</td>
+              <td className="px-3 py-2 text-xs text-gray-600 max-w-sm"><div className="truncate">{q.issueDesc ?? '—'}</div></td>
+              <td className="px-3 py-2 whitespace-nowrap text-gray-600">{q.sourceStage ?? '—'}</td>
+              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={q.issueType ?? '—'} /></td>
+              <td className="px-3 py-2"><StatusBadge status={q.severity ?? '—'} /></td>
+              <td className="px-3 py-2"><StatusBadge status={q.status} /></td>
+              <td className="px-3 py-2 whitespace-nowrap text-xs">{q.linkedWorkOrderId ? <LinkAction to="/after-sales?tab=orders">{q.linkedWorkOrderId}</LinkAction> : <span className="text-gray-300">—</span>}</td>
+              <td className="px-3 py-2 whitespace-nowrap"><LinkAction to="/after-sales?tab=issues">查看</LinkAction></td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
+
       <Section title="关联售后工单" subtitle="交付子工单产生的售后 / 交付工单（deliveryWorkOrders + 关联 workOrders）" bodyClassName="p-0">
         <Table
           head={['工单编号', '类型', '设备SN', '问题描述', '严重程度', '负责人', '状态', '操作']}
@@ -459,12 +691,25 @@ export default function DeliveryPlanDetail() {
       <Modal
         isOpen={!!detail}
         onClose={() => setDetail(null)}
-        title={detail?.type === 'pre' ? '前置准备子工单详情' : detail?.type === 'doc' ? '交付资料 / 附件详情' : '设备部署子工单详情'}
-        size="lg"
+        title={
+          detail?.type === 'pre' ? '前置准备子工单详情'
+            : detail?.type === 'doc' ? '交付资料 / 附件详情'
+              : detail?.type === 'ex' ? '交付异常详情'
+                : detail?.type === 'exlog' ? '交付异常处理日志'
+                  : '设备部署子工单详情'
+        }
+        size={detail?.type === 'ex' ? 'xl' : 'lg'}
       >
         {detail?.type === 'pre' && <PreOrderDetail order={detail.order} />}
-        {detail?.type === 'deploy' && <DeployOrderDetail order={detail.order} />}
+        {detail?.type === 'deploy' && (
+          <DeployOrderDetail
+            order={detail.order}
+            onSubmitPreprocess={(o) => submitPreprocess({ deviceId: o.device?.id, deviceSN: o.deviceSN, node: '现场安装调试', desc: o.exceptionNote && o.exceptionNote !== '—' ? o.exceptionNote : `设备部署子工单 ${o.id} 提交技术客服预处理`, orderId: o.id })}
+          />
+        )}
         {detail?.type === 'doc' && <DocDetail doc={detail.doc} />}
+        {detail?.type === 'ex' && <ExceptionDetail ex={detail.ex} />}
+        {detail?.type === 'exlog' && <ExProcessLogs logs={detail.ex.processLogs || detail.ex.logs || []} />}
       </Modal>
     </Page>
   );
