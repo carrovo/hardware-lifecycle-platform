@@ -13,37 +13,65 @@ import { FEISHU_USERS } from '../data/mockData';
 
 /* ═══════════════════════════════════════════════════════════════════
    售后管理：问题池（issues） / 售后工单（orders） / 换件记录（replacements）
-   平台只读同步 ERP，围绕设备 SN 记录售后过程、形成问题闭环与操作日志。
-   ─ 状态词在页面做「展示态映射」，不改动 mockData 里的原始状态值。
+   平台链路：交付异常/扫码上报/系统告警 → 问题池（技术客服预处理） → 转售后工单（现场执行闭环）。
+   ─ 状态词在页面做「展示态映射」，不改动 mockData 原始状态值；缺字段回退 '—'。
    ═══════════════════════════════════════════════════════════════════ */
 
 const ISSUE_TYPES = ['使用问题', '设备质量问题'];
 const WO_STATUS_LIST = ['待分派', '待接单', '待上门', '现场处理中', '已关单', '已取消'];
-const QI_STATUS_LIST = ['待处理', '处理中', '已远程关闭', '已转售后工单', '已关闭'];
-const QI_SOURCES = ['扫码上报', '手动录入', '系统告警', '问题平台上报'];
+// 问题池只用这 6 个状态
+const QI_STATUS_LIST = ['待预处理', '预处理中', '待补充信息', '远程已解决', '已转售后工单', '已关闭'];
+// 来源类型
+const QI_SOURCES = ['扫码上报', '系统告警', '交付异常', '手动录入', '问题平台上报'];
+const ORDER_SOURCES = ['问题池转入', '交付子工单转入', '售后直接创建'];
+const MOREINFO_TARGETS = ['交付工程师', '客户', '现场人员', '工程师'];
 const SEVERITIES = ['高', '中', '低'];
+const YN = ['是', '否'];
 
 const nowText = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
 const genId = (prefix) => `${prefix}-${Date.now().toString().slice(-6)}`;
 const TA = 'w-full border border-[#e0e0e0] rounded-md px-2.5 py-1.5 text-[13px] text-gray-800 focus:outline-none focus:border-[#a3a3a3] focus:ring-2 focus:ring-gray-100';
+const yn = (v) => (v == null ? '—' : (v ? '是' : '否'));
 
-// 问题类型展示映射：把原始细分类型归并为「使用问题 / 设备质量问题」两类。
-function displayIssueType(qi) {
-  const t = (qi && qi.issueType) || '';
-  if (t === '使用问题' || t === '设备质量问题') return t;
-  if (['外观缺陷', '性能不达标'].includes(t)) return '使用问题';
-  if (/使用|体验|操作|外观|性能/.test(t)) return '使用问题';
-  return '设备质量问题'; // 功能异常 / 通信异常 / 工单转质量问题 / 其他 → 设备质量问题
+// 问题池状态规范化：兼容旧值（待处理→待预处理、处理中→预处理中、已远程关闭→远程已解决）。
+function normalizeIssueStatus(qi) {
+  const s = qi && qi.status;
+  if (QI_STATUS_LIST.includes(s)) return s;
+  if (qi && (qi.linkedWorkOrder || qi.linkedWorkOrderId)) return '已转售后工单';
+  const map = { 待处理: '待预处理', 处理中: '预处理中', 已远程关闭: '远程已解决', 已解决: '远程已解决' };
+  return map[s] || s || '待预处理';
 }
 
 // 售后工单状态展示映射：把旧状态映射为统一的 6 个新状态词。
 function displayWoStatus(wo) {
   const s = wo && wo.status;
+  if (WO_STATUS_LIST.includes(s)) return s;
   if (s === '待处理') return wo.assignedTo ? '待接单' : '待分派';
   if (s === '处理中' || s === '复检中') return '现场处理中';
   if (s === '已关闭') return '已关单';
   if (s === '已作废') return '已取消';
   return s || '—';
+}
+
+/* ── 时长计算（缺失回退 '—'）─────────────────────────── */
+const parseTime = (s) => {
+  if (!s) return null;
+  const d = new Date(String(s).replace(' ', 'T'));
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+function durationText(from, to) {
+  const a = parseTime(from);
+  const b = parseTime(to);
+  if (!a || !b) return '—';
+  let m = Math.round((b - a) / 60000);
+  if (m < 0) return '—';
+  if (m < 60) return `${m} 分钟`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (h < 24) return `${h} 小时${mm ? ` ${mm} 分` : ''}`;
+  const d = Math.floor(h / 24);
+  const hh = h % 24;
+  return `${d} 天${hh ? ` ${hh} 小时` : ''}`;
 }
 
 /* ── 关联数据解析（只读，缺字段回退 '—'）───────────────────────── */
@@ -55,16 +83,24 @@ function locationOfDevice(state, device) {
   const id = device.locationId || device.preAssignedLocationId;
   return (id && locs.find((l) => l.id === id)) || locs.find((l) => (l.deviceIds || []).includes(device.id)) || null;
 }
+const locById = (state, id) => (state.locations || []).find((l) => l.id === id) || null;
 const locLabel = (loc) => (loc ? [loc.name, loc.address].filter(Boolean).join(' · ') : '—');
 const materialOf = (state, id) => (state.materials || []).find((m) => m.id === id) || null;
 // 来源问题编号：优先工单自带，其次从质量问题反查 linkedWorkOrderId。
 const sourceIssueIdOf = (state, wo) =>
-  wo.sourceQualityIssueId || wo.linkedQualityIssueId ||
+  wo.sourceIssueId || wo.sourceQualityIssueId || wo.linkedQualityIssueId ||
   ((state.qualityIssues || []).find((q) => q.linkedWorkOrderId === wo.id) || {}).id || null;
 const allWorkOrders = (state) => [
   ...(state.deliveryWorkOrders || []).map((w) => ({ ...w, _kind: 'delivery' })),
   ...(state.workOrders || []).map((w) => ({ ...w, _kind: 'aftersales' })),
 ];
+// 售后工单来源标签：问题池转入 / 交付子工单转入 / 售后直接创建。
+function orderSourceLabel(state, wo) {
+  if (wo.source) return wo.source;
+  if (wo._kind === 'delivery') return '交付子工单转入';
+  if (sourceIssueIdOf(state, wo)) return '问题池转入';
+  return '售后直接创建';
+}
 const engineerOptions = () => FEISHU_USERS.map((u) => (
   <option key={u.id} value={u.name}>{u.name}（{u.dept}）</option>
 ));
@@ -88,13 +124,27 @@ function ModalActions({ onClose, onConfirm, disabled, confirmLabel = '确认', v
   );
 }
 
-// 右侧抽屉：详情 = 只读信息 + 可执行操作台 + 操作日志。
+// 只读原始信息条（来源快照片段，编辑弹窗内提示技术客服不要覆盖来源）。
+function ReadonlyNote({ items }) {
+  return (
+    <Card className="bg-[#fafafa] space-y-1.5">
+      <div className="flex items-center gap-2"><Chip>来源只读</Chip><span className="text-xs text-gray-400">来源快照不被规范化覆盖</span></div>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+        {items.map(([k, v], i) => (
+          <div key={i} className="flex gap-2 text-xs"><dt className="text-gray-400 flex-shrink-0">{k}</dt><dd className="text-gray-600 break-words">{v || '—'}</dd></div>
+        ))}
+      </dl>
+    </Card>
+  );
+}
+
+// 右侧宽抽屉：分区详情 + 可执行操作台 + 操作日志。
 function Drawer({ open, onClose, title, subtitle, chips, children }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="absolute right-0 top-0 h-full w-full max-w-2xl bg-white shadow-2xl border-l border-[#ececec] flex flex-col">
+      <div className="absolute right-0 top-0 h-full w-full max-w-3xl bg-white shadow-2xl border-l border-[#ececec] flex flex-col">
         <div className="px-5 py-4 border-b border-[#f0f0f0] flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-[15px] font-semibold text-gray-900 font-mono truncate">{title}</div>
@@ -146,7 +196,12 @@ function LogTimeline({ logs }) {
   );
 }
 
-/* 通用「填写原因」弹窗（作废 / 打回 / 重新打开等） */
+// 行内操作组：按状态渲染的一批文字操作。
+function ActionCell({ children }) {
+  return <div className="flex items-center gap-x-2.5 whitespace-nowrap">{children}</div>;
+}
+
+/* 通用「填写原因」弹窗（取消 / 重新打开等） */
 function ReasonModal({ title, label = '原因', placeholder, confirmLabel = '确认', variant = 'primary', requireConfirm = false, onClose, onConfirm }) {
   const [reason, setReason] = useState('');
   const [ok, setOk] = useState(!requireConfirm);
@@ -177,9 +232,9 @@ function NewOrderModal({ state, onClose, onSave }) {
     const t = nowText();
     onSave({
       id: genId('WO'), type: 'aftersales', woClass: '其他问题工单', involvesReplacement: false,
-      projectId: form.projectId || null, deviceId: form.deviceId, deviceSN: device?.sn || '', stage: '在线运营',
-      description: form.description, severity: form.severity, status: '待处理', assignedTo: form.engineer,
-      createdAt: t, updatedAt: t, closedAt: null, processLogs: [],
+      source: '售后直接创建', projectId: form.projectId || null, deviceId: form.deviceId, deviceSN: device?.sn || '', stage: '在线运营',
+      description: form.description, severity: form.severity, status: form.engineer ? '待接单' : '待分派', assignedTo: form.engineer,
+      createTime: t, createdAt: t, updatedAt: t, closedAt: null, processLogs: [{ time: t, operator: '售后创建', toStatus: form.engineer ? '待接单' : '待分派', notes: '售后直接创建工单' }],
     });
     onClose();
   };
@@ -214,88 +269,175 @@ function NewOrderModal({ state, onClose, onSave }) {
         <Field label="故障描述" required>
           <textarea rows={3} className={TA} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="描述设备故障现象" />
         </Field>
-        <Card className="bg-[#fafafa] text-xs text-gray-500">新建工单默认状态为「待分派」。分派工程师后进入「待接单」，开始现场处理后为「现场处理中」，处理完成后关单。</Card>
+        <Card className="bg-[#fafafa] text-xs text-gray-500">售后直接创建的工单默认「待分派」；分派工程师后进入「待接单」，到场后「现场处理中」，处理完成后关单。</Card>
         <ModalActions onClose={onClose} onConfirm={submit} disabled={!form.projectId || !form.deviceId || !form.description.trim()} confirmLabel="创建工单" />
       </div>
     </Modal>
   );
 }
 
-function AssignEngineerModal({ wo, onClose, onConfirm }) {
+// 1 分派 / 改派工程师
+function DispatchEngineerModal({ wo, reassign, onClose, onConfirm }) {
+  const [leader, setLeader] = useState(wo.leader || '');
   const [engineer, setEngineer] = useState(wo.assignedTo || '');
+  const [expectVisit, setExpectVisit] = useState(wo.expectVisitTime || wo.expectVisitAt || '');
+  const [note, setNote] = useState('');
   return (
-    <Modal isOpen onClose={onClose} title="分配工程师">
+    <Modal isOpen onClose={onClose} title={reassign ? '改派工程师' : '分派工程师'}>
       <div className="space-y-3">
         <div className="text-[13px] text-gray-500">工单号：<span className="font-mono text-gray-700">{wo.id}</span></div>
-        <Field label="工程师" required>
-          <Select value={engineer} onChange={(e) => setEngineer(e.target.value)} className="w-full">
-            <option value="">-- 选择工程师 --</option>
-            {engineerOptions()}
-          </Select>
-        </Field>
-        <ModalActions onClose={onClose} onConfirm={() => onConfirm(engineer)} disabled={!engineer} confirmLabel="确认分配" />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="服务 leader"><Select value={leader} onChange={(e) => setLeader(e.target.value)} className="w-full"><option value="">-- 选择 leader --</option>{engineerOptions()}</Select></Field>
+          <Field label="工程师" required><Select value={engineer} onChange={(e) => setEngineer(e.target.value)} className="w-full"><option value="">-- 选择工程师 --</option>{engineerOptions()}</Select></Field>
+          <Field label="预计上门时间"><Input value={expectVisit} onChange={(e) => setExpectVisit(e.target.value)} placeholder="YYYY-MM-DD HH:mm" className="w-full" /></Field>
+          <Field label="leader 分派时间"><Input disabled value={nowText()} className="w-full bg-gray-50 text-gray-400" /></Field>
+        </div>
+        <Field label="分派说明"><textarea rows={2} className={TA} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ leader, engineer, expectVisit, note })} disabled={!engineer} confirmLabel={reassign ? '确认改派' : '确认分派'} />
       </div>
     </Modal>
   );
 }
 
-function StartProcessModal({ wo, currentUser, onClose, onConfirm }) {
-  const [engineer, setEngineer] = useState(wo.assignedTo || currentUser);
-  const [method, setMethod] = useState('');
+// 2 确认上门时间（待上门 → 现场处理中）
+function ConfirmVisitModal({ wo, onClose, onConfirm }) {
+  const [expectVisit, setExpectVisit] = useState(wo.expectVisitTime || wo.expectVisitAt || '');
+  const [acceptTime, setAcceptTime] = useState(wo.acceptTime || wo.acceptAt || nowText());
+  const [contact, setContact] = useState('');
+  const [phone, setPhone] = useState('');
   const [note, setNote] = useState('');
   return (
-    <Modal isOpen onClose={onClose} title="开始现场处理">
+    <Modal isOpen onClose={onClose} title="确认上门时间">
       <div className="space-y-3">
-        <Field label="工程师" required>
-          <Select value={engineer} onChange={(e) => setEngineer(e.target.value)} className="w-full">{engineerOptions()}</Select>
-        </Field>
-        <Field label="处理方式"><Input value={method} onChange={(e) => setMethod(e.target.value)} placeholder="如：现场检修 / 更换部件 / 远程处理" className="w-full" /></Field>
+        <div className="text-[13px] text-gray-500">工程师：<span className="text-gray-700">{wo.assignedTo || '—'}</span></div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="预计上门时间"><Input value={expectVisit} onChange={(e) => setExpectVisit(e.target.value)} placeholder="YYYY-MM-DD HH:mm" className="w-full" /></Field>
+          <Field label="接单时间"><Input value={acceptTime} onChange={(e) => setAcceptTime(e.target.value)} className="w-full" /></Field>
+          <Field label="现场联系人"><Input value={contact} onChange={(e) => setContact(e.target.value)} className="w-full" /></Field>
+          <Field label="联系电话"><Input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full" /></Field>
+        </div>
         <Field label="备注"><textarea rows={2} className={TA} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
-        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ engineer, method, note })} disabled={!engineer} confirmLabel="开始处理" />
+        <Card className="bg-[#fafafa] text-xs text-gray-500">确认到场后工单转入「现场处理中」。</Card>
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ expectVisit, acceptTime, contact, phone, note })} confirmLabel="确认到场" />
       </div>
     </Modal>
   );
 }
 
-function RecordRepairModal({ wo, onClose, onConfirm }) {
-  const [action, setAction] = useState(wo.repairActions || '');
+// 3 记录现场处理
+function RecordOnsiteModal({ wo, currentUser, onClose, onConfirm }) {
+  const [start, setStart] = useState(wo.onsiteStartTime || nowText());
+  const [done, setDone] = useState(wo.onsiteDoneTime || '');
+  const [record, setRecord] = useState(wo.onsiteRecord || '');
+  const [fault, setFault] = useState(wo.faultL3 || '');
+  const [solution, setSolution] = useState(wo.repairActions || '');
+  const [needReplace, setNeedReplace] = useState(wo.needReplace ? '是' : '否');
+  const [person, setPerson] = useState(wo.assignedTo || currentUser);
+  return (
+    <Modal isOpen onClose={onClose} title="记录现场处理" size="lg">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="现场处理开始时间"><Input value={start} onChange={(e) => setStart(e.target.value)} className="w-full" /></Field>
+          <Field label="现场处理完成时间"><Input value={done} onChange={(e) => setDone(e.target.value)} placeholder="YYYY-MM-DD HH:mm" className="w-full" /></Field>
+        </div>
+        <Field label="现场处理说明" required><textarea rows={2} className={TA} value={record} onChange={(e) => setRecord(e.target.value)} placeholder="记录现场检修 / 处理过程" /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="故障原因"><Input value={fault} onChange={(e) => setFault(e.target.value)} className="w-full" /></Field>
+          <Field label="处理方案"><Input value={solution} onChange={(e) => setSolution(e.target.value)} className="w-full" /></Field>
+          <Field label="是否需换件"><Select value={needReplace} onChange={(e) => setNeedReplace(e.target.value)} className="w-full">{YN.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="操作人"><Select value={person} onChange={(e) => setPerson(e.target.value)} className="w-full">{engineerOptions()}</Select></Field>
+        </div>
+        <Field label="现场照片 / log / 正常工作视频"><Input disabled placeholder="（原型占位）支持上传现场照片、log、视频" className="w-full bg-gray-50 text-gray-400" /></Field>
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ start, done, record: record.trim(), fault, solution, needReplace: needReplace === '是', person })} disabled={!record.trim()} confirmLabel="保存记录" />
+      </div>
+    </Modal>
+  );
+}
+
+// 4 发起换件（写工单换件字段与 ERP 领料信息，不改动换件记录 tab 数据）
+function InitReplaceModal({ wo, onClose, onConfirm }) {
+  const [form, setForm] = useState({
+    coreType: wo.needReplaceModuleType || wo.needModuleType || '', oldSN: wo.oldModuleSN || '', newSN: wo.newModuleSN || '',
+    newSource: wo.newPartSource || '在库可用', erpPickingNo: wo.erpPickingNo || '', erpPickingStatus: wo.erpPickingStatus || '未领料',
+    applyTime: wo.erpPickApplyTime || nowText(), doneTime: wo.erpPickDoneTime || '', replaceTime: wo.newPartReplaceTime || '',
+    reason: wo.replaceReason || '', note: wo.replaceNote || '',
+  });
+  const set = (k, v) => setForm({ ...form, [k]: v });
+  return (
+    <Modal isOpen onClose={onClose} title="发起换件" size="lg">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="核心部件类型" required><Input value={form.coreType} onChange={(e) => set('coreType', e.target.value)} className="w-full" /></Field>
+          <Field label="新件来源"><Input value={form.newSource} onChange={(e) => set('newSource', e.target.value)} className="w-full" /></Field>
+          <Field label="旧件 SN"><Input value={form.oldSN} onChange={(e) => set('oldSN', e.target.value)} className="w-full" /></Field>
+          <Field label="新件 SN"><Input value={form.newSN} onChange={(e) => set('newSN', e.target.value)} className="w-full" /></Field>
+          <Field label="ERP 领料单号 / 出库申请单号"><Input value={form.erpPickingNo} onChange={(e) => set('erpPickingNo', e.target.value)} className="w-full" /></Field>
+          <Field label="ERP 领料状态"><Select value={form.erpPickingStatus} onChange={(e) => set('erpPickingStatus', e.target.value)} className="w-full">{['未领料', '已领料'].map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="领料申请时间"><Input value={form.applyTime} onChange={(e) => set('applyTime', e.target.value)} className="w-full" /></Field>
+          <Field label="领料完成时间"><Input value={form.doneTime} onChange={(e) => set('doneTime', e.target.value)} placeholder="YYYY-MM-DD HH:mm" className="w-full" /></Field>
+          <Field label="新件更换时间"><Input value={form.replaceTime} onChange={(e) => set('replaceTime', e.target.value)} placeholder="YYYY-MM-DD HH:mm" className="w-full" /></Field>
+          <Field label="换件原因"><Input value={form.reason} onChange={(e) => set('reason', e.target.value)} className="w-full" /></Field>
+        </div>
+        <Field label="换件说明"><textarea rows={2} className={TA} value={form.note} onChange={(e) => set('note', e.target.value)} /></Field>
+        <Field label="附件"><Input disabled placeholder="（原型占位）支持上传换件照片 / log" className="w-full bg-gray-50 text-gray-400" /></Field>
+        <Card className="bg-[#fafafa] text-xs text-gray-500">换件明细最终以 ERP 领料 / 出库为准；换件记录 tab 为只读追溯视图。</Card>
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm(form)} disabled={!form.coreType.trim()} confirmLabel="发起换件" />
+      </div>
+    </Modal>
+  );
+}
+
+// 5 上传资料
+function UploadDocModal({ wo, currentUser, onClose, onConfirm }) {
+  const [docType, setDocType] = useState('现场照片');
+  const [fileName, setFileName] = useState('');
   const [note, setNote] = useState('');
   return (
-    <Modal isOpen onClose={onClose} title="记录处理措施">
+    <Modal isOpen onClose={onClose} title="上传资料">
       <div className="space-y-3">
-        <Field label="处理方案 / 现场措施" required>
-          <textarea rows={3} className={TA} value={action} onChange={(e) => setAction(e.target.value)} placeholder="记录本次现场处理 / 维修措施" />
-        </Field>
-        <Field label="附件 / 图片 / 日志"><Input disabled placeholder="（原型占位）支持上传现场照片、日志" className="w-full bg-gray-50 text-gray-400" /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="资料类型"><Select value={docType} onChange={(e) => setDocType(e.target.value)} className="w-full">{['现场照片', 'log 日志', '正常工作视频', '验收单', '其他'].map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="文件名" required><Input value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder="如：onsite_DEV-515.jpg" className="w-full" /></Field>
+          <Field label="关联设备 SN"><Input disabled value={wo.deviceSN || '—'} className="w-full bg-gray-50 text-gray-400" /></Field>
+          <Field label="关联工单号"><Input disabled value={wo.id} className="w-full bg-gray-50 text-gray-400" /></Field>
+          <Field label="上传人"><Input disabled value={currentUser} className="w-full bg-gray-50 text-gray-400" /></Field>
+          <Field label="上传时间"><Input disabled value={nowText()} className="w-full bg-gray-50 text-gray-400" /></Field>
+        </div>
         <Field label="备注"><textarea rows={2} className={TA} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
-        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ action: action.trim(), note })} disabled={!action.trim()} confirmLabel="保存措施" />
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ docType, fileName: fileName.trim(), note })} disabled={!fileName.trim()} confirmLabel="上传" />
       </div>
     </Modal>
   );
 }
 
-function CloseOrderModal({ wo, onClose, onConfirm }) {
+// 6 关单
+function CloseOrderModal({ wo, currentUser, onClose, onConfirm }) {
   const [finalResult, setFinalResult] = useState('');
   const [closeNote, setCloseNote] = useState('');
+  const [restored, setRestored] = useState('是');
   const [ok, setOk] = useState(false);
   return (
-    <Modal isOpen onClose={onClose} title="关单">
+    <Modal isOpen onClose={onClose} title="关单" size="lg">
       <div className="space-y-3">
         <div className="text-[13px] text-gray-500">工单号：<span className="font-mono text-gray-700">{wo.id}</span></div>
-        <Field label="最终处理结果" required>
-          <Input value={finalResult} onChange={(e) => setFinalResult(e.target.value)} placeholder="如：故障已排除 / 已更换部件 / 远程修复" className="w-full" />
-        </Field>
-        <Field label="关单说明"><textarea rows={3} className={TA} value={closeNote} onChange={(e) => setCloseNote(e.target.value)} placeholder="补充关单说明（选填）" /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="最终处理结果" required><Input value={finalResult} onChange={(e) => setFinalResult(e.target.value)} placeholder="如：故障已排除 / 已更换部件" className="w-full" /></Field>
+          <Field label="是否恢复正常"><Select value={restored} onChange={(e) => setRestored(e.target.value)} className="w-full">{YN.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="关单人"><Input disabled value={currentUser} className="w-full bg-gray-50 text-gray-400" /></Field>
+          <Field label="关单提交时间"><Input disabled value={nowText()} className="w-full bg-gray-50 text-gray-400" /></Field>
+        </div>
+        <Field label="关单说明"><textarea rows={2} className={TA} value={closeNote} onChange={(e) => setCloseNote(e.target.value)} placeholder="补充关单说明（选填）" /></Field>
+        <Field label="正常工作视频 / 现场照片 / log"><Input disabled placeholder="（原型占位）关单资料" className="w-full bg-gray-50 text-gray-400" /></Field>
         <label className="flex items-center gap-2 text-[13px] text-gray-600"><input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} /> 确认问题已闭环，可以关单。</label>
-        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ finalResult: finalResult.trim(), closeNote: closeNote.trim() })} disabled={!finalResult.trim() || !ok} confirmLabel="确认关单" />
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ finalResult: finalResult.trim(), closeNote: closeNote.trim(), restored: restored === '是' })} disabled={!finalResult.trim() || !ok} confirmLabel="确认关单" />
       </div>
     </Modal>
   );
 }
 
-// 工单详情抽屉：字段严格覆盖需求清单，缺失回退 '—'。
+// 工单详情：宽抽屉，分区明确（来源 / 技术客服预处理 / 基础 / 调度 / 时间节点 / 故障 / 现场 / 换件 / 附件 / 关单 / 日志）。
 function OrderDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose }) {
-  const [modal, setModal] = useState(null);
+  const [modal, setModal] = useState(entry.action || null);
   if (!entry) return null;
   const source = entry.kind === 'delivery' ? (state.deliveryWorkOrders || []) : (state.workOrders || []);
   const fresh = source.find((w) => w.id === entry.id);
@@ -306,9 +448,9 @@ function OrderDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
   const device = findDeviceOf(state, wo);
   const loc = locationOfDevice(state, device);
   const srcQI = sourceIssueIdOf(state, wo);
-  const isDelivery = wo._kind === 'delivery';
+  const srcLabel = orderSourceLabel(state, wo);
   const dStatus = displayWoStatus(wo);
-  const closed = ['已关闭', '已作废'].includes(wo.status);
+  const closed = ['已关单', '已取消'].includes(dStatus);
   const editable = canDo('update_work_order');
   const close = () => setModal(null);
 
@@ -318,53 +460,94 @@ function OrderDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
     dispatch({ type: updType, payload: { id: wo.id, updatedAt: t, ...p, processLogs: [...(wo.processLogs || []), { time: t, operator: currentUser, fromStatus: dStatus, toStatus: toD, notes: note }] } });
     close();
   };
-  const doAssign = (engineer) => patch({ assignedTo: engineer }, `分配工程师：${engineer}`);
-  const doStart = ({ engineer, method, note }) => patch({ status: '处理中', assignedTo: engineer }, `工程师 ${engineer} 开始现场处理${method ? `，方式：${method}` : ''}${note ? `（${note}）` : ''}`);
-  const doRepair = ({ action, note }) => patch({ repairActions: action }, `记录处理措施：${action}${note ? `（${note}）` : ''}`);
-  const doClose = ({ finalResult, closeNote }) => patch({ status: '已关闭', closedAt: nowText(), closeNote, finalResult }, `关单：${finalResult || '处理完成'}${closeNote ? `（${closeNote}）` : ''}`);
-  const doReject = (reason) => patch({ status: '处理中' }, `复检打回，重新处理：${reason}`);
-  const doVoid = (reason) => patch({ status: '已作废', closedAt: nowText(), voidReason: reason }, `工单取消：${reason}`);
+  const doDispatch = ({ leader, engineer, expectVisit, note }) => patch(
+    { status: '待接单', assignedTo: engineer, leader, expectVisitTime: expectVisit, dispatchTime: nowText() },
+    `${wo.assignedTo ? '改派' : '分派'}工程师：${engineer}${leader ? `（leader ${leader}）` : ''}${note ? `（${note}）` : ''}`, '待接单',
+  );
+  const doConfirmVisit = ({ expectVisit, acceptTime, contact, phone, note }) => patch(
+    { status: '现场处理中', expectVisitTime: expectVisit, acceptTime, actualVisitTime: nowText(), contactName: contact, contactPhone: phone },
+    `确认到场，进入现场处理${contact ? `，联系人 ${contact}` : ''}${note ? `（${note}）` : ''}`, '现场处理中',
+  );
+  const doOnsite = ({ start, done, record, fault, solution, needReplace, person }) => patch(
+    { onsiteStartTime: start, onsiteDoneTime: done, onsiteRecord: record, faultL3: fault, repairActions: solution, needReplace, assignedTo: person || wo.assignedTo },
+    `记录现场处理：${record}${solution ? `；方案：${solution}` : ''}`, '现场处理中',
+  );
+  const doReplace = (f) => patch(
+    { involvesReplacement: true, needReplace: true, needReplaceModuleType: f.coreType, oldModuleSN: f.oldSN, newModuleSN: f.newSN, newPartSource: f.newSource, erpPickingNo: f.erpPickingNo, erpPickingStatus: f.erpPickingStatus, replaceInitTime: nowText(), erpPickApplyTime: f.applyTime, erpPickDoneTime: f.doneTime, newPartReplaceTime: f.replaceTime, replaceReason: f.reason, replaceNote: f.note },
+    `发起换件：${f.coreType}${f.erpPickingNo ? `（领料单 ${f.erpPickingNo}）` : ''}`, '现场处理中',
+  );
+  const doUpload = ({ docType, fileName, note }) => patch(
+    { docUploadTime: nowText(), docType, docFileName: fileName },
+    `上传资料：${docType} ${fileName}${note ? `（${note}）` : ''}`, '现场处理中',
+  );
+  const doClose = ({ finalResult, closeNote, restored }) => patch(
+    { status: '已关闭', closeSubmitTime: nowText(), closeTime: nowText(), closedAt: nowText(), closeNote, finalResult, restoredNormal: restored },
+    `关单：${finalResult}${restored ? '，已恢复正常' : ''}${closeNote ? `（${closeNote}）` : ''}`, '已关单',
+  );
+  const doCancel = (reason) => patch({ status: '已作废', cancelTime: nowText(), closedAt: nowText(), cancelReason: reason }, `取消工单：${reason}`, '已取消');
 
   return (
     <Drawer open onClose={onClose} title={wo.id}
-      subtitle={isDelivery ? `来源：交付子工单 · 交付计划 ${wo.deliveryPlanId || '—'}` : (srcQI ? `来源：问题池 ${srcQI}` : '来源：售后直接创建')}
+      subtitle={srcQI ? `${srcLabel} · 来源问题 ${srcQI}` : srcLabel}
       chips={<>
         <StatusBadge status={dStatus} />
         <StatusBadge status={wo.severity || '中'} />
-        <Chip>{isDelivery ? '交付子工单' : '售后工单'}</Chip>
+        <Chip>{srcLabel}</Chip>
         <span className="text-xs text-gray-500">工程师：{wo.assignedTo || '待分派'}</span>
       </>}>
       <Section title="当前可执行操作" bodyClassName="p-3">
         {!editable ? (
           <div className="text-[13px] text-gray-400">当前角色无工单处理权限，仅可查看。</div>
         ) : closed ? (
-          <div className="text-[13px] text-gray-400">{wo.status === '已作废' ? '工单已取消，仅可查看详情与操作日志。' : '工单已关单，仅可查看详情与操作日志。'}</div>
+          <div className="text-[13px] text-gray-400">{dStatus === '已取消' ? '工单已取消，仅可查看资料与操作日志。' : '工单已关单，仅可查看资料与操作日志。'}</div>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {wo.status === '待处理' && <>
-              {!wo.assignedTo && <Btn variant="primary" size="sm" onClick={() => setModal('assign')}>分配工程师</Btn>}
-              {wo.assignedTo && <Btn variant="primary" size="sm" onClick={() => setModal('start')}>开始处理</Btn>}
-              {wo.assignedTo && <Btn size="sm" onClick={() => setModal('assign')}>重新分配</Btn>}
-              <Btn variant="danger" size="sm" onClick={() => setModal('void')}>作废</Btn>
+            {dStatus === '待分派' && <>
+              <Btn variant="primary" size="sm" onClick={() => setModal('dispatch')}>分派工程师</Btn>
+              <Btn variant="danger" size="sm" onClick={() => setModal('cancel')}>取消工单</Btn>
             </>}
-            {wo.status === '处理中' && <>
-              <Btn size="sm" onClick={() => setModal('repair')}>记录处理措施</Btn>
-              <Btn variant="primary" size="sm" onClick={() => setModal('close')}>关单</Btn>
-              <Btn variant="danger" size="sm" onClick={() => setModal('void')}>作废</Btn>
+            {dStatus === '待接单' && <>
+              <Btn size="sm" onClick={() => setModal('dispatch')}>改派工程师</Btn>
+              <Btn variant="danger" size="sm" onClick={() => setModal('cancel')}>取消工单</Btn>
             </>}
-            {wo.status === '复检中' && <>
+            {dStatus === '待上门' && <Btn variant="primary" size="sm" onClick={() => setModal('confirmVisit')}>确认上门时间</Btn>}
+            {dStatus === '现场处理中' && <>
+              <Btn size="sm" onClick={() => setModal('onsite')}>记录现场处理</Btn>
+              <Btn size="sm" onClick={() => setModal('replace')}>发起换件</Btn>
+              <Btn size="sm" onClick={() => setModal('upload')}>上传资料</Btn>
               <Btn variant="primary" size="sm" onClick={() => setModal('close')}>关单</Btn>
-              <Btn size="sm" onClick={() => setModal('reject')}>打回处理</Btn>
-              <Btn variant="danger" size="sm" onClick={() => setModal('void')}>作废</Btn>
             </>}
           </div>
         )}
       </Section>
 
+      <DrawerSection title="来源信息">
+        <DescList items={[
+          ['工单来源', <Chip>{srcLabel}</Chip>],
+          ['来源问题编号', srcQI ? <LinkAction to={`/after-sales?tab=issues&highlight=${srcQI}`}>{srcQI}</LinkAction> : '—'],
+          ['来源交付计划', wo.deliveryPlanId],
+          ['来源交付子工单', wo._kind === 'delivery' ? wo.id : (wo.sourceSubOrderId || '—')],
+        ]} />
+      </DrawerSection>
+
+      <DrawerSection title="技术客服预处理信息（只读）">
+        <DescList items={[
+          ['技术客服', wo.csAgent],
+          ['预处理完成时间', wo.preprocessDoneTime],
+          ['预处理结论', wo.preprocessConclusion],
+          ['规范化故障描述', wo.normalizedDesc],
+          ['一级故障原因', wo.faultL1],
+          ['二级故障原因', wo.faultL2],
+          ['三级故障原因', wo.faultL3],
+          ['建议处理方案', wo.suggestedSolution || wo.solution],
+          ['是否需上门', wo.needVisit == null ? '—' : yn(wo.needVisit)],
+          ['是否需换件', wo.needReplace == null ? yn(wo.involvesReplacement) : yn(wo.needReplace)],
+        ]} />
+      </DrawerSection>
+
       <DrawerSection title="基础信息">
         <DescList items={[
           ['售后工单号', <span className="font-mono">{wo.id}</span>],
-          ['来源问题编号', srcQI ? <LinkAction to="/after-sales?tab=issues">{srcQI}</LinkAction> : '—'],
           ['客户名称', project?.client],
           ['项目名称', project?.name],
           ['设备 SN', wo.deviceSN],
@@ -374,61 +557,98 @@ function OrderDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
         ]} />
       </DrawerSection>
 
+      <DrawerSection title="调度与上门">
+        <DescList items={[
+          ['服务 leader', wo.leader],
+          ['工程师', wo.assignedTo],
+          ['预计上门时间', wo.expectVisitTime || wo.expectVisitAt],
+          ['接单时间', wo.acceptTime || wo.acceptAt],
+          ['实际上门时间', wo.actualVisitTime || wo.visitAt || wo.arriveTime],
+          ['现场联系人 / 电话', [wo.contactName, wo.contactPhone].filter(Boolean).join(' / ') || '—'],
+        ]} />
+      </DrawerSection>
+
+      <DrawerSection title="售后时间节点">
+        <DescList cols={3} items={[
+          ['创建时间', wo.createTime || wo.createdAt],
+          ['分派时间', wo.dispatchTime || wo.dispatchAt],
+          ['接单时间', wo.acceptTime || wo.acceptAt],
+          ['预计上门时间', wo.expectVisitTime || wo.expectVisitAt],
+          ['实际上门时间', wo.actualVisitTime || wo.visitAt],
+          ['现场开始时间', wo.onsiteStartTime],
+          ['现场完成时间', wo.onsiteDoneTime],
+          ['发起换件时间', wo.replaceInitTime],
+          ['领料申请时间', wo.erpPickApplyTime],
+          ['领料完成时间', wo.erpPickDoneTime],
+          ['新件更换时间', wo.newPartReplaceTime],
+          ['资料上传时间', wo.docUploadTime],
+          ['关单提交时间', wo.closeSubmitTime],
+          ['关单时间', wo.closeTime || wo.closedAt],
+          ['取消时间', wo.cancelTime],
+        ]} />
+      </DrawerSection>
+
       <DrawerSection title="故障与方案">
         <div className="space-y-3">
-          <TextBlock>{wo.description}</TextBlock>
+          <TextBlock>{wo.normalizedDesc || wo.description}</TextBlock>
           <DescList items={[
-            ['一级故障原因', wo.faultCause1],
-            ['二级故障原因', wo.faultCause2],
-            ['三级故障原因', wo.faultCause3],
-            ['处理方案', wo.repairActions],
+            ['一级故障原因', wo.faultL1],
+            ['二级故障原因', wo.faultL2],
+            ['三级故障原因', wo.faultL3],
+            ['处理方案', wo.repairActions || wo.solution],
           ]} />
         </div>
       </DrawerSection>
 
-      <DrawerSection title="调度与上门">
+      <DrawerSection title="现场处理记录">
         <DescList items={[
-          ['leader 分配时间', wo.assignTime],
-          ['工程师', wo.assignedTo],
-          ['预计上门时间', wo.expectVisitTime],
-          ['工程师接单时间', wo.acceptTime],
-          ['工程师上门时间', wo.arriveTime],
+          ['现场处理说明', wo.onsiteRecord || wo.fieldRecord],
+          ['现场开始 / 完成', [wo.onsiteStartTime, wo.onsiteDoneTime].filter(Boolean).join(' ~ ') || '—'],
+          ['是否恢复正常', wo.restoredNormal == null ? '—' : yn(wo.restoredNormal)],
         ]} />
       </DrawerSection>
 
-      <DrawerSection title="换件信息">
+      <DrawerSection title="换件记录 / ERP 领料关联">
         <DescList items={[
-          ['是否需要换件', wo.involvesReplacement ? '是' : '否'],
-          ['核心零部件类型', wo.needReplaceModuleType || wo.needModuleType],
+          ['是否需换件', yn(wo.involvesReplacement || wo.needReplace)],
+          ['核心部件类型', wo.needReplaceModuleType || wo.needModuleType],
           ['旧件 SN', wo.oldModuleSN],
           ['新件 SN', wo.newModuleSN],
+          ['新件来源', wo.newPartSource],
           ['换件原因', wo.replaceReason],
-          ['换件说明', wo.replaceNote],
-          ['ERP 领料单号', wo.erpPickingNo],
-          ['消耗物料', wo.consumedMaterials],
+          ['ERP 领料单号 / 出库申请单号', wo.erpPickingNo],
+          ['ERP 领料状态', wo.erpPickingStatus ? <StatusBadge status={wo.erpPickingStatus} /> : '—'],
+          ['换件记录', <LinkAction to="/after-sales?tab=replacements">前往换件记录 →</LinkAction>],
         ]} />
       </DrawerSection>
 
-      <DrawerSection title="现场记录与关单">
+      <DrawerSection title="附件 / log / 视频">
         <DescList items={[
-          ['现场维护记录', wo.fieldRecord],
-          ['正常工作视频', wo.workVideo],
-          ['现场照片', wo.imageFile || wo.sitePhoto],
+          ['现场照片', wo.imageFile || wo.sitePhoto || wo.docFileName],
           ['log', wo.logFile],
-          ['关单说明', wo.closeNote || wo.voidReason],
-          ['最终处理结果', wo.finalResult || wo.recheckResult],
-          ['工程师关单时间', wo.closedAt],
+          ['正常工作视频', wo.workVideo],
+          ['资料类型', wo.docType],
         ]} />
       </DrawerSection>
 
-      <DrawerSection title="操作日志"><LogTimeline logs={wo.processLogs} /></DrawerSection>
+      <DrawerSection title="关单信息">
+        <DescList items={[
+          ['最终处理结果', wo.finalResult || wo.recheckResult],
+          ['关单说明', wo.closeNote],
+          ['取消原因', wo.cancelReason || wo.voidReason],
+          ['关单时间', wo.closeTime || wo.closedAt],
+        ]} />
+      </DrawerSection>
 
-      {modal === 'assign' && <AssignEngineerModal wo={wo} onClose={close} onConfirm={doAssign} />}
-      {modal === 'start' && <StartProcessModal wo={wo} currentUser={currentUser} onClose={close} onConfirm={doStart} />}
-      {modal === 'repair' && <RecordRepairModal wo={wo} onClose={close} onConfirm={doRepair} />}
-      {modal === 'close' && <CloseOrderModal wo={wo} onClose={close} onConfirm={doClose} />}
-      {modal === 'reject' && <ReasonModal title="打回处理" label="打回原因" placeholder="说明复检 / 验收未通过的原因" confirmLabel="打回处理" variant="secondary" onClose={close} onConfirm={doReject} />}
-      {modal === 'void' && <ReasonModal title="作废工单" label="作废原因" placeholder="请填写作废原因（必填）" confirmLabel="确认作废" variant="danger" requireConfirm onClose={close} onConfirm={doVoid} />}
+      <DrawerSection title="处理进展 / 操作日志"><LogTimeline logs={wo.processLogs} /></DrawerSection>
+
+      {modal === 'dispatch' && <DispatchEngineerModal wo={wo} reassign={dStatus === '待接单'} onClose={close} onConfirm={doDispatch} />}
+      {modal === 'confirmVisit' && <ConfirmVisitModal wo={wo} onClose={close} onConfirm={doConfirmVisit} />}
+      {modal === 'onsite' && <RecordOnsiteModal wo={wo} currentUser={currentUser} onClose={close} onConfirm={doOnsite} />}
+      {modal === 'replace' && <InitReplaceModal wo={wo} onClose={close} onConfirm={doReplace} />}
+      {modal === 'upload' && <UploadDocModal wo={wo} currentUser={currentUser} onClose={close} onConfirm={doUpload} />}
+      {modal === 'close' && <CloseOrderModal wo={wo} currentUser={currentUser} onClose={close} onConfirm={doClose} />}
+      {modal === 'cancel' && <ReasonModal title="取消工单" label="取消原因" placeholder="请填写取消原因（必填）" confirmLabel="确认取消" variant="danger" requireConfirm onClose={close} onConfirm={doCancel} />}
     </Drawer>
   );
 }
@@ -439,10 +659,10 @@ function OrdersTab({ state, dispatch, currentUser, canDo }) {
   const [fStatus, setFStatus] = useState('');
   const [fProject, setFProject] = useState('');
   const [fEngineer, setFEngineer] = useState('');
-  const [fSwap, setFSwap] = useState('');
   const [fSource, setFSource] = useState('');
   const [detail, setDetail] = useState(null);
   const [showNew, setShowNew] = useState(false);
+  const openDetail = (w, action) => setDetail({ id: w.id, kind: w._kind, action });
 
   const orders = allWorkOrders(state);
   const engineers = [...new Set(orders.map((w) => w.assignedTo).filter(Boolean))];
@@ -458,8 +678,7 @@ function OrdersTab({ state, dispatch, currentUser, canDo }) {
       && (!fStatus || displayWoStatus(w) === fStatus)
       && (!fProject || w.projectId === fProject)
       && (!fEngineer || w.assignedTo === fEngineer)
-      && (!fSwap || (fSwap === '是' ? w.involvesReplacement : !w.involvesReplacement))
-      && (!fSource || w._kind === fSource);
+      && (!fSource || orderSourceLabel(state, w) === fSource);
   }).sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   const pager = usePaged(filtered, 10);
 
@@ -470,7 +689,7 @@ function OrdersTab({ state, dispatch, currentUser, canDo }) {
       <PageHeader
         breadcrumb={<div className="text-xs text-gray-400">售后管理 / 售后工单</div>}
         title="售后工单"
-        description="围绕设备 SN 记录售后处理全过程：分派、上门、现场处理到关单，形成闭环与操作日志。"
+        description="承载现场服务执行闭环：分派、上门、现场处理、换件到关单。来源于问题池转入 / 交付子工单转入 / 售后直接创建。"
         actions={canDo('update_work_order') && <Btn variant="primary" onClick={() => setShowNew(true)}>新增工单</Btn>}
       />
       <StatGrid cols={4}>
@@ -480,24 +699,17 @@ function OrdersTab({ state, dispatch, currentUser, canDo }) {
         <StatCard label="已关单" value={nClosed} tone="success" />
       </StatGrid>
 
-      <Section title="售后闭环边界" bodyClassName="p-3">
-        <p className="text-xs text-gray-500 leading-relaxed">
-          售后工单处理在线运营 / 交付后设备的现场问题；生产测试 NG 属于生产返修，不在此处。交付异常转售后是流程分支，工单顶部会标注「来源：交付子工单」。
-        </p>
-      </Section>
-
       <Toolbar right={<span className="text-xs text-gray-400">共 {filtered.length} 条</span>}>
         <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索工单号 / 设备 SN / 描述" className="w-60" />
         <Select value={fStatus} onChange={(e) => setFStatus(e.target.value)}><option value="">全部状态</option>{WO_STATUS_LIST.map((s) => <option key={s}>{s}</option>)}</Select>
         <Select value={fProject} onChange={(e) => setFProject(e.target.value)}><option value="">全部项目</option>{(state.projects || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
         <Select value={fEngineer} onChange={(e) => setFEngineer(e.target.value)}><option value="">全部工程师</option>{engineers.map((o) => <option key={o}>{o}</option>)}</Select>
-        <Select value={fSwap} onChange={(e) => setFSwap(e.target.value)}><option value="">是否换件</option><option value="是">需换件</option><option value="否">不换件</option></Select>
-        <Select value={fSource} onChange={(e) => setFSource(e.target.value)}><option value="">全部来源</option><option value="aftersales">售后创建</option><option value="delivery">交付子工单</option></Select>
+        <Select value={fSource} onChange={(e) => setFSource(e.target.value)}><option value="">全部来源</option>{ORDER_SOURCES.map((s) => <option key={s}>{s}</option>)}</Select>
       </Toolbar>
 
       <Table
         className="text-[12px]"
-        head={['售后工单号', '来源问题编号', '客户名称', '项目名称', '设备 SN', '点位 / 地址', '故障描述', '当前状态', '工程师', '预计上门时间', '最近更新时间', '操作']}
+        head={['售后工单号', '来源', '来源问题编号', '客户名称', '项目名称', '设备 SN', '点位 / 地址', '故障描述', '当前状态', '严重程度', '工程师', '预计上门时间', '最近更新时间', '操作']}
         empty="暂无售后工单"
         footer={<Pagination page={pager.page} total={pager.total} totalPages={pager.totalPages} onChange={pager.setPage} />}
       >
@@ -505,20 +717,42 @@ function OrdersTab({ state, dispatch, currentUser, canDo }) {
           const project = findProject(state, w.projectId);
           const device = findDeviceOf(state, w);
           const srcQI = sourceIssueIdOf(state, w);
+          const dS = displayWoStatus(w);
           return (
-            <tr key={`${w._kind}-${w.id}`} className="hover:bg-[#fafafa] transition-colors">
+            <tr key={`${w._kind}-${w.id}`} className="hover:bg-[#fafafa] transition-colors align-top">
               <td className="px-3 py-2 font-mono text-gray-700 whitespace-nowrap">{w.id}</td>
+              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{orderSourceLabel(state, w)}</td>
               <td className="px-3 py-2 font-mono text-gray-500 whitespace-nowrap">{srcQI || '—'}</td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{project?.client || '—'}</td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{project?.name || '—'}</td>
               <td className="px-3 py-2 font-mono text-gray-800 whitespace-nowrap">{w.deviceSN || '—'}</td>
               <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{locLabel(locationOfDevice(state, device))}</td>
-              <td className="px-3 py-2 text-gray-600 max-w-[200px]"><div className="truncate" title={w.description}>{w.description || '—'}</div></td>
-              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={displayWoStatus(w)} /></td>
+              <td className="px-3 py-2 text-gray-600 max-w-[200px]"><div className="truncate" title={w.normalizedDesc || w.description}>{w.normalizedDesc || w.description || '—'}</div></td>
+              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={dS} /></td>
+              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={w.severity || '中'} /></td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{w.assignedTo || '—'}</td>
-              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{w.expectVisitTime || '—'}</td>
+              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{w.expectVisitTime || w.expectVisitAt || '—'}</td>
               <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{w.updatedAt || '—'}</td>
-              <td className="px-3 py-2 whitespace-nowrap"><LinkAction onClick={() => setDetail({ id: w.id, kind: w._kind })}>查看详情</LinkAction></td>
+              <td className="px-3 py-2">
+                <ActionCell>
+                  <LinkAction onClick={() => openDetail(w)}>查看详情</LinkAction>
+                  {canDo('update_work_order') && dS === '待分派' && <>
+                    <LinkAction onClick={() => openDetail(w, 'dispatch')}>分派工程师</LinkAction>
+                    <LinkAction onClick={() => openDetail(w, 'cancel')}>取消工单</LinkAction>
+                  </>}
+                  {canDo('update_work_order') && dS === '待接单' && <>
+                    <LinkAction onClick={() => openDetail(w, 'dispatch')}>改派工程师</LinkAction>
+                    <LinkAction onClick={() => openDetail(w, 'cancel')}>取消工单</LinkAction>
+                  </>}
+                  {canDo('update_work_order') && dS === '待上门' && <LinkAction onClick={() => openDetail(w, 'confirmVisit')}>确认上门时间</LinkAction>}
+                  {canDo('update_work_order') && dS === '现场处理中' && <>
+                    <LinkAction onClick={() => openDetail(w, 'onsite')}>记录现场处理</LinkAction>
+                    <LinkAction onClick={() => openDetail(w, 'replace')}>发起换件</LinkAction>
+                    <LinkAction onClick={() => openDetail(w, 'upload')}>上传资料</LinkAction>
+                    <LinkAction onClick={() => openDetail(w, 'close')}>关单</LinkAction>
+                  </>}
+                </ActionCell>
+              </td>
             </tr>
           );
         })}
@@ -530,20 +764,22 @@ function OrdersTab({ state, dispatch, currentUser, canDo }) {
   );
 }
 
-/* ═════════════════════════ 问题池：动作弹窗 ═════════════════════════ */
+/* ═════════════════════════ 问题池：录入弹窗 ═════════════════════════ */
 function ManualEntryModal({ state, currentUser, onClose, onSave }) {
   const { projects = [], devices = [], locations = [] } = state;
-  const [form, setForm] = useState({ projectId: '', deviceId: '', locationId: '', issueType: '设备质量问题', severity: '中', sourceStage: '在线运营', issueDesc: '' });
+  const [form, setForm] = useState({ projectId: '', deviceId: '', locationId: '', sourceType: '手动录入', sourceNode: '在线运营', originalDesc: '' });
   const projDevices = form.projectId ? devices.filter((d) => d.projectId === form.projectId) : [];
   const projLocations = form.projectId ? locations.filter((l) => l.projectId === form.projectId) : [];
   const submit = () => {
     const device = devices.find((d) => d.id === form.deviceId);
+    const t = nowText();
     onSave({
-      id: genId('QI'), deviceId: form.deviceId, deviceSN: device?.sn || '',
-      locationId: form.locationId || null, projectId: form.projectId, sourceStage: form.sourceStage,
-      issueType: form.issueType, severity: form.severity, issueDesc: form.issueDesc,
-      reporterName: currentUser, owner: currentUser, reportTime: nowText(),
-      status: '待处理', source: '手动录入', linkedWorkOrder: false, processLogs: [],
+      id: genId('QI'), deviceId: form.deviceId, deviceSN: device?.sn || '', originalDeviceSN: device?.sn || '',
+      locationId: form.locationId || null, originalLocationId: form.locationId || null, projectId: form.projectId,
+      sourceType: form.sourceType, source: form.sourceType, sourceNode: form.sourceNode, sourceStage: form.sourceNode,
+      originalDesc: form.originalDesc, issueDesc: form.originalDesc, originalRecorder: currentUser, originalOccurTime: t,
+      occurTime: t, enterPoolTime: t, reportTime: t, reporterName: currentUser, owner: '', csAgent: '',
+      status: '待预处理', linkedWorkOrder: false, processLogs: [{ time: t, operator: currentUser, toStatus: '待预处理', notes: '录入问题池' }],
     });
     onClose();
   };
@@ -569,26 +805,22 @@ function ManualEntryModal({ state, currentUser, onClose, onSave }) {
               {projLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </Select>
           </Field>
-          <Field label="问题类型">
-            <Select value={form.issueType} onChange={(e) => setForm({ ...form, issueType: e.target.value })} className="w-full">
-              {ISSUE_TYPES.map((t) => <option key={t}>{t}</option>)}
+          <Field label="来源类型">
+            <Select value={form.sourceType} onChange={(e) => setForm({ ...form, sourceType: e.target.value })} className="w-full">
+              {QI_SOURCES.map((s) => <option key={s}>{s}</option>)}
             </Select>
           </Field>
-          <Field label="问题来源阶段">
-            <Select value={form.sourceStage} onChange={(e) => setForm({ ...form, sourceStage: e.target.value })} className="w-full">
-              {['在线运营', '出厂检验', '现场安装调试', '客户验收'].map((s) => <option key={s}>{s}</option>)}
-            </Select>
-          </Field>
-          <Field label="严重程度">
-            <Select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })} className="w-full">
-              {SEVERITIES.map((s) => <option key={s}>{s}</option>)}
+          <Field label="来源节点">
+            <Select value={form.sourceNode} onChange={(e) => setForm({ ...form, sourceNode: e.target.value })} className="w-full">
+              {['在线运营', '出厂检验', '现场安装调试', '客户验收', '交付'].map((s) => <option key={s}>{s}</option>)}
             </Select>
           </Field>
         </div>
-        <Field label="故障描述" required>
-          <textarea rows={3} className={TA} value={form.issueDesc} onChange={(e) => setForm({ ...form, issueDesc: e.target.value })} placeholder="请描述发现的问题" />
+        <Field label="原始异常描述" required>
+          <textarea rows={3} className={TA} value={form.originalDesc} onChange={(e) => setForm({ ...form, originalDesc: e.target.value })} placeholder="请描述发现的问题（进入问题池后由技术客服规范化）" />
         </Field>
-        <ModalActions onClose={onClose} onConfirm={submit} disabled={!form.projectId || !form.deviceId || !form.issueDesc.trim()} confirmLabel="提交" />
+        <Card className="bg-[#fafafa] text-xs text-gray-500">录入后问题进入问题池，状态为「待预处理」，由技术客服指派、预处理并规范化。</Card>
+        <ModalActions onClose={onClose} onConfirm={submit} disabled={!form.projectId || !form.deviceId || !form.originalDesc.trim()} confirmLabel="提交" />
       </div>
     </Modal>
   );
@@ -598,7 +830,7 @@ function ScanReportModal({ onClose }) {
   return (
     <Modal isOpen onClose={onClose} title="扫码上报问题">
       <div className="space-y-4 text-center">
-        <p className="text-[13px] text-gray-600 text-left">使用飞书扫一扫扫描下方二维码，自动识别设备 SN 后填写上报。</p>
+        <p className="text-[13px] text-gray-600 text-left">使用飞书扫一扫扫描下方二维码，自动识别设备 SN 后填写上报，进入问题池待预处理。</p>
         <div className="flex justify-center">
           <svg width="150" height="150" viewBox="0 0 160 160" className="border border-[#ececec] rounded-lg p-2">
             <rect x="10" y="10" width="50" height="50" rx="3" fill="none" stroke="#171717" strokeWidth="5" />
@@ -619,184 +851,346 @@ function ScanReportModal({ onClose }) {
   );
 }
 
-function AssignQIModal({ qi, onClose, onConfirm }) {
-  const [owner, setOwner] = useState(qi.owner || '');
-  const [toProcessing, setToProcessing] = useState(qi.status === '待处理');
-  return (
-    <Modal isOpen onClose={onClose} title="指派预处理人">
-      <div className="space-y-3">
-        <Field label="预处理人" required>
-          <Select value={owner} onChange={(e) => setOwner(e.target.value)} className="w-full">
-            <option value="">-- 选择处理人 --</option>{engineerOptions()}
-          </Select>
-        </Field>
-        {qi.status === '待处理' && (
-          <label className="flex items-center gap-2 text-[13px] text-gray-600"><input type="checkbox" checked={toProcessing} onChange={(e) => setToProcessing(e.target.checked)} /> 指派后同时转入「处理中」</label>
-        )}
-        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ owner, toProcessing })} disabled={!owner} confirmLabel="确认指派" />
-      </div>
-    </Modal>
-  );
-}
-
-function ProgressQIModal({ qi, currentUser, onClose, onConfirm }) {
-  const pending = qi.status === '待处理';
-  const [content, setContent] = useState('');
-  const [person, setPerson] = useState(qi.owner || currentUser);
-  return (
-    <Modal isOpen onClose={onClose} title={pending ? '更新处理建议' : '更新处理进展'}>
-      <div className="space-y-3">
-        <Field label={pending ? '处理建议' : '处理进展'} required>
-          <textarea rows={3} className={TA} value={content} onChange={(e) => setContent(e.target.value)} placeholder={pending ? '填写初步判断 / 处理建议' : '填写本次处理进展'} />
-        </Field>
-        <Field label="处理人"><Select value={person} onChange={(e) => setPerson(e.target.value)} className="w-full">{engineerOptions()}</Select></Field>
-        {pending && <Card className="bg-[#fafafa] text-xs text-gray-500">提交后问题将转入「处理中」。</Card>}
-        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ content: content.trim(), person })} disabled={!content.trim()} confirmLabel="保存" />
-      </div>
-    </Modal>
-  );
-}
-
-function GenOrderModal({ qi, onClose, onConfirm }) {
-  const [engineer, setEngineer] = useState('');
+/* ═════════════════════════ 问题池：预处理动作弹窗 ═════════════════════════ */
+// 1 指派技术客服
+function AssignCSModal({ qi, dStatus, onClose, onConfirm }) {
+  const [csAgent, setCsAgent] = useState(qi.csAgent || qi.owner || '');
   const [note, setNote] = useState('');
   return (
-    <Modal isOpen onClose={onClose} title="转售后工单">
+    <Modal isOpen onClose={onClose} title="指派技术客服">
       <div className="space-y-3">
-        <Card className="bg-[#fafafa] text-xs text-gray-500">将根据本问题生成一条售后工单（默认「待分派」），并回填到问题的「是否转售后工单」。</Card>
         <div className="grid grid-cols-2 gap-3 text-[13px]">
-          <div><span className="text-gray-400 text-xs">设备 SN：</span><span className="text-gray-700">{qi.deviceSN}</span></div>
-          <div><span className="text-gray-400 text-xs">问题类型：</span><span className="text-gray-700">{displayIssueType(qi)}</span></div>
+          <div><span className="text-gray-400 text-xs">问题编号：</span><span className="font-mono text-gray-700">{qi.id}</span></div>
+          <div><span className="text-gray-400 text-xs">当前状态：</span><StatusBadge status={dStatus} /></div>
         </div>
-        <Field label="工程师">
-          <Select value={engineer} onChange={(e) => setEngineer(e.target.value)} className="w-full"><option value="">-- 待分派 --</option>{engineerOptions()}</Select>
+        <Field label="技术客服" required>
+          <Select value={csAgent} onChange={(e) => setCsAgent(e.target.value)} className="w-full"><option value="">-- 选择技术客服 --</option>{engineerOptions()}</Select>
         </Field>
-        <Field label="生成说明"><textarea rows={2} className={TA} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
-        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ engineer, note })} confirmLabel="生成工单" />
+        <Field label="指派说明"><textarea rows={2} className={TA} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+        <div className="text-xs text-gray-400">指派时间 {nowText()} · 操作人由当前登录用户记录</div>
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ csAgent, note })} disabled={!csAgent} confirmLabel="确认指派" />
       </div>
     </Modal>
   );
 }
 
-function CloseQIModal({ onClose, onConfirm }) {
+// 2 编辑·规范化问题信息
+function EditNormalizeModal({ qi, onClose, onConfirm }) {
+  const [form, setForm] = useState({
+    issueType: qi.issueType || '设备质量问题', severity: qi.severity || '中', deviceSN: qi.deviceSN || '', locationId: qi.locationId || '',
+    normalizedDesc: qi.normalizedDesc || qi.issueDesc || '', faultL1: qi.faultL1 || '', faultL2: qi.faultL2 || '', faultL3: qi.faultL3 || '',
+    solution: qi.solution || '', remoteSolvable: (qi.remoteSolvable ?? qi.remoteClosable) ? '是' : '否', needVisit: qi.needVisit ? '是' : '否',
+    needReplace: qi.needReplace ? '是' : '否', needMoreInfo: qi.needMoreInfo ? '是' : '否', preprocessConclusion: qi.preprocessConclusion || '', csNote: qi.csNote || '',
+  });
+  const set = (k, v) => setForm({ ...form, [k]: v });
+  return (
+    <Modal isOpen onClose={onClose} title="编辑 · 规范化问题信息" size="xl">
+      <div className="space-y-3">
+        <ReadonlyNote items={[['原始异常描述', qi.originalDesc || qi.issueDesc], ['原始设备 SN', qi.originalDeviceSN || qi.deviceSN], ['原始点位', qi.originalLocationId || qi.locationId]]} />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="问题类型"><Select value={form.issueType} onChange={(e) => set('issueType', e.target.value)} className="w-full">{ISSUE_TYPES.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="严重程度"><Select value={form.severity} onChange={(e) => set('severity', e.target.value)} className="w-full">{SEVERITIES.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="设备 SN"><Input value={form.deviceSN} onChange={(e) => set('deviceSN', e.target.value)} className="w-full" /></Field>
+          <Field label="点位 ID"><Input value={form.locationId} onChange={(e) => set('locationId', e.target.value)} className="w-full" /></Field>
+        </div>
+        <Field label="规范化故障描述"><textarea rows={2} className={TA} value={form.normalizedDesc} onChange={(e) => set('normalizedDesc', e.target.value)} /></Field>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="一级故障原因"><Input value={form.faultL1} onChange={(e) => set('faultL1', e.target.value)} className="w-full" /></Field>
+          <Field label="二级故障原因"><Input value={form.faultL2} onChange={(e) => set('faultL2', e.target.value)} className="w-full" /></Field>
+          <Field label="三级故障原因"><Input value={form.faultL3} onChange={(e) => set('faultL3', e.target.value)} className="w-full" /></Field>
+        </div>
+        <Field label="处理方案"><textarea rows={2} className={TA} value={form.solution} onChange={(e) => set('solution', e.target.value)} /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="是否可远程解决"><Select value={form.remoteSolvable} onChange={(e) => set('remoteSolvable', e.target.value)} className="w-full">{YN.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="是否需上门"><Select value={form.needVisit} onChange={(e) => set('needVisit', e.target.value)} className="w-full">{YN.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="是否需换件"><Select value={form.needReplace} onChange={(e) => set('needReplace', e.target.value)} className="w-full">{YN.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="是否需补充信息"><Select value={form.needMoreInfo} onChange={(e) => set('needMoreInfo', e.target.value)} className="w-full">{YN.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+        </div>
+        <Field label="预处理结论"><textarea rows={2} className={TA} value={form.preprocessConclusion} onChange={(e) => set('preprocessConclusion', e.target.value)} /></Field>
+        <Field label="技术客服备注"><textarea rows={2} className={TA} value={form.csNote} onChange={(e) => set('csNote', e.target.value)} /></Field>
+        <Field label="附件"><Input disabled placeholder="（原型占位）支持上传附件" className="w-full bg-gray-50 text-gray-400" /></Field>
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm({
+          issueType: form.issueType, severity: form.severity, deviceSN: form.deviceSN, locationId: form.locationId || null,
+          normalizedDesc: form.normalizedDesc, faultL1: form.faultL1, faultL2: form.faultL2, faultL3: form.faultL3, solution: form.solution,
+          remoteSolvable: form.remoteSolvable === '是', needVisit: form.needVisit === '是', needReplace: form.needReplace === '是',
+          needMoreInfo: form.needMoreInfo === '是', preprocessConclusion: form.preprocessConclusion, csNote: form.csNote,
+        })} confirmLabel="保存规范化信息" />
+      </div>
+    </Modal>
+  );
+}
+
+// 3 更新预处理记录
+function UpdatePreprocessModal({ qi, currentUser, onClose, onConfirm }) {
+  const [stage, setStage] = useState('远程排查');
+  const [content, setContent] = useState('');
+  const [judge, setJudge] = useState('');
+  return (
+    <Modal isOpen onClose={onClose} title="更新预处理记录">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="处理阶段"><Select value={stage} onChange={(e) => setStage(e.target.value)} className="w-full">{['远程排查', '远程指导', '等待反馈', '复现验证', '结论确认'].map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="操作人"><Input disabled value={qi.csAgent || currentUser} className="w-full bg-gray-50 text-gray-400" /></Field>
+        </div>
+        <Field label="处理说明" required><textarea rows={3} className={TA} value={content} onChange={(e) => setContent(e.target.value)} placeholder="填写本次预处理进展" /></Field>
+        <Field label="当前判断"><Input value={judge} onChange={(e) => setJudge(e.target.value)} placeholder="如：疑似软件问题 / 需上门" className="w-full" /></Field>
+        <Field label="附件"><Input disabled placeholder="（原型占位）支持上传附件" className="w-full bg-gray-50 text-gray-400" /></Field>
+        <div className="text-xs text-gray-400">操作时间 {nowText()}</div>
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ stage, content: content.trim(), judge })} disabled={!content.trim()} confirmLabel="保存记录" />
+      </div>
+    </Modal>
+  );
+}
+
+// 4 请求补充信息
+function RequestMoreInfoModal({ onClose, onConfirm }) {
+  const [content, setContent] = useState('');
+  const [target, setTarget] = useState('交付工程师');
+  const [deadline, setDeadline] = useState('');
+  const [note, setNote] = useState('');
+  return (
+    <Modal isOpen onClose={onClose} title="请求补充信息">
+      <div className="space-y-3">
+        <Field label="需补充内容" required><textarea rows={3} className={TA} value={content} onChange={(e) => setContent(e.target.value)} placeholder="说明需要对方补充的信息" /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="补充对象"><Select value={target} onChange={(e) => setTarget(e.target.value)} className="w-full">{MOREINFO_TARGETS.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="截止时间"><Input value={deadline} onChange={(e) => setDeadline(e.target.value)} placeholder="YYYY-MM-DD HH:mm" className="w-full" /></Field>
+        </div>
+        <Field label="备注"><textarea rows={2} className={TA} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+        <Card className="bg-[#fafafa] text-xs text-gray-500">提交后问题转入「待补充信息」。</Card>
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ content: content.trim(), target, deadline, note })} disabled={!content.trim()} confirmLabel="发起请求" />
+      </div>
+    </Modal>
+  );
+}
+
+// 补充信息（待补充信息 → 预处理中）
+function SupplementModal({ onClose, onConfirm }) {
+  const [content, setContent] = useState('');
+  return (
+    <Modal isOpen onClose={onClose} title="补充信息">
+      <div className="space-y-3">
+        <Field label="补充内容" required><textarea rows={3} className={TA} value={content} onChange={(e) => setContent(e.target.value)} placeholder="填写补充的信息 / 反馈" /></Field>
+        <Card className="bg-[#fafafa] text-xs text-gray-500">提交后问题回到「预处理中」，由技术客服继续处理。</Card>
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ content: content.trim() })} disabled={!content.trim()} confirmLabel="提交补充" />
+      </div>
+    </Modal>
+  );
+}
+
+// 5 远程关闭（预处理中/待补充信息 → 远程已解决）
+function RemoteCloseModal({ currentUser, onClose, onConfirm }) {
   const [reason, setReason] = useState('');
-  const [conclusion, setConclusion] = useState('');
+  const [result, setResult] = useState('');
+  const [restored, setRestored] = useState('是');
   const [ok, setOk] = useState(false);
   return (
-    <Modal isOpen onClose={onClose} title="关闭问题">
+    <Modal isOpen onClose={onClose} title="远程关闭">
       <div className="space-y-3">
-        <Field label="关闭原因" required><textarea rows={2} className={TA} value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
-        <Field label="处理结论"><textarea rows={2} className={TA} value={conclusion} onChange={(e) => setConclusion(e.target.value)} /></Field>
-        <label className="flex items-center gap-2 text-[13px] text-gray-600"><input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} /> 我已确认问题可关闭。</label>
-        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ reason: reason.trim(), conclusion: conclusion.trim() })} disabled={!reason.trim() || !ok} confirmLabel="确认关闭" variant="primary" />
+        <Field label="关闭原因" required><textarea rows={2} className={TA} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="说明可远程解决的原因" /></Field>
+        <Field label="处理结果" required><Input value={result} onChange={(e) => setResult(e.target.value)} placeholder="如：远程重启后恢复 / 推送补丁修复" className="w-full" /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="是否恢复正常"><Select value={restored} onChange={(e) => setRestored(e.target.value)} className="w-full">{YN.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="关闭人"><Input disabled value={currentUser} className="w-full bg-gray-50 text-gray-400" /></Field>
+        </div>
+        <Field label="正常工作视频 / 附件"><Input disabled placeholder="（原型占位）支持上传视频 / 附件" className="w-full bg-gray-50 text-gray-400" /></Field>
+        <label className="flex items-center gap-2 text-[13px] text-gray-600"><input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} /> 我已确认问题可远程关闭。</label>
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ reason: reason.trim(), result: result.trim(), restored: restored === '是' })} disabled={!reason.trim() || !result.trim() || !ok} confirmLabel="确认远程关闭" />
       </div>
     </Modal>
   );
 }
 
-// 问题详情抽屉：完整字段 + 处理日志 + 处理台。
-function IssueDetailDrawer({ id, state, dispatch, currentUser, canDo, onClose }) {
-  const [modal, setModal] = useState(null);
-  const qi = (state.qualityIssues || []).find((q) => q.id === id);
+// 6 转售后工单（默认取规范化字段）
+function ToWorkOrderModal({ qi, project, locationLabel, onClose, onConfirm }) {
+  const [form, setForm] = useState({
+    normalizedDesc: qi.normalizedDesc || qi.issueDesc || '', faultCause: [qi.faultL1, qi.faultL2, qi.faultL3].filter(Boolean).join(' / '),
+    suggestedSolution: qi.solution || '', severity: qi.severity || '中', needReplace: qi.needReplace ? '是' : '否', expectVisit: '', note: '',
+  });
+  const set = (k, v) => setForm({ ...form, [k]: v });
+  return (
+    <Modal isOpen onClose={onClose} title="转售后工单" size="lg">
+      <div className="space-y-3">
+        <ReadonlyNote items={[['来源问题编号', qi.id], ['客户', project?.client], ['项目', project?.name], ['设备 SN', qi.deviceSN], ['点位 / 地址', locationLabel]]} />
+        <Field label="规范化故障描述"><textarea rows={2} className={TA} value={form.normalizedDesc} onChange={(e) => set('normalizedDesc', e.target.value)} /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="故障原因"><Input value={form.faultCause} onChange={(e) => set('faultCause', e.target.value)} className="w-full" /></Field>
+          <Field label="建议处理方案"><Input value={form.suggestedSolution} onChange={(e) => set('suggestedSolution', e.target.value)} className="w-full" /></Field>
+          <Field label="严重程度"><Select value={form.severity} onChange={(e) => set('severity', e.target.value)} className="w-full">{SEVERITIES.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="是否需换件"><Select value={form.needReplace} onChange={(e) => set('needReplace', e.target.value)} className="w-full">{YN.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="期望上门时间"><Input value={form.expectVisit} onChange={(e) => set('expectVisit', e.target.value)} placeholder="YYYY-MM-DD HH:mm" className="w-full" /></Field>
+        </div>
+        <Field label="备注"><textarea rows={2} className={TA} value={form.note} onChange={(e) => set('note', e.target.value)} /></Field>
+        <Card className="bg-[#fafafa] text-xs text-gray-500">提交后默认取规范化字段生成售后工单（待分派），并回填问题的「是否转售后工单」与关联工单号。</Card>
+        <ModalActions onClose={onClose} onConfirm={() => onConfirm({ ...form, needReplace: form.needReplace === '是' })} confirmLabel="生成售后工单" />
+      </div>
+    </Modal>
+  );
+}
+
+// 问题池强详情：宽抽屉，分区（状态栏 / 操作 / 来源快照 / 规范化 / 时间节点 / 时间线 / 附件 / 工单关联）。
+function IssueDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose }) {
+  const [modal, setModal] = useState(entry.action || null);
+  const qi = (state.qualityIssues || []).find((q) => q.id === entry.id);
   if (!qi) return null;
   const project = findProject(state, qi.projectId);
-  const location = (state.locations || []).find((l) => l.id === qi.locationId);
+  const location = locById(state, qi.locationId);
+  const origLocation = locById(state, qi.originalLocationId);
+  const dStatus = normalizeIssueStatus(qi);
   const linked = !!(qi.linkedWorkOrder || qi.linkedWorkOrderId);
-  const closed = qi.status === '已关闭';
   const editable = canDo('update_quality_issue');
-  const lastUpdate = qi.processLogs && qi.processLogs.length ? qi.processLogs[qi.processLogs.length - 1].time : qi.reportTime;
+  const enterT = qi.enterPoolTime || qi.reportTime;
+  const stayEnd = qi.closeTime || qi.toWorkOrderTime || qi.remoteCloseTime || nowText();
   const close = () => setModal(null);
 
   const patchQI = (p, note, forceTo) => {
     const t = nowText();
-    dispatch({ type: 'UPDATE_QUALITY_ISSUE', payload: { id: qi.id, ...p, processLogs: [...(qi.processLogs || []), { time: t, operator: currentUser, fromStatus: qi.status, toStatus: forceTo ?? p.status ?? qi.status, notes: note }] } });
+    const to = forceTo ?? p.status ?? dStatus;
+    dispatch({ type: 'UPDATE_QUALITY_ISSUE', payload: { id: qi.id, ...p, processLogs: [...(qi.processLogs || []), { time: t, operator: currentUser, fromStatus: dStatus, toStatus: to, notes: note }] } });
     close();
   };
-  const doAssign = ({ owner, toProcessing }) => patchQI({ owner, status: toProcessing ? '处理中' : qi.status }, `指派预处理人：${owner}`, toProcessing ? '处理中' : qi.status);
-  const doProgress = ({ content, person }) => { const to = qi.status === '待处理' ? '处理中' : qi.status; patchQI({ status: to, owner: qi.owner || person, handleNote: content }, `更新处理${qi.status === '待处理' ? '（转处理中）' : '进展'}：${content}`, to); };
-  const doClose = ({ reason, conclusion }) => patchQI({ status: '已关闭', closeReason: reason, closeConclusion: conclusion }, `关闭问题：${reason}${conclusion ? `；结论：${conclusion}` : ''}`, '已关闭');
-  const doReopen = (reason) => patchQI({ status: '处理中' }, `重新打开：${reason}`, '处理中');
-  const genOrder = ({ engineer, note }) => {
+  const doAssign = ({ csAgent, note }) => patchQI({ csAgent, owner: csAgent, csAssignTime: nowText() }, `指派技术客服：${csAgent}${note ? `（${note}）` : ''}`);
+  const doStart = () => patchQI({ status: '预处理中', csFirstResponseTime: qi.csFirstResponseTime || nowText() }, '开始预处理', '预处理中');
+  const doEdit = (p) => patchQI(p, `编辑·规范化问题信息（问题类型 ${p.issueType} / 严重度 ${p.severity}）`);
+  const doProgress = ({ stage, content, judge }) => patchQI({ handleNote: content }, `更新预处理记录[${stage}]：${content}${judge ? `；判断：${judge}` : ''}`);
+  const doMoreInfo = ({ content, target, deadline, note }) => patchQI({ status: '待补充信息', needMoreInfo: true, moreInfoTarget: target, moreInfoDeadline: deadline }, `请求补充信息（对象：${target}${deadline ? `，截止 ${deadline}` : ''}）：${content}${note ? `（${note}）` : ''}`, '待补充信息');
+  const doSupplement = ({ content }) => patchQI({ status: '预处理中', needMoreInfo: false }, `补充信息：${content}`, '预处理中');
+  const doRemoteClose = ({ reason, result, restored }) => patchQI({ status: '远程已解决', remoteCloseTime: nowText(), preprocessDoneTime: qi.preprocessDoneTime || nowText(), closeReason: reason, preprocessConclusion: qi.preprocessConclusion || result, restoredNormal: restored }, `远程关闭：${reason}；结果：${result}`, '远程已解决');
+  const doToWorkOrder = (f) => {
     if (linked) return;
     const t = nowText();
     const woId = genId('WO');
-    const needSwap = displayIssueType(qi) === '设备质量问题';
-    dispatch({ type: 'ADD_WORK_ORDER', payload: { id: woId, type: 'aftersales', woClass: needSwap ? '换件工单' : '其他问题工单', involvesReplacement: needSwap, stage: qi.sourceStage || '在线运营', projectId: qi.projectId, deviceId: qi.deviceId, deviceSN: qi.deviceSN, description: qi.issueDesc, severity: qi.severity || '中', status: '待处理', assignedTo: engineer || '', sourceQualityIssueId: qi.id, createdAt: t, updatedAt: t, closedAt: null, processLogs: [] } });
-    patchQI({ linkedWorkOrder: true, linkedWorkOrderId: woId }, `转售后工单 ${woId}${note ? `（${note}）` : ''}`);
+    dispatch({ type: 'ADD_WORK_ORDER', payload: {
+      id: woId, type: 'aftersales', woClass: f.needReplace ? '换件工单' : '其他问题工单', involvesReplacement: f.needReplace, needReplace: f.needReplace,
+      source: '问题池转入', sourceIssueId: qi.id, sourceQualityIssueId: qi.id, stage: qi.sourceNode || qi.sourceStage || '在线运营',
+      projectId: qi.projectId, deviceId: qi.deviceId, deviceSN: qi.deviceSN, description: f.normalizedDesc, normalizedDesc: f.normalizedDesc,
+      faultL1: qi.faultL1, faultL2: qi.faultL2, faultL3: qi.faultL3, suggestedSolution: f.suggestedSolution, severity: f.severity,
+      csAgent: qi.csAgent || qi.owner, preprocessDoneTime: qi.preprocessDoneTime || t, preprocessConclusion: qi.preprocessConclusion,
+      needVisit: qi.needVisit, expectVisitTime: f.expectVisit, status: '待分派', assignedTo: '',
+      createTime: t, createdAt: t, updatedAt: t, closedAt: null, processLogs: [{ time: t, operator: currentUser, toStatus: '待分派', notes: `由问题池 ${qi.id} 转入` }],
+    } });
+    patchQI({ status: '已转售后工单', linkedWorkOrder: true, linkedWorkOrderId: woId, toWorkOrderTime: t, preprocessDoneTime: qi.preprocessDoneTime || t }, `转售后工单 ${woId}${f.note ? `（${f.note}）` : ''}`, '已转售后工单');
   };
 
   return (
-    <Drawer open onClose={onClose} title={qi.id} subtitle={`来源：${qi.source || '—'} · 上报 ${qi.reportTime || '—'}`}
+    <Drawer open onClose={onClose} title={qi.id}
+      subtitle={`${qi.sourceType || qi.source || '—'} · 进入问题池 ${enterT || '—'}`}
       chips={<>
-        <StatusBadge status={qi.status} />
+        {(qi.sourceType || qi.source) && <StatusBadge status={qi.sourceType || qi.source} />}
+        {qi.issueType && <StatusBadge status={qi.issueType} />}
+        <StatusBadge status={dStatus} />
         <StatusBadge status={qi.severity || '中'} />
-        <StatusBadge status={displayIssueType(qi)} />
-        <span className="text-xs text-gray-500">预处理人：{qi.owner || '—'}</span>
+        <span className="text-xs text-gray-500">技术客服：{qi.csAgent || qi.owner || '—'}</span>
+        <Chip>{linked ? '已转售后工单' : '未转工单'}</Chip>
       </>}>
       <Section title="当前可执行操作" bodyClassName="p-3">
         {!editable ? (
           <div className="text-[13px] text-gray-400">当前角色无问题处理权限，仅可查看。</div>
-        ) : closed ? (
-          <div className="flex flex-wrap gap-2 items-center">
-            <Btn size="sm" onClick={() => setModal('reopen')}>重新打开</Btn>
-            <span className="text-[13px] text-gray-400">问题已关闭，其余动作不可用。</span>
-          </div>
         ) : (
           <div className="flex flex-wrap gap-2">
-            <Btn size="sm" onClick={() => setModal('assign')}>指派预处理人</Btn>
-            <Btn size="sm" onClick={() => setModal('progress')}>{qi.status === '待处理' ? '更新处理建议' : '更新处理进展'}</Btn>
-            <Btn variant="primary" size="sm" disabled={linked} title={linked ? `已转工单 ${qi.linkedWorkOrderId || ''}` : ''} onClick={() => setModal('genOrder')}>转售后工单</Btn>
-            <Btn size="sm" onClick={() => setModal('close')}>关闭问题</Btn>
+            {dStatus === '待预处理' && <>
+              <Btn size="sm" onClick={() => setModal('assign')}>指派技术客服</Btn>
+              <Btn variant="primary" size="sm" onClick={() => setModal('start')}>开始预处理</Btn>
+            </>}
+            {dStatus === '预处理中' && <>
+              <Btn size="sm" onClick={() => setModal('edit')}>编辑·规范化问题信息</Btn>
+              <Btn size="sm" onClick={() => setModal('progress')}>更新预处理记录</Btn>
+              <Btn size="sm" onClick={() => setModal('moreinfo')}>请求补充信息</Btn>
+              <Btn size="sm" onClick={() => setModal('remoteclose')}>远程关闭</Btn>
+              <Btn variant="primary" size="sm" onClick={() => setModal('toworkorder')}>转售后工单</Btn>
+            </>}
+            {dStatus === '待补充信息' && <>
+              <Btn size="sm" onClick={() => setModal('supplement')}>补充信息</Btn>
+              <Btn size="sm" onClick={() => setModal('progress')}>更新预处理记录</Btn>
+              <Btn size="sm" onClick={() => setModal('remoteclose')}>远程关闭</Btn>
+              <Btn variant="primary" size="sm" onClick={() => setModal('toworkorder')}>转售后工单</Btn>
+            </>}
+            {['远程已解决', '已转售后工单', '已关闭'].includes(dStatus) && (
+              <span className="text-[13px] text-gray-400">问题已{dStatus}，仅可查看处理记录与日志。{dStatus === '已转售后工单' && qi.linkedWorkOrderId && <LinkAction to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`}>查看售后工单 →</LinkAction>}</span>
+            )}
           </div>
         )}
       </Section>
 
-      <DrawerSection title="基础信息">
+      <DrawerSection title="来源快照（只读，不被技术客服覆盖）">
         <DescList items={[
-          ['问题编号', <span className="font-mono">{qi.id}</span>],
-          ['问题来源', qi.source ? <StatusBadge status={qi.source} /> : '—'],
-          ['问题类型', <StatusBadge status={displayIssueType(qi)} />],
-          ['当前状态', <StatusBadge status={qi.status} />],
-          ['严重程度', <StatusBadge status={qi.severity || '中'} />],
-          ['问题来源阶段', qi.sourceStage || '在线运营'],
-          ['问题发生时间', qi.reportTime],
-          ['最近更新时间', lastUpdate],
+          ['来源类型', (qi.sourceType || qi.source) ? <StatusBadge status={qi.sourceType || qi.source} /> : '—'],
+          ['来源交付计划', qi.sourceDeliveryPlanId],
+          ['来源交付子工单', qi.sourceSubOrderId],
+          ['来源节点', qi.sourceNode || qi.sourceStage],
+          ['原始记录人', qi.originalRecorder || qi.reporterName],
+          ['原始发生时间', qi.originalOccurTime || qi.reportTime],
+          ['原始设备 SN', qi.originalDeviceSN || qi.deviceSN],
+          ['原始点位', locLabel(origLocation) !== '—' ? locLabel(origLocation) : (qi.originalLocationId || '—')],
+          ['原始附件', qi.originalAttachments],
         ]} />
+        <div className="mt-3"><div className="text-xs text-gray-400 mb-1">原始异常描述</div><TextBlock>{qi.originalDesc || qi.issueDesc}</TextBlock></div>
       </DrawerSection>
 
-      <DrawerSection title="关联对象">
+      <DrawerSection title="技术客服规范化信息（可编辑）">
         <DescList items={[
-          ['客户名称', project?.client],
-          ['项目名称', project?.name],
+          ['问题类型', qi.issueType ? <StatusBadge status={qi.issueType} /> : '—'],
+          ['严重程度', <StatusBadge status={qi.severity || '中'} />],
           ['设备 SN', qi.deviceSN],
           ['点位 / 地址', locLabel(location)],
-        ]} />
-      </DrawerSection>
-
-      <DrawerSection title="故障描述"><TextBlock>{qi.issueDesc}</TextBlock></DrawerSection>
-
-      <DrawerSection title="故障归因与处理">
-        <DescList items={[
-          ['一级故障原因', qi.faultL1 ? <StatusBadge status={qi.faultL1} /> : '—'],
+          ['一级故障原因', qi.faultL1],
           ['二级故障原因', qi.faultL2],
           ['三级故障原因', qi.faultL3],
           ['处理方案', qi.solution],
-          ['预处理人', qi.owner],
-          ['是否可远程关闭', qi.remoteClosable == null ? '—' : (qi.remoteClosable ? '是' : '否')],
-          ['是否转售后工单', linked ? '是' : '否'],
-          ['关联售后工单', qi.linkedWorkOrderId ? <LinkAction to="/after-sales?tab=orders">{qi.linkedWorkOrderId}</LinkAction> : '—'],
-          ['当前处理进展', qi.handleNote],
-          ...(closed ? [['关闭原因', qi.closeReason], ['处理结论', qi.closeConclusion]] : []),
+          ['是否可远程解决', (qi.remoteSolvable ?? qi.remoteClosable) == null ? '—' : yn(qi.remoteSolvable ?? qi.remoteClosable)],
+          ['是否需上门', qi.needVisit == null ? '—' : yn(qi.needVisit)],
+          ['是否需换件', qi.needReplace == null ? '—' : yn(qi.needReplace)],
+          ['是否需补充信息', qi.needMoreInfo == null ? '—' : yn(qi.needMoreInfo)],
+        ]} />
+        <div className="mt-3 space-y-2">
+          <div><div className="text-xs text-gray-400 mb-1">规范化故障描述</div><TextBlock>{qi.normalizedDesc || qi.issueDesc}</TextBlock></div>
+          <DescList items={[['预处理结论', qi.preprocessConclusion], ['技术客服备注', qi.csNote]]} />
+        </div>
+      </DrawerSection>
+
+      <DrawerSection title="预处理时间节点">
+        <DescList cols={3} items={[
+          ['问题发生时间', qi.occurTime || qi.originalOccurTime || qi.reportTime],
+          ['进入问题池时间', enterT],
+          ['指派时间', qi.csAssignTime],
+          ['技术客服首次响应', qi.csFirstResponseTime],
+          ['预处理完成时间', qi.preprocessDoneTime],
+          ['转售后工单时间', qi.toWorkOrderTime],
+          ['远程关闭时间', qi.remoteCloseTime],
+          ['关闭时间', qi.closeTime],
+        ]} />
+        <div className="mt-3"><DescList cols={3} items={[
+          ['技术客服响应时长', durationText(enterT, qi.csFirstResponseTime)],
+          ['预处理时长', durationText(qi.csFirstResponseTime, qi.preprocessDoneTime)],
+          ['问题池停留时长', durationText(enterT, stayEnd)],
+        ]} /></div>
+      </DrawerSection>
+
+      <DrawerSection title="处理进展 / 操作日志"><LogTimeline logs={qi.processLogs} /></DrawerSection>
+
+      <DrawerSection title="附件 / log / 视频">
+        <DescList items={[
+          ['附件', qi.attachments || qi.originalAttachments],
+          ['log', qi.logFile],
+          ['正常工作视频', qi.workVideo],
         ]} />
       </DrawerSection>
 
-      <DrawerSection title="操作日志"><LogTimeline logs={qi.processLogs} /></DrawerSection>
+      <DrawerSection title="售后工单关联">
+        <DescList items={[
+          ['是否转售后工单', yn(linked)],
+          ['关联售后工单号', qi.linkedWorkOrderId ? <LinkAction to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`}>{qi.linkedWorkOrderId}</LinkAction> : '—'],
+        ]} />
+      </DrawerSection>
 
-      {modal === 'assign' && <AssignQIModal qi={qi} onClose={close} onConfirm={doAssign} />}
-      {modal === 'progress' && <ProgressQIModal qi={qi} currentUser={currentUser} onClose={close} onConfirm={doProgress} />}
-      {modal === 'genOrder' && <GenOrderModal qi={qi} onClose={close} onConfirm={genOrder} />}
-      {modal === 'close' && <CloseQIModal onClose={close} onConfirm={doClose} />}
-      {modal === 'reopen' && <ReasonModal title="重新打开问题" label="重新打开原因" confirmLabel="重新打开" variant="secondary" onClose={close} onConfirm={doReopen} />}
+      {modal === 'assign' && <AssignCSModal qi={qi} dStatus={dStatus} onClose={close} onConfirm={doAssign} />}
+      {modal === 'start' && <Modal isOpen onClose={close} title="开始预处理"><div className="space-y-3"><Card className="bg-[#fafafa] text-xs text-gray-500">开始预处理后问题转入「预处理中」，并记录技术客服首次响应时间。</Card><div className="text-[13px] text-gray-600">技术客服：{qi.csAgent || qi.owner || '（未指派，将以当前用户记录）'}</div><ModalActions onClose={close} onConfirm={doStart} confirmLabel="开始预处理" /></div></Modal>}
+      {modal === 'edit' && <EditNormalizeModal qi={qi} onClose={close} onConfirm={doEdit} />}
+      {modal === 'progress' && <UpdatePreprocessModal qi={qi} currentUser={currentUser} onClose={close} onConfirm={doProgress} />}
+      {modal === 'moreinfo' && <RequestMoreInfoModal onClose={close} onConfirm={doMoreInfo} />}
+      {modal === 'supplement' && <SupplementModal onClose={close} onConfirm={doSupplement} />}
+      {modal === 'remoteclose' && <RemoteCloseModal currentUser={currentUser} onClose={close} onConfirm={doRemoteClose} />}
+      {modal === 'toworkorder' && <ToWorkOrderModal qi={qi} project={project} locationLabel={locLabel(location)} onClose={close} onConfirm={doToWorkOrder} />}
     </Drawer>
   );
 }
@@ -812,25 +1206,25 @@ function IssuesTab({ state, dispatch, currentUser, canDo }) {
   const [detail, setDetail] = useState(null);
   const [showScan, setShowScan] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const openDetail = (qi, action) => setDetail({ id: qi.id, action });
 
   const issues = state.qualityIssues || [];
   const hasWO = (qi) => !!(qi.linkedWorkOrder || qi.linkedWorkOrderId);
-  const qiUpdatedAt = (qi) => (qi.processLogs && qi.processLogs.length ? qi.processLogs[qi.processLogs.length - 1].time : qi.reportTime);
 
-  const total = issues.length;
-  const nPending = issues.filter((q) => q.status === '待处理').length;
-  const nToWO = issues.filter(hasWO).length;
-  const nClosed = issues.filter((q) => q.status === '已关闭').length;
+  const nPre = issues.filter((q) => normalizeIssueStatus(q) === '待预处理').length;
+  const nProc = issues.filter((q) => normalizeIssueStatus(q) === '预处理中').length;
+  const nRemote = issues.filter((q) => normalizeIssueStatus(q) === '远程已解决').length;
+  const nToWO = issues.filter((q) => normalizeIssueStatus(q) === '已转售后工单').length;
 
   const filtered = issues.filter((qi) => {
     const q = search.trim().toLowerCase();
-    return (!q || (qi.id || '').toLowerCase().includes(q) || (qi.deviceSN || '').toLowerCase().includes(q) || (qi.issueDesc || '').toLowerCase().includes(q))
-      && (!fStatus || qi.status === fStatus)
-      && (!fType || displayIssueType(qi) === fType)
+    return (!q || (qi.id || '').toLowerCase().includes(q) || (qi.deviceSN || '').toLowerCase().includes(q) || (qi.normalizedDesc || qi.issueDesc || '').toLowerCase().includes(q))
+      && (!fStatus || normalizeIssueStatus(qi) === fStatus)
+      && (!fType || qi.issueType === fType)
       && (!fProject || qi.projectId === fProject)
-      && (!fSource || qi.source === fSource)
+      && (!fSource || (qi.sourceType || qi.source) === fSource)
       && (!fToWO || (fToWO === '是' ? hasWO(qi) : !hasWO(qi)));
-  }).sort((a, b) => (b.reportTime || '').localeCompare(a.reportTime || ''));
+  }).sort((a, b) => ((b.enterPoolTime || b.reportTime || '')).localeCompare(a.enterPoolTime || a.reportTime || ''));
   const pager = usePaged(filtered, 10);
 
   const handleSave = (qi) => dispatch({ type: 'ADD_QUALITY_ISSUE', payload: qi });
@@ -840,21 +1234,21 @@ function IssuesTab({ state, dispatch, currentUser, canDo }) {
       <PageHeader
         breadcrumb={<div className="text-xs text-gray-400">售后管理 / 问题池</div>}
         title="问题池"
-        description="设备售后问题的统一台账：沉淀、追溯与闭环。扫码上报 / 手动录入进入问题池，可转售后工单。"
+        description="平台统一入口：交付异常 / 扫码上报 / 系统告警进入问题池，由技术客服预处理、规范化，可远程关闭或转售后工单。"
         actions={<div className="flex items-center gap-2">
           <Btn variant="secondary" onClick={() => setShowScan(true)}>扫码上报</Btn>
           {canDo('add_quality_issue') && <Btn variant="primary" onClick={() => setShowManual(true)}>手动录入</Btn>}
         </div>}
       />
       <StatGrid cols={4}>
-        <StatCard label="问题总数" value={total} />
-        <StatCard label="待处理" value={nPending} tone={nPending ? 'warning' : 'default'} />
+        <StatCard label="待预处理" value={nPre} tone={nPre ? 'warning' : 'default'} />
+        <StatCard label="预处理中" value={nProc} tone={nProc ? 'warning' : 'default'} />
+        <StatCard label="远程已解决" value={nRemote} tone="success" />
         <StatCard label="已转售后工单" value={nToWO} />
-        <StatCard label="已关闭" value={nClosed} tone="success" />
       </StatGrid>
 
       <Card className="bg-[#fafafa] text-xs text-gray-500 leading-relaxed">
-        问题池用于问题沉淀、追溯与统计，不替代售后工单。「问题类型」统一归并为「使用问题 / 设备质量问题」两类；需要现场处理的问题可转为售后工单。
+        问题池是统一入口，技术客服在此预处理并规范化问题（来源快照只读，规范化字段可编辑）；需现场执行的问题转售后工单，售后工单只承载现场执行闭环。
       </Card>
 
       <Toolbar right={<span className="text-xs text-gray-400">共 {filtered.length} 条</span>}>
@@ -862,44 +1256,67 @@ function IssuesTab({ state, dispatch, currentUser, canDo }) {
         <Select value={fStatus} onChange={(e) => setFStatus(e.target.value)}><option value="">全部状态</option>{QI_STATUS_LIST.map((s) => <option key={s}>{s}</option>)}</Select>
         <Select value={fType} onChange={(e) => setFType(e.target.value)}><option value="">全部问题类型</option>{ISSUE_TYPES.map((t) => <option key={t}>{t}</option>)}</Select>
         <Select value={fProject} onChange={(e) => setFProject(e.target.value)}><option value="">全部项目</option>{(state.projects || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
-        <Select value={fSource} onChange={(e) => setFSource(e.target.value)}><option value="">全部来源</option>{QI_SOURCES.map((s) => <option key={s}>{s}</option>)}</Select>
+        <Select value={fSource} onChange={(e) => setFSource(e.target.value)}><option value="">全部来源类型</option>{QI_SOURCES.map((s) => <option key={s}>{s}</option>)}</Select>
         <Select value={fToWO} onChange={(e) => setFToWO(e.target.value)}><option value="">是否转工单</option><option value="是">已转工单</option><option value="否">未转工单</option></Select>
       </Toolbar>
 
       <Table
         className="text-[12px]"
-        head={['问题编号', '问题来源', '问题类型', '客户名称', '项目名称', '设备 SN', '点位 / 地址', '问题发生时间', '故障描述', '当前状态', '一级故障原因', '二级故障原因', '预处理人', '是否可远程关闭', '是否转售后工单', '最近更新时间', '操作']}
+        head={['问题编号', '来源类型', '问题类型', '当前状态', '严重程度', '客户名称', '项目名称', '设备 SN', '点位 / 地址', '问题发生时间', '进入问题池时间', '技术客服', '首次响应时间', '预处理完成时间', '预处理结论', '是否转工单', '关联工单号', '操作']}
         empty="暂无问题记录"
         footer={<Pagination page={pager.page} total={pager.total} totalPages={pager.totalPages} onChange={pager.setPage} />}
       >
         {pager.pageItems.map((qi) => {
           const project = findProject(state, qi.projectId);
-          const location = (state.locations || []).find((l) => l.id === qi.locationId);
+          const location = locById(state, qi.locationId);
+          const dS = normalizeIssueStatus(qi);
           return (
-            <tr key={qi.id} className="hover:bg-[#fafafa] transition-colors">
+            <tr key={qi.id} className="hover:bg-[#fafafa] transition-colors align-top">
               <td className="px-3 py-2 font-mono text-gray-700 whitespace-nowrap">{qi.id}</td>
-              <td className="px-3 py-2 whitespace-nowrap">{qi.source ? <StatusBadge status={qi.source} /> : '—'}</td>
-              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={displayIssueType(qi)} /></td>
+              <td className="px-3 py-2 whitespace-nowrap">{(qi.sourceType || qi.source) ? <StatusBadge status={qi.sourceType || qi.source} /> : '—'}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{qi.issueType ? <StatusBadge status={qi.issueType} /> : '—'}</td>
+              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={dS} /></td>
+              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={qi.severity || '中'} /></td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{project?.client || '—'}</td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{project?.name || '—'}</td>
               <td className="px-3 py-2 font-mono text-gray-800 whitespace-nowrap">{qi.deviceSN || '—'}</td>
               <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{locLabel(location)}</td>
-              <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{qi.reportTime || '—'}</td>
-              <td className="px-3 py-2 text-gray-600 max-w-[200px]"><div className="truncate" title={qi.issueDesc}>{qi.issueDesc || '—'}</div></td>
-              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={qi.status} /></td>
-              <td className="px-3 py-2 whitespace-nowrap">{qi.faultL1 ? <StatusBadge status={qi.faultL1} /> : '—'}</td>
-              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{qi.faultL2 || '—'}</td>
-              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{qi.owner || '—'}</td>
-              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{qi.remoteClosable == null ? '—' : (qi.remoteClosable ? '是' : '否')}</td>
+              <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{qi.occurTime || qi.originalOccurTime || qi.reportTime || '—'}</td>
+              <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{qi.enterPoolTime || qi.reportTime || '—'}</td>
+              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{qi.csAgent || qi.owner || '—'}</td>
+              <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{qi.csFirstResponseTime || '—'}</td>
+              <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{qi.preprocessDoneTime || '—'}</td>
+              <td className="px-3 py-2 text-gray-600 max-w-[180px]"><div className="truncate" title={qi.preprocessConclusion}>{qi.preprocessConclusion || '—'}</div></td>
               <td className="px-3 py-2 whitespace-nowrap">{hasWO(qi) ? <span className="text-gray-700">是</span> : <span className="text-gray-400">否</span>}</td>
-              <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{qiUpdatedAt(qi)}</td>
-              <td className="px-3 py-2 whitespace-nowrap"><LinkAction onClick={() => setDetail(qi.id)}>查看详情</LinkAction></td>
+              <td className="px-3 py-2 font-mono text-gray-500 whitespace-nowrap">{qi.linkedWorkOrderId || '—'}</td>
+              <td className="px-3 py-2">
+                <ActionCell>
+                  <LinkAction onClick={() => openDetail(qi)}>查看详情</LinkAction>
+                  {canDo('update_quality_issue') && dS === '待预处理' && <>
+                    <LinkAction onClick={() => openDetail(qi, 'assign')}>指派技术客服</LinkAction>
+                    <LinkAction onClick={() => openDetail(qi, 'start')}>开始预处理</LinkAction>
+                  </>}
+                  {canDo('update_quality_issue') && dS === '预处理中' && <>
+                    <LinkAction onClick={() => openDetail(qi, 'edit')}>编辑规范化</LinkAction>
+                    <LinkAction onClick={() => openDetail(qi, 'progress')}>更新记录</LinkAction>
+                    <LinkAction onClick={() => openDetail(qi, 'moreinfo')}>请求补充</LinkAction>
+                    <LinkAction onClick={() => openDetail(qi, 'remoteclose')}>远程关闭</LinkAction>
+                    <LinkAction onClick={() => openDetail(qi, 'toworkorder')}>转售后工单</LinkAction>
+                  </>}
+                  {canDo('update_quality_issue') && dS === '待补充信息' && <>
+                    <LinkAction onClick={() => openDetail(qi, 'supplement')}>补充信息</LinkAction>
+                    <LinkAction onClick={() => openDetail(qi, 'remoteclose')}>远程关闭</LinkAction>
+                    <LinkAction onClick={() => openDetail(qi, 'toworkorder')}>转售后工单</LinkAction>
+                  </>}
+                  {dS === '已转售后工单' && qi.linkedWorkOrderId && <LinkAction to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`}>查看售后工单</LinkAction>}
+                </ActionCell>
+              </td>
             </tr>
           );
         })}
       </Table>
 
-      {detail && <IssueDetailDrawer id={detail} state={state} dispatch={dispatch} currentUser={currentUser} canDo={canDo} onClose={() => setDetail(null)} />}
+      {detail && <IssueDetailDrawer entry={detail} state={state} dispatch={dispatch} currentUser={currentUser} canDo={canDo} onClose={() => setDetail(null)} />}
       {showScan && <ScanReportModal onClose={() => setShowScan(false)} />}
       {showManual && <ManualEntryModal state={state} currentUser={currentUser} onClose={() => setShowManual(false)} onSave={handleSave} />}
     </Page>
