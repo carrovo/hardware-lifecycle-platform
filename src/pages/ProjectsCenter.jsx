@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
 import Modal from '../components/Modal';
 import StatusBadge from '../components/StatusBadge';
+import OperationLog from '../components/OperationLog';
 import { Pagination, usePaged } from '../components/Pagination';
 import {
   Page, PageHeader, Section, Card, Toolbar, Input, Select, SearchInput,
@@ -725,12 +726,440 @@ function ProductionPlanTab() {
   );
 }
 
+/* ═════════ 交付计划：操作弹窗（仅交付 tab 使用） ═════════ */
+const DELIVERY_BINDABLE_STATUSES = ['已入库', '待分配项目', '已分配项目'];
+const DELIVERY_VOID_REASONS = ['客户取消', '项目变更', '重复创建', '计划信息错误', '设备无法交付', '其他'];
+const DELIVERY_OWNERS = ['张三', '李四', '王五', '赵六'];
+const DELIVERY_SUBORDER_OPS = ['分派工程师', '更新进度', '上传资料', '记录异常', '提交技术客服预处理'];
+
+// 绑定设备集合：boundDeviceIds ∪ records.binding。
+function deliveryBoundIds(plan) {
+  const explicit = plan.boundDeviceIds || [];
+  const binding = (plan.records?.binding || []).map((r) => r.deviceId);
+  return [...new Set([...explicit, ...binding].filter(Boolean))];
+}
+
+// 设备部署子工单当前状态（与交付计划详情口径一致）。
+function deliveryDeployStatus(recs, deviceId) {
+  const ca = (recs.customerAccept || []).find((r) => r.deviceId === deviceId);
+  const si = (recs.siteInstall || []).find((r) => r.deviceId === deviceId);
+  const fi = (recs.factoryInspection || []).find((r) => r.deviceId === deviceId);
+  if (ca) return isPass(ca) ? '已验收' : '验收异常';
+  if (si) return isPass(si) ? '待客户验收' : '安装异常';
+  if (fi) return isPass(fi) ? '已出厂' : '不可出厂';
+  return '待出厂检验';
+}
+
+function deviceTypeName(state, id) {
+  return (state.deviceTypes || []).find((t) => t.id === id)?.name || '—';
+}
+function prodPlanName(state, id) {
+  const plans = [...(state.workflowProductionPlans || []), ...(state.productionPlans || [])];
+  return plans.find((p) => p.id === id)?.name || id || '—';
+}
+function inspectBadge(v) {
+  return v ? <StatusBadge status={v} /> : <span className="text-gray-400">—</span>;
+}
+
+// 管理交付设备：已绑定 / 可绑定两张表，绑定/解绑更新本地集合并 dispatch UPDATE_DELIVERY_PLAN(boundDeviceIds)。
+function ManageDeliveryDevicesModal({ planId, state, dispatch, onClose, onToast }) {
+  const devices = state.devices || [];
+  const plan = (state.deliveryPlans || []).find((p) => p.id === planId);
+  const project = (state.projects || []).find((p) => p.id === plan?.projectId);
+  const [boundIds, setBoundIds] = useState(() => (plan ? deliveryBoundIds(plan) : []));
+
+  const boundDevices = boundIds.map((id) => devices.find((d) => d.id === id)).filter(Boolean);
+  const otherBound = new Set();
+  (state.deliveryPlans || []).forEach((p) => {
+    if (p.id !== planId) deliveryBoundIds(p).forEach((id) => otherBound.add(id));
+  });
+  const bindable = devices.filter((d) => DELIVERY_BINDABLE_STATUSES.includes(d.status) && !boundIds.includes(d.id));
+
+  const boundPaged = usePaged(boundDevices, 6);
+  const bindablePaged = usePaged(bindable, 6);
+
+  if (!plan) return null;
+
+  const persist = (next, msg) => {
+    setBoundIds(next);
+    dispatch({ type: 'UPDATE_DELIVERY_PLAN', payload: { id: plan.id, boundDeviceIds: next, updatedAt: nowText() } });
+    onToast(msg);
+  };
+  const bindDev = (d) => { if (!boundIds.includes(d.id)) persist([...boundIds, d.id], `已绑定设备 ${d.sn}`); };
+  const unbindDev = (d) => persist(boundIds.filter((x) => x !== d.id), `已解绑设备 ${d.sn}`);
+
+  return (
+    <Modal isOpen onClose={onClose} title="管理交付设备" size="xl">
+      <div className="space-y-5">
+        <DescList
+          cols={4}
+          items={[
+            ['交付计划编号', <span className="font-mono text-xs">{plan.id}</span>],
+            ['所属项目', project?.name || '—'],
+            ['当前已绑定设备数', `${boundDevices.length} 台`],
+            ['计划交付数量', plan.targetCount != null ? `${plan.targetCount} 台` : '—'],
+          ]}
+        />
+
+        <div>
+          <div className="text-[13px] font-semibold text-gray-800 mb-2">已绑定设备（{boundDevices.length}）</div>
+          <Table
+            head={['设备SN', '机器人型号', '当前状态', '所属生产计划', '出厂检验状态', '操作']}
+            empty="暂无已绑定设备"
+            footer={<Pagination page={boundPaged.page} total={boundPaged.total} totalPages={boundPaged.totalPages} pageSize={6} onChange={boundPaged.setPage} />}
+          >
+            {boundPaged.pageItems.map((d) => (
+              <tr key={d.id} className="hover:bg-[#fafafa]">
+                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-gray-700">{d.sn}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-gray-700">{deviceTypeName(state, d.deviceTypeId)}</td>
+                <td className="px-3 py-2"><StatusBadge status={d.status} /></td>
+                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{prodPlanName(state, d.productionPlanId)}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{inspectBadge(d.erpInspectionStatus)}</td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  <div className="flex items-center gap-x-3">
+                    <LinkAction onClick={() => unbindDev(d)}>解绑</LinkAction>
+                    <LinkAction to={`/devices/${d.id}`}>查看设备详情</LinkAction>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </Table>
+        </div>
+
+        <div>
+          <div className="text-[13px] font-semibold text-gray-800 mb-1">可绑定设备（{bindable.length}）</div>
+          <div className="text-xs text-gray-400 mb-2">已入库 / 待分配项目 / 已分配项目 且未绑定本计划的设备。</div>
+          <Table
+            head={['设备SN', '机器人型号', '当前状态', '所属生产计划', '出厂检验状态', '是否已绑定其他交付计划', '操作']}
+            empty="暂无可绑定设备"
+            footer={<Pagination page={bindablePaged.page} total={bindablePaged.total} totalPages={bindablePaged.totalPages} pageSize={6} onChange={bindablePaged.setPage} />}
+          >
+            {bindablePaged.pageItems.map((d) => {
+              const elsewhere = otherBound.has(d.id) || (d.deliveryPlanId && d.deliveryPlanId !== plan.id);
+              return (
+                <tr key={d.id} className="hover:bg-[#fafafa]">
+                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-gray-700">{d.sn}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-gray-700">{deviceTypeName(state, d.deviceTypeId)}</td>
+                  <td className="px-3 py-2"><StatusBadge status={d.status} /></td>
+                  <td className="px-3 py-2 whitespace-nowrap text-gray-600">{prodPlanName(state, d.productionPlanId)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{inspectBadge(d.erpInspectionStatus)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{elsewhere ? <Chip tone="outline">是</Chip> : <span className="text-gray-400">否</span>}</td>
+                  <td className="px-3 py-2 whitespace-nowrap"><LinkAction onClick={() => bindDev(d)}>绑定</LinkAction></td>
+                </tr>
+              );
+            })}
+          </Table>
+        </div>
+
+        <div className="flex justify-end"><button onClick={onClose} className={BTN_PRIMARY}>完成</button></div>
+      </div>
+    </Modal>
+  );
+}
+
+// 管理交付子工单：由计划记录合成子工单（智魔方含前置准备，均按设备生成部署子工单），操作为原型占位轻提示。
+function ManageDeliverySubOrdersModal({ planId, state, onClose, onToast }) {
+  const plan = (state.deliveryPlans || []).find((p) => p.id === planId);
+  const project = (state.projects || []).find((p) => p.id === plan?.projectId);
+  const devices = state.devices || [];
+  const recs = plan?.records || {};
+  const boundDevices = (plan ? deliveryBoundIds(plan) : []).map((id) => devices.find((d) => d.id === id)).filter(Boolean);
+  const isZhimofang = project?.projectType === '智魔方';
+  const templateName = plan?.templateName || (isZhimofang ? '智魔方交付流程模板' : '通用部署流程模板');
+
+  const preAdvanced = (recs.factoryInspection || []).length > 0 || ['出厂检验', '现场安装调试', '客户验收'].includes(plan?.currentNode);
+  const preStarted = (recs.binding || []).length > 0;
+  const preOrders = isZhimofang ? [{
+    id: `PRE-${plan.id}`,
+    type: '前置准备子工单',
+    deviceSN: '—',
+    status: preAdvanced ? '已完成' : preStarted ? '进行中' : '未开始',
+    owner: plan.owner || '—',
+    eta: plan.factoryDate || plan.siteInstallDate || '—',
+    actual: preAdvanced ? (plan.siteInstallDate || '—') : '—',
+    updated: plan.updatedAt || '—',
+  }] : [];
+  const deployOrders = boundDevices.map((d) => {
+    const si = (recs.siteInstall || []).find((r) => r.deviceId === d.id);
+    return {
+      id: `DEP-${plan.id}-${d.id}`,
+      type: '机器人 / 设备部署子工单',
+      deviceSN: d.sn,
+      status: deliveryDeployStatus(recs, d.id),
+      owner: si?.operator || plan.owner || '—',
+      eta: plan.siteInstallDate || '—',
+      actual: si?.time || '—',
+      updated: d.updatedAt || '—',
+    };
+  });
+  const orders = [...preOrders, ...deployOrders];
+  const paged = usePaged(orders, 6);
+
+  if (!plan) return null;
+
+  return (
+    <Modal isOpen onClose={onClose} title="管理交付子工单" size="xl">
+      <div className="space-y-5">
+        <DescList
+          cols={4}
+          items={[
+            ['交付计划编号', <span className="font-mono text-xs">{plan.id}</span>],
+            ['所属项目', project?.name || '—'],
+            ['项目类型 · 业务场景', project?.projectType ? <Chip>{project.projectType}</Chip> : '—'],
+            ['使用流程模板', templateName],
+          ]}
+        />
+        <Table
+          head={['子工单编号', '子工单类型', '关联设备SN', '当前状态', '负责人 · 工程师', '预计上门时间', '实际上门时间', '最近更新时间', '操作']}
+          empty="暂无交付子工单"
+          footer={<Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} pageSize={6} onChange={paged.setPage} />}
+        >
+          {paged.pageItems.map((o) => (
+            <tr key={o.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-gray-700">{o.id}</td>
+              <td className="px-3 py-2 whitespace-nowrap"><Chip tone="outline">{o.type}</Chip></td>
+              <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-gray-600">{o.deviceSN}</td>
+              <td className="px-3 py-2"><StatusBadge status={o.status} /></td>
+              <td className="px-3 py-2 whitespace-nowrap text-gray-600">{o.owner}</td>
+              <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{o.eta}</td>
+              <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{o.actual}</td>
+              <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{o.updated}</td>
+              <td className="px-3 py-2 whitespace-nowrap">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <LinkAction to={`/delivery-plans/${plan.id}?node=subOrders`}>查看详情</LinkAction>
+                  {DELIVERY_SUBORDER_OPS.map((op) => <LinkAction key={op} onClick={() => onToast(`原型环境：${op} · ${o.id}`)}>{op}</LinkAction>)}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </Table>
+        <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
+          子工单由交付计划记录合成：{isZhimofang ? '智魔方含前置准备子工单，' : ''}按已绑定设备各生成一条机器人 / 设备部署子工单。分派 / 更新进度 / 上传资料 / 记录异常 / 提交技术客服预处理为原型占位操作。
+        </div>
+        <div className="flex justify-end"><button onClick={onClose} className={BTN_PRIMARY}>完成</button></div>
+      </div>
+    </Modal>
+  );
+}
+
+// 编辑交付计划：完整表单 + 只读已绑定设备列表，保存 dispatch UPDATE_DELIVERY_PLAN。
+function EditDeliveryModal({ planId, state, dispatch, onClose, onToast }) {
+  const plan = (state.deliveryPlans || []).find((p) => p.id === planId);
+  const projects = state.projects || [];
+  const devices = state.devices || [];
+  const [form, setForm] = useState(() => ({
+    projectId: plan?.projectId || '',
+    templateName: plan?.templateName || '',
+    batchNo: plan?.batchNo || '',
+    owner: plan?.owner || '',
+    targetCount: plan?.targetCount ?? 1,
+    startDate: plan?.startDate || '',
+    siteInstallDate: plan?.siteInstallDate || '',
+    acceptanceDate: plan?.acceptanceDate || '',
+    notes: plan?.notes || '',
+  }));
+  if (!plan) return null;
+
+  const selProject = projects.find((p) => p.id === form.projectId);
+  const boundDevices = deliveryBoundIds(plan).map((id) => devices.find((d) => d.id === id)).filter(Boolean);
+  const set = (k, v) => setForm({ ...form, [k]: v });
+  const ownerOpts = [...new Set([...DELIVERY_OWNERS, plan.owner].filter(Boolean))];
+  const ro = 'ui-input w-full bg-gray-50 text-gray-500';
+  const lbl = 'block text-xs text-gray-500 mb-1';
+
+  const submit = (e) => {
+    e.preventDefault();
+    dispatch({
+      type: 'UPDATE_DELIVERY_PLAN',
+      payload: {
+        id: plan.id,
+        projectId: form.projectId,
+        templateName: form.templateName,
+        batchNo: form.batchNo,
+        owner: form.owner,
+        targetCount: Number(form.targetCount || 0),
+        startDate: form.startDate,
+        siteInstallDate: form.siteInstallDate,
+        acceptanceDate: form.acceptanceDate,
+        dueDate: form.acceptanceDate || plan.dueDate,
+        notes: form.notes,
+        updatedAt: nowText(),
+      },
+    });
+    onToast(`交付计划 ${plan.id} 已保存`);
+    onClose();
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title="编辑交付计划" size="xl">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div><label className={lbl}>交付计划编号</label><input readOnly value={plan.id} className={ro} /></div>
+          <div><label className={lbl}>当前状态</label><input readOnly value={deliveryPlanStatus(plan)} className={ro} /></div>
+          <div>
+            <label className={lbl}>所属项目</label>
+            <select value={form.projectId} onChange={(e) => set('projectId', e.target.value)} className="ui-input w-full">
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div><label className={lbl}>客户名称</label><input readOnly value={selProject?.client || '—'} className={ro} /></div>
+          <div><label className={lbl}>项目类型 · 业务场景</label><input readOnly value={selProject?.projectType || '—'} className={ro} /></div>
+          <div>
+            <label className={lbl}>使用流程模板</label>
+            <select value={form.templateName} onChange={(e) => set('templateName', e.target.value)} className="ui-input w-full">
+              <option value="">-- 请选择 --</option>
+              <option>智魔方交付流程模板</option>
+              <option>通用部署流程模板</option>
+            </select>
+          </div>
+          <div><label className={lbl}>交付批次</label><input value={form.batchNo} onChange={(e) => set('batchNo', e.target.value)} className="ui-input w-full" /></div>
+          <div>
+            <label className={lbl}>负责人</label>
+            <select value={form.owner} onChange={(e) => set('owner', e.target.value)} className="ui-input w-full">
+              <option value="">-- 请选择 --</option>
+              {ownerOpts.map((o) => <option key={o}>{o}</option>)}
+            </select>
+          </div>
+          <div><label className={lbl}>计划交付数量</label><input type="number" min={0} value={form.targetCount} onChange={(e) => set('targetCount', e.target.value)} className="ui-input w-full" /></div>
+          <div><label className={lbl}>计划开始时间</label><input type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} className="ui-input w-full" /></div>
+          <div><label className={lbl}>计划现场安装调试时间</label><input type="date" value={form.siteInstallDate} onChange={(e) => set('siteInstallDate', e.target.value)} className="ui-input w-full" /></div>
+          <div><label className={lbl}>计划客户验收时间</label><input type="date" value={form.acceptanceDate} onChange={(e) => set('acceptanceDate', e.target.value)} className="ui-input w-full" /></div>
+          <div className="col-span-2"><label className={lbl}>备注</label><textarea rows={2} value={form.notes} onChange={(e) => set('notes', e.target.value)} className="ui-input w-full" /></div>
+        </div>
+
+        <div>
+          <div className="text-[13px] font-semibold text-gray-800 mb-2">已绑定设备（只读，{boundDevices.length}）</div>
+          <Table head={['设备SN', '机器人型号', '当前状态', '所属生产计划', '出厂检验状态']} empty="暂无已绑定设备">
+            {boundDevices.map((d) => (
+              <tr key={d.id} className="hover:bg-[#fafafa]">
+                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-gray-700">{d.sn}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-gray-700">{deviceTypeName(state, d.deviceTypeId)}</td>
+                <td className="px-3 py-2"><StatusBadge status={d.status} /></td>
+                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{prodPlanName(state, d.productionPlanId)}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{inspectBadge(d.erpInspectionStatus)}</td>
+              </tr>
+            ))}
+          </Table>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button type="submit" className={BTN_PRIMARY}>保存</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// 作废交付计划：确认弹窗，dispatch UPDATE_DELIVERY_PLAN(status:'已作废')。
+function VoidDeliveryModal({ planId, state, dispatch, onClose, onToast }) {
+  const plan = (state.deliveryPlans || []).find((p) => p.id === planId);
+  const project = (state.projects || []).find((p) => p.id === plan?.projectId);
+  const [reason, setReason] = useState('');
+  const [note, setNote] = useState('');
+  if (!plan) return null;
+
+  const submit = (e) => {
+    e.preventDefault();
+    dispatch({
+      type: 'UPDATE_DELIVERY_PLAN',
+      payload: {
+        id: plan.id,
+        status: '已作废',
+        voided: true,
+        voidReason: reason,
+        voidNote: note,
+        voidedBy: state.currentUser,
+        voidedAt: nowText(),
+        updatedAt: nowText(),
+      },
+    });
+    onToast(`交付计划 ${plan.id} 已作废`);
+    onClose();
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title="作废交付计划">
+      <form onSubmit={submit} className="space-y-4">
+        <DescList
+          cols={2}
+          items={[
+            ['交付计划编号', <span className="font-mono text-xs">{plan.id}</span>],
+            ['所属项目', project?.name || '—'],
+            ['当前状态', <StatusBadge status={deliveryPlanStatus(plan)} />],
+            ['操作人', state.currentUser],
+          ]}
+        />
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">作废原因 *</label>
+          <select required value={reason} onChange={(e) => setReason(e.target.value)} className="ui-input w-full">
+            <option value="">-- 请选择 --</option>
+            {DELIVERY_VOID_REASONS.map((r) => <option key={r}>{r}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">作废说明</label>
+          <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="补充作废说明（可选）" className="ui-input w-full" />
+        </div>
+        <div className="bg-amber-50 border border-amber-100 rounded p-3 text-xs text-amber-700">作废后交付计划状态变为「已作废」，操作时间将在提交时生成，历史记录仍保留。</div>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button type="submit" className="px-4 py-2 text-sm text-white bg-red-600 rounded hover:bg-red-700">确认作废</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// 操作日志：由计划记录合成时间线 + 关联 operationLogs，复用 OperationLog 组件。
+function DeliveryLogsModal({ planId, state, onClose }) {
+  const plan = (state.deliveryPlans || []).find((p) => p.id === planId);
+  const devices = state.devices || [];
+  if (!plan) return null;
+
+  const snOf = (id) => devices.find((d) => d.id === id)?.sn || id;
+  const recs = plan.records || {};
+  const boundIds = deliveryBoundIds(plan);
+  const synth = [{
+    id: `L-${plan.id}-create`,
+    timestamp: recs.binding?.[0]?.time || plan.factoryDate || plan.updatedAt || nowText(),
+    actionType: '创建交付计划',
+    operator: plan.owner || '系统',
+    notes: `交付计划 ${plan.name || plan.id} 创建，计划交付 ${plan.targetCount || 0} 台`,
+  }];
+  (recs.binding || []).forEach((r) => synth.push({ id: `L-b-${r.id}`, timestamp: r.time, actionType: '绑定设备', operator: r.operator, notes: `绑定设备 ${snOf(r.deviceId)}` }));
+  (recs.factoryInspection || []).forEach((r) => synth.push({ id: `L-f-${r.id}`, timestamp: r.time, actionType: '出厂检验', operator: r.operator, notes: `${r.deviceSN || snOf(r.deviceId)} 出厂检验 ${r.result}${r.notes ? ` · ${r.notes}` : ''}` }));
+  (recs.siteInstall || []).forEach((r) => synth.push({ id: `L-s-${r.id}`, timestamp: r.time, actionType: '现场安装调试', operator: r.operator, notes: `${r.deviceSN || snOf(r.deviceId)} 现场安装调试 ${r.result}${r.notes ? ` · ${r.notes}` : ''}` }));
+  (recs.customerAccept || []).forEach((r) => synth.push({ id: `L-c-${r.id}`, timestamp: r.time, actionType: '客户验收', operator: r.operator, notes: `${r.deviceSN || snOf(r.deviceId)} 客户验收 ${r.result}` }));
+  if (plan.voided) synth.push({ id: `L-v-${plan.id}`, timestamp: plan.voidedAt || nowText(), actionType: '作废交付计划', operator: plan.voidedBy || state.currentUser, fromStatus: '交付中', toStatus: '已作废', notes: plan.voidReason || '—' });
+  const real = (state.operationLogs || []).filter((l) => l.deliveryPlanId === plan.id || boundIds.includes(l.deviceId));
+  const logs = [...synth, ...real];
+
+  return (
+    <Modal isOpen onClose={onClose} title="交付计划操作日志" size="lg">
+      <div className="space-y-3">
+        <DescList
+          cols={2}
+          items={[
+            ['交付计划编号', <span className="font-mono text-xs">{plan.id}</span>],
+            ['日志条数', `${logs.length} 条`],
+          ]}
+        />
+        <OperationLog logs={logs} />
+      </div>
+    </Modal>
+  );
+}
+
 /* ═════════ 交付计划 ═════════ */
 function DeliveryPlanTab() {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const [filters, setFilters] = useState({ keyword: '', projectId: '', status: '', node: '', owner: '', delayed: '' });
-  const [placeholder, setPlaceholder] = useState(null);
+  const [modal, setModal] = useState(null);
+  const [toast, setToast] = useState('');
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2600); };
+  const openModal = (type, planId) => setModal({ type, planId });
   const projects = state.projects || [];
 
   const enriched = (state.deliveryPlans || []).map((plan) => {
@@ -817,26 +1246,30 @@ function DeliveryPlanTab() {
             <td className="px-3 py-2 text-xs whitespace-nowrap" onClick={stop}>
               <div className="flex items-center gap-x-3">
                 <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}`)}>查看详情</LinkAction>
-                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}?node=devices`)}>管理设备</LinkAction>
-                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}?node=subOrders`)}>管理子工单</LinkAction>
-                <LinkAction onClick={() => setPlaceholder({ title: '编辑交付计划', text: `编辑「${plan.name || plan.id}」的入口已保留，后续接入表单与校验。` })}>编辑</LinkAction>
+                <LinkAction onClick={() => openModal('devices', plan.id)}>管理设备</LinkAction>
+                <LinkAction onClick={() => openModal('subOrders', plan.id)}>管理子工单</LinkAction>
+                <LinkAction onClick={() => openModal('edit', plan.id)}>编辑</LinkAction>
                 {!['已验收', '已作废'].includes(plan.status) && (
-                  <LinkAction onClick={() => setPlaceholder({ title: '作废交付计划', text: `作废「${plan.name || plan.id}」的入口已保留，后续接入审批流程。` })}>作废</LinkAction>
+                  <LinkAction onClick={() => openModal('void', plan.id)}>作废</LinkAction>
                 )}
-                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}?node=logs`)}>查看日志</LinkAction>
+                <LinkAction onClick={() => openModal('logs', plan.id)}>查看日志</LinkAction>
               </div>
             </td>
           </tr>
         ))}
       </Table>
 
-      <Modal isOpen={!!placeholder} onClose={() => setPlaceholder(null)} title={placeholder?.title || ''}>
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">{placeholder?.text}</p>
-          <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">本阶段以可演示的流程结构为主，动作入口先占位。</div>
-          <div className="flex justify-end"><button onClick={() => setPlaceholder(null)} className={BTN_PRIMARY}>知道了</button></div>
+      {modal?.type === 'devices' && <ManageDeliveryDevicesModal planId={modal.planId} state={state} dispatch={dispatch} onClose={() => setModal(null)} onToast={showToast} />}
+      {modal?.type === 'subOrders' && <ManageDeliverySubOrdersModal planId={modal.planId} state={state} onClose={() => setModal(null)} onToast={showToast} />}
+      {modal?.type === 'edit' && <EditDeliveryModal planId={modal.planId} state={state} dispatch={dispatch} onClose={() => setModal(null)} onToast={showToast} />}
+      {modal?.type === 'void' && <VoidDeliveryModal planId={modal.planId} state={state} dispatch={dispatch} onClose={() => setModal(null)} onToast={showToast} />}
+      {modal?.type === 'logs' && <DeliveryLogsModal planId={modal.planId} state={state} onClose={() => setModal(null)} />}
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-slate-800 text-white text-[13px] px-4 py-2 rounded-md shadow-lg">
+          {toast}
         </div>
-      </Modal>
+      )}
     </Page>
   );
 }
