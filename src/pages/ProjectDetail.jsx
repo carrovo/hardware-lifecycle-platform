@@ -15,8 +15,6 @@ import { isPass, projectStatus, productionPlanStatus, deliveryPlanStatus, device
 // 项目详情：项目概览 / 基本信息 / 点位管理 / 设备列表 / 当前项目生产计划 /
 // 当前项目交付计划 / 关联问题·售后记录 / 操作日志。分区卡片分层，复用 ../components/ui。
 
-const PROD_NODE_KEY = { 来料准备: 'materialPrep', 整机装配: 'assembly', 质量测试: 'quality', 整机入库: 'warehouse' };
-const DELIV_NODE_KEY = { 绑定设备: 'binding', 出厂检验: 'factoryInspection', 现场安装调试: 'siteInstall', 客户验收: 'customerAccept' };
 const PROJECT_TYPES = ['智魔方', '机场', '工业场景', '遥操数采'];
 const LOC_OWNERS = ['张三', '李四', '王五', '赵六', '蔡八'];
 
@@ -404,7 +402,6 @@ export default function ProjectDetail() {
           {prodPaged.pageItems.map((plan) => {
             const planDevices = devices.filter((d) => d.productionPlanId === plan.id);
             const done = planDevices.filter((d) => ['已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status)).length;
-            const nodeKey = PROD_NODE_KEY[plan.currentNode] || 'materialPrep';
             return (
               <tr key={plan.id} className="hover:bg-[#fafafa]">
                 <td className="px-3 py-2 font-mono text-xs whitespace-nowrap"><Link to={`/production-plans/${plan.id}`} className="ui-link">{plan.id}</Link></td>
@@ -416,7 +413,6 @@ export default function ProjectDetail() {
                 <td className="px-3 py-2 text-xs whitespace-nowrap">
                   <div className="flex items-center gap-x-3">
                     <LinkAction to={`/production-plans/${plan.id}`}>查看详情</LinkAction>
-                    <LinkAction to={`/production-plans/${plan.id}?node=${nodeKey}`}>进入当前节点</LinkAction>
                   </div>
                 </td>
               </tr>
@@ -434,7 +430,6 @@ export default function ProjectDetail() {
         >
           {delivPaged.pageItems.map((plan) => {
             const accepted = (plan.records?.customerAccept || []).filter(isPass).length;
-            const nodeKey = DELIV_NODE_KEY[plan.currentNode] || 'binding';
             return (
               <tr key={plan.id} className="hover:bg-[#fafafa]">
                 <td className="px-3 py-2 font-mono text-xs whitespace-nowrap"><Link to={`/delivery-plans/${plan.id}`} className="ui-link">{plan.id}</Link></td>
@@ -446,7 +441,6 @@ export default function ProjectDetail() {
                 <td className="px-3 py-2 text-xs whitespace-nowrap">
                   <div className="flex items-center gap-x-3">
                     <LinkAction to={`/delivery-plans/${plan.id}`}>查看详情</LinkAction>
-                    <LinkAction to={`/delivery-plans/${plan.id}?node=${nodeKey}`}>进入当前节点</LinkAction>
                   </div>
                 </td>
               </tr>
