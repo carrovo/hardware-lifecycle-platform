@@ -5,7 +5,7 @@ import StatusBadge from '../components/StatusBadge';
 import OperationLog from '../components/OperationLog';
 import { Pagination, usePaged } from '../components/Pagination';
 import { Page, PageHeader, Section, DescList, Table, StatCard, StatGrid, Chip, Btn, LinkAction, Select, EmptyState } from '../components/ui';
-import { productionPlanStatus, deviceBusinessNode, TODAY } from '../utils/status';
+import { productionPlanStatus, deviceBusinessNode, planBottleneck, planDeviceDistribution, assemblyProgress, TODAY } from '../utils/status';
 
 // 生产计划详情（只读追溯视图）
 // 定位：平台不创建 ERP 生产订单、不维护 BOM / 入库 / 出库 / 检验。
@@ -15,9 +15,6 @@ import { productionPlanStatus, deviceBusinessNode, TODAY } from '../utils/status
 
 const STATION_LABEL = { semi: '半成品检验', init: '初测', mid: '中测', oqt: 'OQT终测' };
 const isPassRec = (r) => r.stationResult === 'Pass' || ['合格', 'Pass', '通过'].includes(r.result);
-
-// 平台强工站（来料准备/入库/检验/库存不属于平台强工站，仅在 ERP 关联信息只读展示）
-const STATIONS = [['semi', '半成品检验'], ['init', '初测'], ['mid', '中测'], ['oqt', 'OQT终测']];
 
 // 轻量进度条（设备级 / 单机记录使用，不做成计划级所有设备共用一条固定进度条）
 function ProgressLine({ done, total, tone = 'bg-blue-500' }) {
@@ -47,19 +44,19 @@ export default function ProductionPlanDetail() {
   const plan = plans.find((p) => p.id === id);
 
   const deviceTypes = state.deviceTypes || [];
+  const moduleTypes = state.moduleTypes || [];
+  const moduleInstances = state.moduleInstances || [];
+  const moduleReplacements = state.moduleReplacements || [];
   const typeName = (tid) => deviceTypes.find((t) => t.id === tid)?.name || '—';
 
   const planDevices = plan ? (state.devices || []).filter((d) => d.productionPlanId === plan.id) : [];
   const planDeviceIds = new Set(planDevices.map((d) => d.id));
-  const snOf = (deviceId) => planDevices.find((d) => d.id === deviceId)?.sn || deviceId;
   const testRecords = plan ? (state.testRecords || []).filter((r) => planDeviceIds.has(r.deviceId) && r.stationKey) : [];
   const repairs = plan ? (state.productionWorkOrders || []).filter((w) => w.productionPlanId === plan.id || planDeviceIds.has(w.deviceId)) : [];
   const planLogs = plan ? (state.operationLogs || []).filter((l) => l.productionPlanId === plan.id || planDeviceIds.has(l.deviceId)) : [];
   const testSorted = [...testRecords].sort((a, b) => String(b.testTime || '').localeCompare(String(a.testTime || '')));
 
   const devPaged = usePaged(planDevices, 8);
-  const testPaged = usePaged(testSorted, 10);
-  const repairPaged = usePaged(repairs, 8);
   const [selectedDeviceId, setSelectedDeviceId] = useState(null);
 
   if (!plan) {
@@ -87,7 +84,6 @@ export default function ProductionPlanDetail() {
   };
   const passedAll = planDevices.filter((d) => ['semi', 'init', 'mid', 'oqt'].every((k) => stationPassed(d.id, k))).length;
   const repairing = planDevices.filter((d) => ['生产返修中', '返修中'].includes(d.status)).length;
-  const openRepairs = repairs.filter((w) => !['已关闭', '已作废', '已完成'].includes(w.status)).length;
 
   // 每台设备最近一次工站测试 & 返修次数（用于设备列表进度快照）
   const latestTest = {};
@@ -95,37 +91,22 @@ export default function ProductionPlanDetail() {
   const repairCount = {};
   repairs.forEach((w) => { if (w.deviceId) repairCount[w.deviceId] = (repairCount[w.deviceId] || 0) + 1; });
 
-  // 设备状态分布（按当前状态分组计数）
-  const statusDist = Object.entries(
-    planDevices.reduce((acc, d) => { acc[d.status] = (acc[d.status] || 0) + 1; return acc; }, {}),
-  ).sort((a, b) => b[1] - a[1]);
+  // 设备状态分布（平台派生：按设备当前状态分组计数）
+  const { dist } = planDeviceDistribution(plan, state.devices || []);
+  const distEntries = Object.entries(dist).sort((a, b) => b[1] - a[1]);
 
-  // 已入库及下游设备数（计划进度概览口径；来料/入库/检验不作为平台强工站）
-  const INBOUND_OR_LATER = ['已入库', '待分配项目', '已分配项目', '现场安装调试中', '客户验收中', '在线运营', '退役', '待交付', '可交付'];
-  const storedCount = planDevices.filter((d) => INBOUND_OR_LATER.includes(d.status)).length;
+  // 已完成测试设备数（进度概览分子；全工站通过或已进入下游测试完成态）
+  const TEST_DONE = ['已完成测试', '待入库', '已入库', '待分配项目', '已分配项目', '现场安装调试中', '客户验收中', '在线运营', '售后中', '已停用', '已报废', '退役', '待交付', '可交付'];
+  const completedTest = planDevices.filter((d) => TEST_DONE.includes(d.status) || ['semi', 'init', 'mid', 'oqt'].every((k) => stationPassed(d.id, k))).length;
 
-  // 当前卡点（平台派生，非单一节点）：未结返修单 / NG → 质量测试；创建久未完成 → 长期未结；否则无明显卡点
-  const anyNG = planDevices.some((d) => {
-    const lt = latestTest[d.id];
-    return ['生产返修中', '返修中', '测试NG', 'NG待返修'].includes(d.status) || (!!lt && !isPassRec(lt));
-  });
-  const bottleneck = isDone ? '无明显卡点' : (openRepairs > 0 || anyNG) ? '质量测试' : longUnsettled ? '长期未结' : '无明显卡点';
+  // 当前卡点（平台派生，非单一节点）：由设备状态分布 + ERP + 超时派生
+  const bottleneck = planBottleneck(plan, state.devices || [], state.productionWorkOrders || [], TODAY);
 
-  // 单机生产记录：按设备查看（默认第一台，可从设备列表「查看单机记录」定位）
+  // ERP 同步状态（只读同步，非平台强工站）
+  const erpSync = (plan.erpInboundNo || plan.erpStockStatus || plan.erpInspectionNo) ? '已同步' : '待同步';
+
+  // 单机生产记录：按设备查看（默认第一台，通过顶部下拉切换）
   const selectedDevice = planDevices.find((d) => d.id === selectedDeviceId) || planDevices[0];
-  const stationState = (deviceId, key) => {
-    const recs = testRecords
-      .filter((r) => r.deviceId === deviceId && r.stationKey === key)
-      .sort((a, b) => String(a.testTime || '').localeCompare(String(b.testTime || '')));
-    const last = recs.at(-1);
-    return last ? (isPassRec(last) ? 'Pass' : 'NG') : '待测试';
-  };
-  const recheckOf = (r) => {
-    if (isPassRec(r)) return '—';
-    const w = repairs.find((x) => x.deviceId === r.deviceId && x.ngStation === r.stationKey);
-    if (!w) return '—';
-    return w.recheckResult || w.status || '—';
-  };
 
   const cycle = `${String(plan.createdAt || '').slice(0, 10) || '—'} ~ ${plan.endDate ?? '—'}`;
 
@@ -144,39 +125,43 @@ export default function ProductionPlanDetail() {
         actions={<Btn as="link" to="/projects?tab=production" variant="secondary">返回生产计划</Btn>}
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Chip>当前卡点</Chip>
-        <StatusBadge status={bottleneck} size="md" />
-        {longUnsettled && <StatusBadge status="长期未结" />}
-        {overdue && <StatusBadge status="超期" />}
-      </div>
+      <Section title="生产计划进度概览" subtitle="平台派生的计划进度快照（左：测试完成进度 · 中：设备状态分布 · 右：卡点与 ERP 同步）">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="space-y-2">
+            <div className="text-xs text-gray-400">已完成测试 / 计划数量</div>
+            <ProgressLine done={completedTest} total={targetCount || planDevices.length} tone="bg-green-500" />
+            <div className="text-xs text-gray-500">已完成测试 {completedTest} / {targetCount || planDevices.length} 台</div>
+          </div>
+          <div className="space-y-2 lg:border-l lg:border-[#f2f2f2] lg:pl-6">
+            <div className="text-xs text-gray-400">设备状态分布</div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              {distEntries.length === 0
+                ? <span className="text-sm text-gray-400">该生产计划暂无设备</span>
+                : distEntries.map(([st, n]) => (
+                  <span key={st} className="inline-flex items-center gap-1">
+                    <StatusBadge status={st} />
+                    <span className="text-xs text-gray-500">{n}</span>
+                  </span>
+                ))}
+            </div>
+          </div>
+          <div className="space-y-2 text-[13px] lg:border-l lg:border-[#f2f2f2] lg:pl-6">
+            <div className="flex items-center gap-2"><span className="text-xs text-gray-400 w-24 flex-shrink-0">当前卡点</span><StatusBadge status={bottleneck} /></div>
+            <div className="flex items-center gap-2"><span className="text-xs text-gray-400 w-24 flex-shrink-0">是否长期未结</span>{longUnsettled ? <StatusBadge status="长期未结" /> : <span className="text-gray-500">否</span>}</div>
+            <div className="flex items-center gap-2"><span className="text-xs text-gray-400 w-24 flex-shrink-0">是否超期</span>{overdue ? <StatusBadge status="超期" /> : <span className="text-gray-500">否</span>}</div>
+            <div className="flex items-center gap-2"><span className="text-xs text-gray-400 w-24 flex-shrink-0">ERP 同步状态</span><StatusBadge status={erpSync} />{plan.erpStockStatus && <span className="text-xs text-gray-400">{plan.erpStockStatus}</span>}</div>
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 mt-4 pt-3 border-t border-[#f2f2f2]">该状态为平台派生状态，基于设备进度与 ERP 同步信息计算，非 ERP 字段，不代表所有设备统一节点。</p>
+      </Section>
 
-      <StatGrid cols={4}>
+      <StatGrid cols={5}>
         <StatCard label="计划数量" value={targetCount || '—'} />
         <StatCard label="已关联设备数" value={planDevices.length} />
         <StatCard label="全工站通过数" value={passedAll} tone="success" />
-        <StatCard label="返修中 / 未结返修单" value={`${repairing} / ${openRepairs}`} tone={openRepairs ? 'warning' : 'default'} />
+        <StatCard label="返修中设备数" value={repairing} tone={repairing ? 'warning' : 'default'} />
+        <StatCard label="当前卡点" value={<StatusBadge status={bottleneck} size="md" />} />
       </StatGrid>
-
-      <Section title="设备状态分布 / 计划进度概览" subtitle="按设备当前状态分组统计（平台派生，非 ERP 字段、非所有设备统一节点）">
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3 text-[13px]">
-            <span className="text-gray-500">已入库进度</span>
-            <ProgressLine done={storedCount} total={targetCount || planDevices.length} />
-            <span className="text-xs text-gray-400">已入库及下游 {storedCount} / {targetCount || planDevices.length} 台</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-3 border-t border-[#f2f2f2]">
-            {statusDist.length === 0
-              ? <span className="text-sm text-gray-400">该生产计划暂无设备</span>
-              : statusDist.map(([st, n]) => (
-                <span key={st} className="inline-flex items-center gap-1.5">
-                  <StatusBadge status={st} />
-                  <span className="text-xs text-gray-500">× {n}</span>
-                </span>
-              ))}
-          </div>
-        </div>
-      </Section>
 
       <Section title="计划基础信息">
         <DescList
@@ -213,19 +198,11 @@ export default function ProductionPlanDetail() {
             ['同步口径', '只读同步'],
           ]}
         />
-        <div className="mt-4 pt-4 border-t border-[#f2f2f2]">
-          <div className="text-xs text-gray-400 mb-2">平台派生状态（基于计划周期与设备状态派生，非 ERP 字段）</div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Chip>当前卡点 · {bottleneck}</Chip>
-            {longUnsettled ? <StatusBadge status="长期未结" /> : <Chip tone="outline">非长期未结</Chip>}
-            {overdue ? <StatusBadge status="超期" /> : <Chip tone="outline">未超期</Chip>}
-          </div>
-        </div>
       </Section>
 
       <Section title="设备列表" subtitle={`进度快照 · 该生产计划下设备 ${planDevices.length} 台（每台设备当前状态）`} bodyClassName="p-0">
         <Table
-          head={['设备SN', '机器人型号', '当前状态', '当前工站', '最近测试结果', '是否返修', '返修次数', '装配人', '最近更新时间', '操作']}
+          head={['设备SN', '机器人型号', '当前状态', '当前工站', '最近测试结果', '是否返修', '返修次数', '装配进度', '最近更新时间', '操作']}
           empty="该生产计划暂无设备"
           footer={<Pagination page={devPaged.page} total={devPaged.total} totalPages={devPaged.totalPages} onChange={devPaged.setPage} />}
         >
@@ -233,6 +210,7 @@ export default function ProductionPlanDetail() {
             const lt = latestTest[d.id];
             const rc = repairCount[d.id] || 0;
             const repaired = rc > 0 || ['生产返修中', '返修中'].includes(d.status);
+            const ap = assemblyProgress(d, deviceTypes, moduleTypes, moduleInstances, moduleReplacements);
             return (
               <tr key={d.id} className="hover:bg-[#fafafa]">
                 <td className="px-3 py-2 whitespace-nowrap"><Link to={`/devices/${d.id}`} className="ui-link font-mono text-xs">{d.sn}</Link></td>
@@ -242,13 +220,10 @@ export default function ProductionPlanDetail() {
                 <td className="px-3 py-2">{lt ? <StatusBadge status={isPassRec(lt) ? 'Pass' : 'NG'} /> : <span className="text-xs text-gray-400">未测试</span>}</td>
                 <td className="px-3 py-2">{repaired ? <span className="text-xs font-medium text-red-600">是</span> : <span className="text-xs text-gray-400">否</span>}</td>
                 <td className="px-3 py-2 text-gray-600">{rc}</td>
-                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{d.assembler ?? '—'}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{ap.rate}% <span className="text-xs text-gray-400">({ap.bound}/{ap.total})</span></td>
                 <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{d.updatedAt ?? '—'}</td>
                 <td className="px-3 py-2 whitespace-nowrap">
-                  <div className="flex items-center gap-x-3">
-                    <LinkAction to={`/devices/${d.id}`}>查看设备详情</LinkAction>
-                    <LinkAction onClick={() => setSelectedDeviceId(d.id)}>查看单机记录</LinkAction>
-                  </div>
+                  <LinkAction to={`/devices/${d.id}`}>查看设备详情</LinkAction>
                 </td>
               </tr>
             );
@@ -257,109 +232,151 @@ export default function ProductionPlanDetail() {
       </Section>
 
       <Section
-        title="单机生产记录"
-        subtitle="按设备查看整机装配与模块绑定过程留痕（平台生产过程记录）"
-        right={planDevices.length > 0 && (
-          <Select className="w-52" value={selectedDevice?.id || ''} onChange={(e) => setSelectedDeviceId(e.target.value)}>
-            {planDevices.map((d) => <option key={d.id} value={d.id}>{d.sn}</option>)}
-          </Select>
-        )}
+        title={`单机生产记录${selectedDevice ? `：${selectedDevice.sn}` : ''}`}
+        subtitle="选择生产计划下的某台设备，查看其装配、模块绑定、工站测试、返修与日志记录"
       >
         {!selectedDevice ? <EmptyState>该生产计划暂无设备</EmptyState> : (() => {
-          const slots = deviceTypes.find((t) => t.id === selectedDevice.deviceTypeId)?.slots?.length || 0;
-          const bound = selectedDevice.usedMaterials?.length || 0;
+          const dt = deviceTypes.find((t) => t.id === selectedDevice.deviceTypeId);
+          const progress = assemblyProgress(selectedDevice, deviceTypes, moduleTypes, moduleInstances, moduleReplacements);
+          const lt = latestTest[selectedDevice.id];
+          const rc = repairCount[selectedDevice.id] || 0;
+          const repaired = rc > 0 || ['生产返修中', '返修中'].includes(selectedDevice.status);
+          const devTests = [...testRecords.filter((r) => r.deviceId === selectedDevice.id)]
+            .sort((a, b) => String(a.testTime || '').localeCompare(String(b.testTime || '')));
+          const devRepairs = repairs.filter((w) => w.deviceId === selectedDevice.id);
           const devLogs = (state.operationLogs || []).filter((l) => l.deviceId === selectedDevice.id);
-          const anomalies = repairs.filter((w) => w.deviceId === selectedDevice.id).map((w) => w.description).filter(Boolean);
+          const ngReasonFor = (station) => devTests.filter((r) => r.stationKey === station && !isPassRec(r)).at(-1)?.ngReason || '—';
+          const stationSeen = {};
           return (
-            <div className="space-y-4">
-              <DescList
-                cols={3}
-                items={[
-                  ['设备SN', <Link to={`/devices/${selectedDevice.id}`} className="ui-link font-mono text-xs">{selectedDevice.sn}</Link>],
-                  ['机器人型号', typeName(selectedDevice.deviceTypeId)],
-                  ['当前状态', <StatusBadge status={selectedDevice.status} />],
-                  ['装配开始时间', selectedDevice.assemblyStartTime ?? selectedDevice.createdAt ?? '—'],
-                  ['装配完成时间', selectedDevice.assemblyTime ?? '—'],
-                  ['装配人', selectedDevice.assembler ?? '—'],
-                  ['已绑定模块数量', `${bound} / ${slots}`],
-                  ['附件', selectedDevice.photoName ?? '—'],
-                  ['异常说明', anomalies.length ? anomalies.join('；') : '—'],
-                ]}
-              />
-              <div className="pt-3 border-t border-[#f2f2f2]">
-                <div className="text-xs text-gray-400 mb-2">模块绑定进度</div>
-                <ProgressLine done={bound} total={slots} tone="bg-emerald-500" />
-              </div>
-              <div className="pt-3 border-t border-[#f2f2f2]">
-                <div className="text-xs text-gray-400 mb-2">工站进度（该设备）</div>
-                <div className="flex flex-wrap gap-4">
-                  {STATIONS.map(([k, label]) => (
-                    <div key={k} className="flex flex-col gap-1">
-                      <span className="text-xs text-gray-400">{label}</span>
-                      <StatusBadge status={stationState(selectedDevice.id, k)} />
-                    </div>
-                  ))}
+            <div className="space-y-5">
+              {/* 设备选择器 + 摘要 */}
+              <div className="bg-[#fafafa] border border-[#ececec] rounded-lg p-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-xs text-gray-500">当前查看设备</span>
+                  <Select className="w-52" value={selectedDevice.id} onChange={(e) => setSelectedDeviceId(e.target.value)}>
+                    {planDevices.map((d) => <option key={d.id} value={d.id}>{d.sn}</option>)}
+                  </Select>
+                  <Link to={`/devices/${selectedDevice.id}`} className="ui-link text-[13px]">查看设备详情</Link>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-3 text-[13px] text-gray-600">
+                  <span>机器人型号：{typeName(selectedDevice.deviceTypeId)}</span>
+                  <span className="inline-flex items-center gap-1.5">当前状态：<StatusBadge status={selectedDevice.status} /></span>
+                  <span className="inline-flex items-center gap-1.5">当前工站：<StatusBadge status={deviceBusinessNode(selectedDevice)} /></span>
+                  <span className="inline-flex items-center gap-1.5">最近测试结果：{lt ? <StatusBadge status={isPassRec(lt) ? 'Pass' : 'NG'} /> : <span className="text-gray-400">未测试</span>}</span>
+                  <span>是否返修：{repaired ? <span className="text-red-600 font-medium">是（{rc}）</span> : '否'}</span>
+                  <span>装配进度：{progress.rate}%（{progress.bound}/{progress.total}）</span>
                 </div>
               </div>
+
+              {/* 设备基础状态 */}
+              <div>
+                <div className="text-xs font-medium text-gray-500 mb-2">设备基础状态</div>
+                <DescList
+                  cols={4}
+                  items={[
+                    ['设备SN', <Link to={`/devices/${selectedDevice.id}`} className="ui-link font-mono text-xs">{selectedDevice.sn}</Link>],
+                    ['机器人型号', typeName(selectedDevice.deviceTypeId)],
+                    ['当前状态', <StatusBadge status={selectedDevice.status} />],
+                    ['当前工站', <StatusBadge status={deviceBusinessNode(selectedDevice)} />],
+                    ['装配人', selectedDevice.assembler ?? '—'],
+                    ['装配开始时间', selectedDevice.assemblyStartTime ?? selectedDevice.createdAt ?? '—'],
+                    ['装配完成时间', selectedDevice.assemblyTime ?? '—'],
+                    ['最近更新时间', selectedDevice.updatedAt ?? '—'],
+                  ]}
+                />
+              </div>
+
+              {/* 装配模板进度 */}
               <div className="pt-3 border-t border-[#f2f2f2]">
-                <div className="text-xs text-gray-400 mb-2">操作日志（{devLogs.length} 条）</div>
+                <div className="text-xs font-medium text-gray-500 mb-2">装配模板进度</div>
+                <DescList
+                  cols={4}
+                  items={[
+                    ['装配模板名称', `${dt?.name || selectedDevice.deviceTypeId} 装配模板`],
+                    ['应绑定模块数', progress.total],
+                    ['已绑定模块数', progress.bound],
+                    ['绑定完成率', `${progress.rate}%`],
+                    ['异常槽位数', progress.exception],
+                  ]}
+                />
+              </div>
+
+              {/* 模块绑定明细 */}
+              <div className="pt-3 border-t border-[#f2f2f2]">
+                <div className="text-xs font-medium text-gray-500 mb-2">模块绑定明细</div>
+                <Table head={['槽位名称', '应绑定部件类型', '模块SN · 内部ID', '绑定状态', '绑定时间', '绑定人', '异常说明', '操作']} empty="暂无模块绑定明细">
+                  {progress.rows.map((row, i) => (
+                    <tr key={i} className="hover:bg-[#fafafa]">
+                      <td className="px-3 py-2 whitespace-nowrap text-gray-600 text-xs">{row.slotName}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-gray-700">{row.corePartType}{row.moduleTypeName && row.moduleTypeName !== '—' && <span className="ml-2 text-xs text-gray-400">{row.moduleTypeName}</span>}</td>
+                      <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600">{row.moduleSN}{row.moduleId && <span className="text-gray-400"> · {row.moduleId}</span>}</td>
+                      <td className="px-3 py-2"><StatusBadge status={row.bindStatus} /></td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">{row.bindTime}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-gray-600 text-xs">{row.operator}</td>
+                      <td className="px-3 py-2 text-xs text-gray-500">{row.exception || '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{row.moduleId ? <span className="text-xs text-gray-400">查看模块详情</span> : <span className="text-gray-300 text-xs">—</span>}</td>
+                    </tr>
+                  ))}
+                </Table>
+              </div>
+
+              {/* 工站测试进度 */}
+              <div className="pt-3 border-t border-[#f2f2f2]">
+                <div className="text-xs font-medium text-gray-500 mb-2">工站测试进度</div>
+                <Table head={['工站', '测试内容', '测试结果', '测试时间', '测试人', '故障代码', '是否复测', '复测结果']} empty="暂无工站测试记录">
+                  {devTests.map((r) => {
+                    const pass = isPassRec(r);
+                    const seen = stationSeen[r.stationKey] || 0;
+                    stationSeen[r.stationKey] = seen + 1;
+                    let recheck = '—';
+                    if (!pass) { const wo = devRepairs.find((w) => w.ngStation === r.stationKey); recheck = wo?.recheckResult || wo?.status || '—'; }
+                    return (
+                      <tr key={r.id} className="hover:bg-[#fafafa]">
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-700">{STATION_LABEL[r.stationKey] ?? r.stationKey ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-600">{r.testType ?? '—'}</td>
+                        <td className="px-3 py-2"><StatusBadge status={pass ? 'Pass' : 'NG'} /></td>
+                        <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{r.testTime ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-600">{r.operator ?? '—'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500 max-w-xs">{r.ngReason ?? '—'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{seen > 0 ? '是' : '否'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{recheck === '—' ? <span className="text-gray-300">—</span> : <StatusBadge status={recheck} />}</td>
+                      </tr>
+                    );
+                  })}
+                </Table>
+              </div>
+
+              {/* 生产返修记录 */}
+              <div className="pt-3 border-t border-[#f2f2f2]">
+                <div className="text-xs font-medium text-gray-500 mb-2">生产返修记录</div>
+                <Table head={['返修记录编号', '来源工站', '故障代码', '返修说明', '返修人', '返修开始', '返修完成', '复测结果']} empty="暂无生产返修记录">
+                  {devRepairs.map((w) => {
+                    const done = ['已关闭', '已完成'].includes(w.status);
+                    const recheck = w.recheckResult || (done ? '通过' : '');
+                    return (
+                      <tr key={w.id} className="hover:bg-[#fafafa]">
+                        <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-700">{w.id}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-700">{STATION_LABEL[w.ngStation] ?? w.ngStation ?? '—'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500 max-w-xs">{ngReasonFor(w.ngStation)}</td>
+                        <td className="px-3 py-2 text-xs text-gray-600 max-w-xs"><div className="truncate">{w.repairActions || '—'}</div></td>
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-600">{w.assignedTo || '待指派'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">{w.createdAt ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">{done ? (w.updatedAt ?? '—') : '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{recheck ? <StatusBadge status={recheck} /> : <span className="text-gray-300">—</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </Table>
+              </div>
+
+              {/* 附件 / 操作日志 */}
+              <div className="pt-3 border-t border-[#f2f2f2]">
+                <div className="text-xs font-medium text-gray-500 mb-2">附件 / 操作日志（{devLogs.length} 条）</div>
                 {devLogs.length ? <OperationLog logs={devLogs} /> : <EmptyState>暂无操作日志</EmptyState>}
               </div>
             </div>
           );
         })()}
-      </Section>
-
-      <Section
-        title="质量测试记录"
-        subtitle="工站测试追溯（半成品检验 / 初测 / 中测 / OQT终测）；为平台生产过程测试，不替代 ERP 产品检验单。"
-        bodyClassName="p-0"
-      >
-        <Table
-          head={['设备SN', '工站', '测试内容', '结果', '故障代码', '复测结果', '测试人', '测试时间']}
-          empty="暂无质量测试记录"
-          footer={<Pagination page={testPaged.page} total={testPaged.total} totalPages={testPaged.totalPages} onChange={testPaged.setPage} />}
-        >
-          {testPaged.pageItems.map((r) => {
-            const recheck = recheckOf(r);
-            return (
-              <tr key={r.id} className="hover:bg-[#fafafa]">
-                <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-700">{snOf(r.deviceId)}</td>
-                <td className="px-3 py-2 whitespace-nowrap text-gray-700">{STATION_LABEL[r.stationKey] ?? '—'}</td>
-                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{r.testType ?? '—'}</td>
-                <td className="px-3 py-2"><StatusBadge status={isPassRec(r) ? 'Pass' : 'NG'} /></td>
-                <td className="px-3 py-2 text-xs text-gray-500 max-w-xs">{r.ngReason ?? '—'}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{recheck === '—' ? <span className="text-gray-300">—</span> : <StatusBadge status={recheck} />}</td>
-                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{r.operator ?? '—'}</td>
-                <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{r.testTime ?? '—'}</td>
-              </tr>
-            );
-          })}
-        </Table>
-      </Section>
-
-      <Section
-        title="生产返修记录"
-        subtitle="测试 NG 生成的生产返修 / NG 工单（仅生产阶段，不进入售后工单中心）"
-        bodyClassName="p-0"
-      >
-        <Table
-          head={['工单编号', '设备SN', '来源工站', '问题描述', '严重程度', '负责人', '状态']}
-          empty="暂无生产返修记录"
-          footer={<Pagination page={repairPaged.page} total={repairPaged.total} totalPages={repairPaged.totalPages} onChange={repairPaged.setPage} />}
-        >
-          {repairPaged.pageItems.map((w) => (
-            <tr key={w.id} className="hover:bg-[#fafafa]">
-              <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-700">{w.id}</td>
-              <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600">{w.deviceSN ?? '—'}</td>
-              <td className="px-3 py-2 whitespace-nowrap text-gray-700">{STATION_LABEL[w.ngStation] ?? w.ngStation ?? '—'}</td>
-              <td className="px-3 py-2 text-xs text-gray-600 max-w-sm"><div className="truncate">{w.description ?? '—'}</div></td>
-              <td className="px-3 py-2"><StatusBadge status={w.severity ?? '—'} /></td>
-              <td className="px-3 py-2 whitespace-nowrap text-gray-600">{w.assignedTo || '待指派'}</td>
-              <td className="px-3 py-2"><StatusBadge status={w.status} /></td>
-            </tr>
-          ))}
-        </Table>
       </Section>
 
       <Section title="操作日志" subtitle={`共 ${planLogs.length} 条`}>
