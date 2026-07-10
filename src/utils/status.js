@@ -151,3 +151,90 @@ export function deviceBusinessNode(device) {
   if (['退役', '已作废', '已报废'].includes(device.status)) return '退役';
   return DEVICE_NODE_MAP[device.status] || '整机装配';
 }
+
+// ---- 装配模板 & 模块绑定（由设备类型 + 模块类型派生，供生产计划/设备详情/型号字典复用）----
+// 装配模板 = 某机器人型号（设备类型）的槽位定义 + 核心部件类型/是否必装/数量/是否需SN/是否支持换件/排序。
+export function assemblyTemplateFor(deviceType, moduleTypes = []) {
+  return (deviceType?.slots || []).map((sl, i) => {
+    const mt = moduleTypes.find((m) => m.id === sl.moduleTypeId);
+    return {
+      order: i + 1,
+      slotName: sl.slotName,
+      moduleTypeId: sl.moduleTypeId,
+      moduleTypeName: mt?.name || '—',
+      corePartType: mt?.category || '—',
+      required: true,
+      quantity: sl.quantity || 1,
+      needSN: true,
+      replaceable: true,
+      bindRule: '按型号槽位一对一绑定',
+    };
+  });
+}
+
+// 某设备的模块绑定明细：基于其型号装配模板 + 已绑定模块实例 + 换件记录，逐槽位给出绑定状态。
+// 绑定状态：待绑定 / 已绑定 / 异常 / 已更换
+export function deviceModuleBindings(device, deviceTypes = [], moduleTypes = [], moduleInstances = [], moduleReplacements = []) {
+  if (!device) return [];
+  const dt = deviceTypes.find((t) => t.id === device.deviceTypeId);
+  const template = assemblyTemplateFor(dt, moduleTypes);
+  const bound = moduleInstances.filter((mi) => mi.boundDeviceId === device.id);
+  const replacedSlots = new Set(moduleReplacements.filter((r) => r.deviceId === device.id).map((r) => r.slotName));
+  const used = new Set();
+  return template.map((slot) => {
+    const inst = bound.find((mi) => mi.moduleTypeId === slot.moduleTypeId && !used.has(mi.id));
+    if (inst) used.add(inst.id);
+    let bindStatus;
+    if (replacedSlots.has(slot.slotName)) bindStatus = '已更换';
+    else if (inst) bindStatus = '已绑定';
+    else bindStatus = '待绑定';
+    return {
+      slotName: slot.slotName,
+      corePartType: slot.corePartType,
+      moduleTypeName: slot.moduleTypeName,
+      moduleSN: inst?.sn || '—',
+      moduleId: inst?.id || null,
+      bindStatus,
+      bindTime: inst || bindStatus === '已更换' ? (device.assemblyTime || '—') : '—',
+      operator: inst || bindStatus === '已更换' ? (device.assembler || '—') : '—',
+      exception: bindStatus === '待绑定' ? '未绑定' : '',
+    };
+  });
+}
+
+// 装配进度汇总：应绑定 / 已绑定 / 完成率 / 异常槽位数
+export function assemblyProgress(device, deviceTypes = [], moduleTypes = [], moduleInstances = [], moduleReplacements = []) {
+  const rows = deviceModuleBindings(device, deviceTypes, moduleTypes, moduleInstances, moduleReplacements);
+  const total = rows.length;
+  const bound = rows.filter((r) => ['已绑定', '已更换'].includes(r.bindStatus)).length;
+  const exception = rows.filter((r) => r.bindStatus === '异常').length;
+  return { total, bound, exception, rate: total ? Math.round((bound / total) * 100) : 0, rows };
+}
+
+// ---- 生产计划派生状态（计划无唯一当前节点，由设备状态分布 + ERP + 超时派生）----
+export function planDeviceDistribution(plan, devices = []) {
+  const devs = devices.filter((d) => d.productionPlanId === plan.id);
+  const dist = {};
+  devs.forEach((d) => { dist[d.status] = (dist[d.status] || 0) + 1; });
+  return { total: devs.length, dist };
+}
+
+// 返回派生的「当前卡点」：质量返修 / 长期未结 / 计划超期 / 待 ERP 入库·检验同步 / 主要阶段 / 多阶段并行 / 无明显卡点
+export function planBottleneck(plan, devices = [], productionWorkOrders = [], today = TODAY) {
+  const devs = devices.filter((d) => d.productionPlanId === plan.id);
+  if (plan.status === '已完成') return '无明显卡点';
+  const hasRepair = devs.some((d) => ['生产返修中', 'NG待返修', '复测中', '测试NG'].includes(d.status))
+    || productionWorkOrders.some((w) => w.productionPlanId === plan.id && !['已关闭', '已取消', '已作废'].includes(w.status));
+  if (hasRepair) return '质量返修';
+  const overdue = plan.endDate && plan.endDate < today;
+  if (overdue) return '计划超期';
+  const longPending = (plan.createdAt || '').slice(0, 10) && (plan.createdAt || '').slice(0, 10) < '2026-05-15';
+  if (longPending) return '长期未结';
+  const DONE = ['已完成测试', '待入库', '已入库', '待分配项目', '已分配项目', '在线运营'];
+  const allTested = devs.length > 0 && devs.every((d) => DONE.includes(d.status));
+  if (allTested && !plan.erpInboundNo && !plan.erpStockStatus) return '待 ERP 入库 / 检验同步';
+  const stages = new Set(devs.map((d) => d.status));
+  if (stages.size >= 3) return '多阶段并行';
+  if (stages.size === 1 && devs.length) return `主要阶段 · ${devs[0].status}`;
+  return '无明显卡点';
+}

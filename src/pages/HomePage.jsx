@@ -4,9 +4,9 @@ import { useApp } from '../context/AppContext';
 import { Section, StatGrid, StatCard } from '../components/ui';
 import { productionPlanStatus, deliveryPlanStatus } from '../utils/status';
 
+// 首页为平台总览，只展示高层级生命周期，不展示生产工站细节，也不把 ERP 当作平台流程节点。
 const WORKFLOW = [
-  '项目创建', '生产计划', '来料/领料确认', '整机装配', '质量测试', 'ERP 入库/检验关联',
-  '交付计划', '出厂检验', '现场安装调试', '客户验收', '在线运营', '告警 / 质量问题 / 工单闭环',
+  'ERP 正式数据同步', '项目', '生产与质量', '交付', '在线运营', '问题 / 售后', '设备履历 / 质量追溯',
 ];
 
 const WO_CLOSED = ['已关闭', '已关单', '已作废', '已取消'];
