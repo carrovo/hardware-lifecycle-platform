@@ -60,8 +60,8 @@ export default function MobileAssemblyPage() {
   const scannedDevice = scanned ? devices.find((d) => d.id === scanned.boundDeviceId) : null;
 
   return (
-    <div className="min-h-screen bg-[#f2f3f5] flex justify-center">
-      <div className="w-full max-w-md bg-white min-h-screen flex flex-col">
+    <div className="w-full min-h-screen bg-[#f2f3f5] flex justify-center">
+      <div className="w-full max-w-md bg-white min-h-screen flex flex-col shadow-sm">
         {/* 顶部 */}
         <div className="bg-gray-900 text-white px-4 py-3 flex items-center gap-2">
           <div className="w-6 h-6 rounded bg-white/15 flex items-center justify-center text-xs font-bold">质</div>
