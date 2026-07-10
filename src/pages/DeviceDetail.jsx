@@ -5,7 +5,8 @@ import { useRole } from '../context/RoleContext';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import { Page, PageHeader, Section, DescList, Table, Btn, LinkAction, EmptyState } from '../components/ui';
-import { deviceLifecycleStatus, deviceBusinessNode } from '../utils/status';
+import { deviceLifecycleStatus, deviceBusinessNode, deviceModuleBindings, assemblyProgress } from '../utils/status';
+import { moduleInstances as MODULE_INSTANCES } from '../data/mockData';
 
 const STATION_LABELS = { semi: '半成品检验', init: '初测', mid: '中测', oqt: 'OQT终测' };
 
@@ -100,11 +101,8 @@ export default function DeviceDetail() {
   const lifecycle = deviceLifecycleStatus(device);
   const online = onlineStateOf(device);
 
-  const getModuleName = (mtId) => state.moduleTypes.find((m) => m.id === mtId)?.name || mtId;
-  const getModuleCategory = (mtId) => state.moduleTypes.find((m) => m.id === mtId)?.category || '';
   const getMaterial = (materialId) => state.materials.find((m) => m.id === materialId);
   const getMaterialSN = (materialId) => getMaterial(materialId)?.sn || materialId || '—';
-  const getSlotName = (mtId) => deviceType?.slots?.find((s) => s.moduleTypeId === mtId)?.slotName || '—';
 
   const handleVoidTestRecord = (record, reason) => {
     const now = nowStamp();
@@ -122,9 +120,33 @@ export default function DeviceDetail() {
     ...alerts.map((a) => ({ kind: '健康告警', id: a.id, summary: a.description, stage: a.alertType, severity: a.severity, status: a.status, owner: a.owner || '—', time: a.alertTime, to: null })),
   ].sort((a, b) => (b.time || '').localeCompare(a.time || ''));
 
-  const moduleRows = (device.usedMaterials && device.usedMaterials.length > 0)
-    ? device.usedMaterials.map((um) => ({ slot: getSlotName(um.moduleTypeId), type: getModuleName(um.moduleTypeId), cat: getModuleCategory(um.moduleTypeId), sn: getMaterial(um.materialId)?.sn || um.materialId, boundAt: device.assemblyTime || '—', status: getMaterial(um.materialId)?.status || '已装配', template: false }))
-    : (deviceType?.slots || []).map((slot) => ({ slot: slot.slotName, type: getModuleName(slot.moduleTypeId), cat: getModuleCategory(slot.moduleTypeId), sn: '待绑定', boundAt: '—', status: '待确认', template: true }));
+  // 模块 / 核心部件：基于机器人型号装配模板逐槽位绑定情况
+  const bindings = deviceModuleBindings(device, state.deviceTypes, state.moduleTypes, MODULE_INSTANCES, state.moduleReplacements);
+  const progress = assemblyProgress(device, state.deviceTypes, state.moduleTypes, MODULE_INSTANCES, state.moduleReplacements);
+
+  // 生产过程记录：装配 → 模块绑定 → 各测试工站 → 生产返修 → 复测 → 测试完成 的节点时间线
+  const testByStation = (key) => testRecords.find((t) => t.stationKey === key && !t.voided);
+  const recBadge = (rec) => (rec ? (rec.result === '合格' ? '合格' : '不合格') : '未开始');
+  const TEST_DONE_STATES = ['已完成测试', '测试通过', '待入库', '已入库', '待分配项目', '已分配项目', '在线运营', '待交付', '可交付', '待出厂检验', '出厂检验中', '现场安装调试中', '客户验收中', '售后中', '维修中'];
+  const semiRec = testByStation('semi');
+  const initRec = testByStation('init');
+  const midRec = testByStation('mid');
+  const oqtRec = testByStation('oqt');
+  const latestPWO = [...productionWorkOrders].sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''))[0];
+  const retestLog = operationLogs.find((l) => (l.actionType || '').includes('复测') || (l.notes || '').includes('复测'));
+  const allStationsPass = [semiRec, initRec, midRec, oqtRec].every((r) => r && r.result === '合格');
+  const testDone = allStationsPass || TEST_DONE_STATES.includes(device.status);
+  const processTimeline = [
+    { label: '装配开始', status: device.assemblyTime ? '已完成' : '未开始', time: device.assemblyTime || '—', operator: device.assembler || '—', hit: !!device.assemblyTime, note: '整机装配启动' },
+    { label: '模块绑定', status: progress.total ? (progress.bound === progress.total ? '已完成' : progress.bound > 0 ? '模块绑定中' : '待绑定') : '待绑定', time: progress.bound > 0 ? (device.assemblyTime || '—') : '—', operator: progress.bound > 0 ? (device.assembler || '—') : '—', hit: progress.bound > 0, note: `模块绑定进度 ${progress.bound}/${progress.total}` },
+    { label: '半成品检验', status: recBadge(semiRec), time: semiRec?.testTime || '—', operator: semiRec?.operator || '—', hit: !!semiRec, note: semiRec?.notes || '' },
+    { label: '初测', status: recBadge(initRec), time: initRec?.testTime || '—', operator: initRec?.operator || '—', hit: !!initRec, note: initRec?.notes || '' },
+    { label: '中测', status: recBadge(midRec), time: midRec?.testTime || '—', operator: midRec?.operator || '—', hit: !!midRec, note: midRec?.notes || '' },
+    { label: 'OQT终测', status: recBadge(oqtRec), time: oqtRec?.testTime || '—', operator: oqtRec?.operator || '—', hit: !!oqtRec, note: oqtRec?.notes || '' },
+    { label: '生产返修', status: latestPWO ? latestPWO.status : '未开始', time: latestPWO ? (latestPWO.updatedAt || latestPWO.createdAt || '—') : '—', operator: latestPWO ? (latestPWO.assignedTo || '待指派') : '—', hit: !!latestPWO, note: latestPWO ? `工单 ${latestPWO.id}${latestPWO.ngStation ? ` · ${STATION_LABELS[latestPWO.ngStation] || latestPWO.ngStation}` : ''}` : '' },
+    { label: '复测', status: (device.status === '复测中' || retestLog) ? '复测中' : '未开始', time: retestLog?.timestamp || (device.status === '复测中' ? (device.updatedAt || '—') : '—'), operator: retestLog?.operator || '—', hit: !!(device.status === '复测中' || retestLog), note: '' },
+    { label: '测试完成', status: testDone ? '测试通过' : '未完成', time: testDone ? (device.inboundTime || oqtRec?.testTime || '—') : '—', operator: testDone ? (oqtRec?.operator || device.assembler || '—') : '—', hit: testDone, note: '' },
+  ];
 
   return (
     <Page>
@@ -187,35 +209,65 @@ export default function DeviceDetail() {
       </Section>
 
       {/* 模块 / 核心部件 */}
-      <Section title="模块 / 核心部件" subtitle={moduleRows.some((r) => r.template) ? '该设备暂未登记核心部件实例，按机器人型号槽位模板展示应绑定模块' : `按槽位展示已绑定核心部件（${moduleRows.length}）`} bodyClassName="p-0">
-        <Table head={['槽位名称', '核心部件类型', '模块 SN', '绑定时间', '状态']} empty="暂无模块绑定记录">
-          {moduleRows.map((m, i) => (
+      <Section
+        title="模块 / 核心部件"
+        subtitle={`基于该设备所属机器人型号装配模板生成的槽位绑定情况 · 装配进度 ${progress.bound}/${progress.total}（${progress.rate}%）`}
+        bodyClassName="p-0"
+      >
+        <Table head={['槽位名称', '应绑定部件类型', '模块 SN · 内部ID', '绑定状态', '绑定时间', '绑定人', '异常说明']} empty="该型号暂无装配模板槽位">
+          {bindings.map((b, i) => (
             <tr key={i} className="hover:bg-[#fafafa]">
-              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{m.slot}</td>
-              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{m.type}{m.cat && <span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{m.cat}</span>}</td>
-              <td className="px-3 py-2 font-mono text-xs text-gray-600">{m.sn}</td>
-              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{m.boundAt}</td>
-              <td className="px-3 py-2"><StatusBadge status={m.status} /></td>
+              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{b.slotName}</td>
+              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{b.moduleTypeName}{b.corePartType && b.corePartType !== '—' && <span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{b.corePartType}</span>}</td>
+              <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap">{b.moduleSN}{b.moduleId ? ` · ${b.moduleId}` : ''}</td>
+              <td className="px-3 py-2"><StatusBadge status={b.bindStatus} /></td>
+              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{b.bindTime}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{b.operator}</td>
+              <td className="px-3 py-2 text-gray-400 text-xs">{b.exception || '—'}</td>
             </tr>
           ))}
         </Table>
       </Section>
 
-      {/* 生产过程记录 */}
-      <Section title="生产过程记录" subtitle={`装配：${device.assembler || '—'} · ${device.assemblyTime || '—'}${plan ? ` · 生产计划 ${plan.name || plan.id}` : ''}`} bodyClassName="p-0">
-        <Table head={['生产工单', 'NG 工站', '描述', '严重程度', '状态', '负责人', '更新时间']} empty="暂无生产返修 / 工单记录">
-          {productionWorkOrders.map((w) => (
-            <tr key={w.id} className="hover:bg-[#fafafa]">
-              <td className="px-3 py-2 font-mono text-xs text-gray-700 whitespace-nowrap">{w.id}</td>
-              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{STATION_LABELS[w.ngStation] || w.ngStation || '—'}</td>
-              <td className="px-3 py-2 text-gray-600 text-xs max-w-xs"><span className="truncate block">{w.description}</span></td>
-              <td className="px-3 py-2"><StatusBadge status={w.severity} /></td>
-              <td className="px-3 py-2"><StatusBadge status={w.status} /></td>
-              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{w.assignedTo || '待指派'}</td>
-              <td className="px-3 py-2 text-gray-400 text-xs whitespace-nowrap">{w.updatedAt || '—'}</td>
-            </tr>
+      {/* 生产过程记录（过程节点时间线，区别于模块绑定表） */}
+      <Section title="生产过程记录" subtitle="该设备从整机装配到测试完成的过程节点时间线（由操作日志 / 测试记录映射，未命中显示未开始 / —）">
+        <div>
+          {processTimeline.map((n, i) => (
+            <div key={n.label} className="flex gap-3">
+              <div className="flex flex-col items-center">
+                <span className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${n.hit ? 'bg-slate-700' : 'bg-white border border-gray-300'}`} />
+                {i < processTimeline.length - 1 && <span className="w-px flex-1 bg-[#ececec] my-1" />}
+              </div>
+              <div className="pb-4 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[13px] font-medium text-gray-800">{n.label}</span>
+                  <StatusBadge status={n.status} />
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {n.time}{n.operator && n.operator !== '—' ? ` · ${n.operator}` : ''}{n.note ? ` · ${n.note}` : ''}
+                </div>
+              </div>
+            </div>
           ))}
-        </Table>
+        </div>
+      </Section>
+
+      {/* 装配记录 */}
+      <Section title="装配记录" subtitle="整机装配的生产计划、模板与绑定进度信息">
+        <DescList
+          cols={4}
+          items={[
+            ['生产计划编号', device.productionPlanId ? (plan ? <Link to={`/production-plans/${plan.id}`} className="ui-link">{device.productionPlanId}</Link> : device.productionPlanId) : '—'],
+            ['装配开始时间', device.assemblyStartTime ?? '—'],
+            ['装配完成时间', device.assemblyTime ?? '—'],
+            ['装配人', device.assembler ?? '—'],
+            ['装配模板', deviceType ? `${deviceType.name} 装配模板` : '—'],
+            ['模块绑定进度', `${progress.bound}/${progress.total}`],
+            ['异常说明', device.assemblyException ?? '—'],
+            ['附件', device.photoName ?? '—'],
+            ['操作日志入口', <a key="oplog" href="#device-oplog" className="ui-link text-[13px]">查看操作日志（{operationLogs.length}）</a>],
+          ]}
+        />
       </Section>
 
       {/* 质量测试记录 */}
@@ -313,6 +365,7 @@ export default function DeviceDetail() {
       </Section>
 
       {/* 操作日志 */}
+      <div id="device-oplog" className="scroll-mt-4">
       <Section title="操作日志" subtitle={`共 ${operationLogs.length} 条 · 从新到旧`} bodyClassName="p-0">
         <Table head={['时间', '操作人', '动作', '状态变化', '说明']} empty="暂无操作日志">
           {operationLogs.map((log) => (
@@ -330,6 +383,7 @@ export default function DeviceDetail() {
           ))}
         </Table>
       </Section>
+      </div>
 
       <Modal isOpen={showQR} onClose={() => setShowQR(false)} title="设备二维码" size="sm">
         <div className="flex flex-col items-center gap-3 py-2">
