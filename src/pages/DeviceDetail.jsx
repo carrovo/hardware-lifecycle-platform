@@ -6,7 +6,7 @@ import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import { Page, PageHeader, Section, DescList, Table, Btn, LinkAction, EmptyState } from '../components/ui';
 import { deviceLifecycleStatus, deviceBusinessNode, deviceModuleBindings, assemblyProgress } from '../utils/status';
-import { moduleInstances as MODULE_INSTANCES } from '../data/mockData';
+import ModuleDetailDrawer from '../components/ModuleDetailDrawer';
 
 const STATION_LABELS = { semi: '半成品检验', init: '初测', mid: '中测', oqt: 'OQT终测' };
 
@@ -71,6 +71,7 @@ export default function DeviceDetail() {
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
   const [showQR, setShowQR] = useState(false);
+  const [moduleDrawerId, setModuleDrawerId] = useState(null);
 
   const device = state.devices.find((d) => d.id === id);
 
@@ -121,8 +122,8 @@ export default function DeviceDetail() {
   ].sort((a, b) => (b.time || '').localeCompare(a.time || ''));
 
   // 模块 / 核心部件：基于机器人型号装配模板逐槽位绑定情况
-  const bindings = deviceModuleBindings(device, state.deviceTypes, state.moduleTypes, MODULE_INSTANCES, state.moduleReplacements);
-  const progress = assemblyProgress(device, state.deviceTypes, state.moduleTypes, MODULE_INSTANCES, state.moduleReplacements);
+  const bindings = deviceModuleBindings(device, state.deviceTypes, state.moduleTypes, state.moduleInstances, state.moduleReplacements, state.materialBatches);
+  const progress = assemblyProgress(device, state.deviceTypes, state.moduleTypes, state.moduleInstances, state.moduleReplacements);
 
   // 生产过程记录：装配 → 模块绑定 → 各测试工站 → 生产返修 → 复测 → 测试完成 的节点时间线
   const testByStation = (key) => testRecords.find((t) => t.stationKey === key && !t.voided);
@@ -214,16 +215,22 @@ export default function DeviceDetail() {
         subtitle={`基于该设备所属机器人型号装配模板生成的槽位绑定情况 · 装配进度 ${progress.bound}/${progress.total}（${progress.rate}%）`}
         bodyClassName="p-0"
       >
-        <Table head={['槽位名称', '应绑定部件类型', '模块 SN · 内部ID', '绑定状态', '绑定时间', '绑定人', '异常说明']} empty="该型号暂无装配模板槽位">
+        <Table head={['槽位名称', '应绑定部件类型', '模块 SN / 内部 ID', '物料编码', '物料名称', '批次号', 'ERP 库存状态', '平台占用状态', '绑定状态', '绑定时间', '绑定人', '异常说明', '操作']} empty="该型号暂无装配模板槽位">
           {bindings.map((b, i) => (
             <tr key={i} className="hover:bg-[#fafafa]">
               <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{b.slotName}</td>
               <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{b.moduleTypeName}{b.corePartType && b.corePartType !== '—' && <span className="ml-2 bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full">{b.corePartType}</span>}</td>
               <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap">{b.moduleSN}{b.moduleId ? ` · ${b.moduleId}` : ''}</td>
+              <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{b.materialCode}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{b.materialName}</td>
+              <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{b.batchNo}</td>
+              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{b.erpStockStatus}</td>
+              <td className="px-3 py-2">{b.platformStatus && b.platformStatus !== '—' ? <StatusBadge status={b.platformStatus} /> : <span className="text-gray-300 text-xs">—</span>}</td>
               <td className="px-3 py-2"><StatusBadge status={b.bindStatus} /></td>
               <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{b.bindTime}</td>
               <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{b.operator}</td>
               <td className="px-3 py-2 text-gray-400 text-xs">{b.exception || '—'}</td>
+              <td className="px-3 py-2 text-xs whitespace-nowrap">{b.moduleId ? <LinkAction onClick={() => setModuleDrawerId(b.moduleId)}>查看模块详情</LinkAction> : <span className="text-gray-300">—</span>}</td>
             </tr>
           ))}
         </Table>
@@ -395,6 +402,8 @@ export default function DeviceDetail() {
           <p className="text-xs text-gray-400 text-center">（原型占位二维码）扫码进入移动端上报页登记该设备的质量问题。</p>
         </div>
       </Modal>
+
+      <ModuleDetailDrawer moduleId={moduleDrawerId} onClose={() => setModuleDrawerId(null)} />
     </Page>
   );
 }
