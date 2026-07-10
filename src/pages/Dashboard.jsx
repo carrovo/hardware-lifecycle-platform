@@ -1,16 +1,45 @@
-import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import {
+  BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid,
+} from 'recharts';
 import { useApp } from '../context/AppContext';
 import StatusBadge from '../components/StatusBadge';
-import { Pagination, usePaged } from '../components/Pagination';
-import { Page, PageHeader, Section, Toolbar, Select, StatCard, StatGrid, Table, LinkAction } from '../components/ui';
+import { Page, PageHeader, Section, StatCard, StatGrid, Table, LinkAction, Chip } from '../components/ui';
 import { productionPlanStatus, deliveryPlanStatus, deviceLifecycleStatus, isPass, isNG, TODAY } from '../utils/status';
 
 // 看板中心：总览 / 项目 / 质量 / 交付 / 售后 五个看板。
-// SaaS dashboard 风格（非大屏）：紧凑指标卡 + 分区卡片 + 紧凑表格，看板只做聚合与跳转，不承载业务流程。
+// 定位为「数据可视化 dashboard」：以分布 / 趋势 / 漏斗 / Top / 占比图表为主体，
+// 列表仅作为风险 Top 与明细摘要放在下方次要位置，只允许轻量跳转，不承载业务操作。
+
+/* ── 配色（灰阶为主 + 语义色，SaaS 克制风） ─────────────── */
+const C = {
+  green: '#16a34a', blue: '#2563eb', amber: '#d97706', red: '#dc2626',
+  purple: '#7c3aed', teal: '#0d9488', gray: '#94a3b8', slate: '#64748b',
+};
+// 已校验的分类色序（身份类图表专用，相邻可区分且色盲安全）
+const CAT = [C.blue, C.amber, C.teal, C.purple];
+const AXIS = { fontSize: 11, fill: '#9ca3af' };
+const TT = {
+  contentStyle: { fontSize: 12, borderRadius: 8, border: '1px solid #ececec', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', padding: '6px 10px' },
+  cursor: { fill: 'rgba(0,0,0,0.03)' },
+};
+// 状态 -> 语义色（与 StatusBadge 口径一致；用于占比/分布图上色，配合图例二次编码）
+const STATUS_HEX = {
+  交付中: C.blue, 已验收: C.green, 已延期: C.red, 未开始: C.gray, 已作废: C.slate,
+  待处理: C.gray, 待接单: C.gray, 处理中: C.blue, 现场处理中: C.blue, 复检中: C.purple,
+  已关闭: C.green, 已关单: C.green, 已取消: C.slate,
+};
+const sHex = (s) => STATUS_HEX[s] || C.gray;
+const LIFE_HEX = {
+  生产中: C.blue, 待入库: '#cbd5e1', 待交付: C.gray, 交付中: C.purple, 在线运营: C.green,
+  维修中: C.amber, 售后中: C.red, 已停用: C.slate, 已报废: '#475569', 退役: C.slate,
+};
 
 const WO_CLOSED = ['已关闭', '已关单', '已作废', '已取消'];
 const isWOOpen = (w) => !WO_CLOSED.includes(w.status);
+const day = (s) => (s || '').slice(0, 10);
+const sevWeight = (s) => (['严重', '高'].includes(s) ? 3 : s === '中' ? 2 : 1);
 
 function useShared(state) {
   const projects = state.projects || [];
@@ -19,46 +48,141 @@ function useShared(state) {
   const devices = state.devices || [];
   const workOrders = [...(state.deliveryWorkOrders || []), ...(state.workOrders || [])];
   const qualityIssues = state.qualityIssues || [];
+  const deviceTypes = state.deviceTypes || [];
   const projName = (id) => projects.find((x) => x.id === id)?.name || '—';
-  const projType = (id) => projects.find((x) => x.id === id)?.projectType || '—';
-  return { projects, wpp, deliveryPlans, devices, workOrders, qualityIssues, projName, projType };
+  const dtName = (id) => deviceTypes.find((t) => t.id === id)?.name || '—';
+  return { projects, wpp, deliveryPlans, devices, workOrders, qualityIssues, deviceTypes, projName, dtName };
+}
+
+/* ── 复用图表片段（作为函数返回 chart element，直接作为 ResponsiveContainer 子节点） ── */
+function donut(data) {
+  return (
+    <PieChart>
+      <Pie data={data} dataKey="value" nameKey="name" innerRadius={46} outerRadius={78} paddingAngle={2} strokeWidth={0}>
+        {data.map((d, i) => <Cell key={i} fill={d.color} />)}
+      </Pie>
+      <Tooltip {...TT} />
+      <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 6 }} />
+    </PieChart>
+  );
+}
+function hbar(data, domain) {
+  return (
+    <BarChart data={data} layout="vertical" margin={{ top: 4, right: 34, left: 6, bottom: 4 }}>
+      <CartesianGrid horizontal={false} stroke="#f2f2f2" />
+      <XAxis type="number" domain={domain || [0, 'dataMax']} tick={AXIS} axisLine={{ stroke: '#eee' }} tickLine={false} allowDecimals={false} />
+      <YAxis type="category" dataKey="name" width={88} tick={AXIS} axisLine={false} tickLine={false} />
+      <Tooltip {...TT} />
+      <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={22} label={{ position: 'right', fontSize: 11, fill: '#6b7280' }}>
+        {data.map((d, i) => <Cell key={i} fill={d.color || C.blue} />)}
+      </Bar>
+    </BarChart>
+  );
+}
+
+function ChartFrame({ title, subtitle, height = 264, children }) {
+  return (
+    <Section title={title} subtitle={subtitle}>
+      <div style={{ height }}>
+        <ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer>
+      </div>
+    </Section>
+  );
+}
+function Grid2({ children }) {
+  return <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">{children}</div>;
 }
 
 /* ═════════ 总览看板 ═════════ */
 function OverviewBoard({ state }) {
-  const { projects, wpp, deliveryPlans, devices, workOrders, qualityIssues } = useShared(state);
+  const { projects, deliveryPlans, devices, workOrders, qualityIssues, projName } = useShared(state);
+  const tests = (state.testRecords || []).filter((t) => t.stationKey);
+  const alerts = state.alerts || [];
+
+  const online = devices.filter((d) => d.status === '在线运营').length;
   const openWO = workOrders.filter(isWOOpen).length;
   const openQI = qualityIssues.filter((q) => q.status !== '已关闭').length;
-  const online = devices.filter((d) => d.status === '在线运营').length;
+  const delivering = deliveryPlans.filter((p) => deliveryPlanStatus(p) === '交付中').length;
+  const delayed = deliveryPlans.filter((p) => deliveryPlanStatus(p) === '已延期').length;
 
-  const lifecycle = ['生产中', '待入库', '待交付', '交付中', '在线运营', '维修中', '已作废'].map((k) => ({
-    k, n: devices.filter((d) => deviceLifecycleStatus(d) === k).length,
-  }));
-  const lastUpdated = devices.map((d) => d.updatedAt).filter(Boolean).sort().slice(-1)[0] || '—';
+  // 生命周期阶段分布（饼图）
+  const lifeOrder = ['生产中', '待入库', '待交付', '交付中', '在线运营', '维修中', '售后中', '已停用', '已报废'];
+  const lifeData = lifeOrder
+    .map((k) => ({ name: k, value: devices.filter((d) => deviceLifecycleStatus(d) === k).length, color: LIFE_HEX[k] || C.gray }))
+    .filter((d) => d.value > 0);
+
+  // 风险总览（横向条形）
+  const testNG = tests.filter((t) => t.stationResult === 'NG').length;
+  const deliveryNG = deliveryPlans.reduce((s, dp) => s + ['factoryInspection', 'siteInstall', 'customerAccept']
+    .reduce((a, k) => a + (dp.records?.[k] || []).filter(isNG).length, 0), 0);
+  const agedWO = workOrders.filter((w) => isWOOpen(w) && day(w.createdAt) && day(w.createdAt) < TODAY).length;
+  const erpPending = devices.filter((d) => d.erpStockStatus === '待检' || d.erpInspectionStatus === '待检').length;
+  const riskData = [
+    { name: '质量 NG', value: testNG + deliveryNG, color: C.red },
+    { name: '交付延期', value: delayed, color: C.amber },
+    { name: '售后超时未结', value: agedWO, color: C.red },
+    { name: 'ERP 同步待办', value: erpPending, color: C.slate },
+  ];
+
+  // 近 7 天动态趋势（按活跃日粗聚合）
+  const ev = {};
+  const bump = (d, k) => { if (!d) return; const key = day(d); (ev[key] = ev[key] || { newIssue: 0, closeIssue: 0, testNG: 0, delivered: 0 })[k] += 1; };
+  qualityIssues.forEach((q) => { bump(q.reportTime, 'newIssue'); (q.processLogs || []).forEach((l) => { if (l.toStatus === '已关闭') bump(l.time, 'closeIssue'); }); });
+  workOrders.forEach((w) => { if (w.closedAt) bump(w.closedAt, 'closeIssue'); });
+  tests.forEach((t) => { if (t.stationResult === 'NG') bump(t.testTime, 'testNG'); });
+  deliveryPlans.forEach((dp) => ['factoryInspection', 'siteInstall', 'customerAccept'].forEach((k) => (dp.records?.[k] || []).forEach((r) => { if (isPass(r)) bump(r.time, 'delivered'); })));
+  const trend = Object.keys(ev).sort().slice(-7).map((d) => ({ date: d.slice(5), ...ev[d] }));
+
+  // 风险 Top5（摘要，仅轻量跳转）
+  const risks = [];
+  deliveryPlans.forEach((dp) => { if (deliveryPlanStatus(dp) === '已延期') risks.push({ type: '交付延期', target: dp.batchNo || dp.name, detail: `计划验收 ${dp.acceptanceDate || dp.dueDate || '—'}`, sev: '高', to: `/delivery-plans/${dp.id}` }); });
+  workOrders.filter((w) => isWOOpen(w) && ['严重', '高'].includes(w.severity)).forEach((w) => risks.push({ type: '售后工单', target: w.deviceSN || w.id, detail: w.description || '售后异常处理中', sev: w.severity, to: '/after-sales?tab=orders' }));
+  qualityIssues.filter((q) => q.status !== '已关闭' && ['高', '严重'].includes(q.severity)).forEach((q) => risks.push({ type: '质量问题', target: q.deviceSN || q.deviceId, detail: q.issueDesc || '在线质量问题', sev: q.severity, to: '/after-sales?tab=issues' }));
+  alerts.filter((a) => a.severity === '严重' && !['已关闭', '已解决'].includes(a.status)).forEach((a) => risks.push({ type: '设备告警', target: a.deviceSN || a.deviceId, detail: a.description || a.alertType, sev: '严重', to: '/assets?tab=devices', proj: a.projectId }));
+  const topRisks = risks.sort((x, y) => sevWeight(y.sev) - sevWeight(x.sev)).slice(0, 5);
 
   return (
     <Page>
-      <PageHeader title="总览看板" description="平台级设备全生命周期概览。数据只读同步自各业务模块与 ERP。" />
+      <PageHeader title="总览看板" description="平台级设备全生命周期可视化概览。数据只读同步自各业务模块与 ERP。" />
       <StatGrid cols={6}>
         <StatCard label="项目数" value={projects.length} />
-        <StatCard label="生产中计划" value={wpp.filter((p) => productionPlanStatus(p) === '生产中').length} />
-        <StatCard label="交付中计划" value={deliveryPlans.filter((p) => deliveryPlanStatus(p) === '交付中').length} />
         <StatCard label="在线运营设备" value={online} tone="success" />
+        <StatCard label="交付中计划" value={delivering} />
         <StatCard label="未关闭工单" value={openWO} tone={openWO ? 'warning' : 'default'} />
         <StatCard label="未关闭质量问题" value={openQI} tone={openQI ? 'warning' : 'default'} />
+        <StatCard label="已延期交付" value={delayed} tone={delayed ? 'danger' : 'default'} />
       </StatGrid>
 
-      <Section title="设备生命周期分布" subtitle={`共 ${devices.length} 台 · 数据更新时间 ${lastUpdated}`}>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          {lifecycle.map(({ k, n }) => (
-            <div key={k} className="rounded-lg border border-[#f0f0f0] bg-[#fafafa] px-3 py-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-semibold text-gray-900 tracking-tight">{n}</span>
-                <StatusBadge status={k} dot />
-              </div>
-            </div>
+      <Grid2>
+        <ChartFrame title="设备生命周期阶段分布" subtitle={`共 ${devices.length} 台设备`}>{donut(lifeData)}</ChartFrame>
+        <ChartFrame title="风险总览" subtitle="质量 / 交付 / 售后 / ERP 四类风险计数">{hbar(riskData)}</ChartFrame>
+      </Grid2>
+
+      <ChartFrame title="近 7 天动态趋势" subtitle="新增问题 / 关闭问题 / 测试 NG / 交付完成（按活跃日聚合）">
+        <LineChart data={trend} margin={{ top: 8, right: 16, left: -18, bottom: 4 }}>
+          <CartesianGrid vertical={false} stroke="#f2f2f2" />
+          <XAxis dataKey="date" tick={AXIS} axisLine={{ stroke: '#eee' }} tickLine={false} />
+          <YAxis tick={AXIS} axisLine={false} tickLine={false} allowDecimals={false} width={30} />
+          <Tooltip {...TT} />
+          <Legend iconType="plainline" wrapperStyle={{ fontSize: 12 }} />
+          <Line type="monotone" dataKey="newIssue" name="新增问题" stroke={C.red} strokeWidth={2} dot={{ r: 2 }} />
+          <Line type="monotone" dataKey="closeIssue" name="关闭问题" stroke={C.green} strokeWidth={2} dot={{ r: 2 }} />
+          <Line type="monotone" dataKey="testNG" name="测试 NG" stroke={C.purple} strokeWidth={2} dot={{ r: 2 }} />
+          <Line type="monotone" dataKey="delivered" name="交付完成" stroke={C.blue} strokeWidth={2} dot={{ r: 2 }} />
+        </LineChart>
+      </ChartFrame>
+
+      <Section title="风险 Top5" subtitle="按严重度排序的高优先风险摘要，可跳转对应模块查看。">
+        <Table head={['风险类型', '关联对象', '说明', '']} empty="暂无风险">
+          {topRisks.map((r, i) => (
+            <tr key={i} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={r.type === '交付延期' ? '已延期' : r.type} /></td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{r.target}</td>
+              <td className="px-3 py-2 text-gray-500 text-xs max-w-md truncate">{r.detail}{r.proj ? `（${projName(r.proj)}）` : ''}</td>
+              <td className="px-3 py-2 text-xs whitespace-nowrap"><LinkAction to={r.to}>查看</LinkAction></td>
+            </tr>
           ))}
-        </div>
+        </Table>
       </Section>
     </Page>
   );
@@ -67,184 +191,175 @@ function OverviewBoard({ state }) {
 /* ═════════ 项目看板 ═════════ */
 function ProjectBoard({ state }) {
   const { projects, wpp, deliveryPlans, devices, workOrders } = useShared(state);
-  const [projectId, setProjectId] = useState('');
-  const [type, setType] = useState('');
 
-  const bottleneckOf = (p) => {
-    const prod = wpp.find((w) => w.projectId === p.id && productionPlanStatus(w) === '生产中');
-    const deliv = deliveryPlans.find((dp) => dp.projectId === p.id && deliveryPlanStatus(dp) === '交付中');
-    const openWOForP = workOrders.filter((w) => w.projectId === p.id && isWOOpen(w)).length;
-    if (prod) return prod.currentNode || '生产推进';
-    if (deliv) return deliv.currentNode || '绑定设备';
-    if (openWOForP > 0) return '工单处理中';
-    return '—';
+  // 项目类型分布
+  const typeData = ['智魔方', '机场', '工业场景', '遥操数采']
+    .map((t, i) => ({ name: t, value: projects.filter((p) => p.projectType === t).length, color: CAT[i] }))
+    .filter((d) => d.value > 0);
+
+  const projDeliveryStatus = (p) => {
+    const dps = deliveryPlans.filter((d) => d.projectId === p.id);
+    if (!dps.length) return '未开始';
+    const sts = dps.map((d) => deliveryPlanStatus(d));
+    if (sts.includes('已延期')) return '已延期';
+    if (sts.every((s) => s === '已验收')) return '已验收';
+    if (sts.includes('交付中')) return '交付中';
+    return '未开始';
   };
+  const delivStatusData = ['交付中', '已验收', '已延期', '未开始']
+    .map((k) => ({ name: k, value: projects.filter((p) => projDeliveryStatus(p) === k).length, color: sHex(k) }))
+    .filter((d) => d.value > 0);
 
-  const rows = projects
-    .filter((p) => !projectId || p.id === projectId)
-    .filter((p) => !type || p.projectType === type)
-    .map((p) => {
-      const projDevices = devices.filter((d) => d.projectId === p.id);
-      const produced = wpp.filter((w) => w.projectId === p.id).reduce((s, w) => s + devices.filter((d) => d.productionPlanId === w.id && ['待入库', '已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status)).length, 0);
-      const stored = projDevices.filter((d) => ['已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status)).length;
-      const delivered = deliveryPlans.filter((dp) => dp.projectId === p.id).reduce((s, dp) => s + (dp.records?.customerAccept || []).filter(isPass).length, 0);
-      const online = projDevices.filter((d) => d.status === '在线运营').length;
-      const delayed = deliveryPlans.some((dp) => dp.projectId === p.id && deliveryPlanStatus(dp) === '已延期');
-      return { p, produced: Math.min(produced, p.targetCount), stored, delivered, online, delayed, bottleneck: bottleneckOf(p) };
-    });
-  const pager = usePaged(rows, 10);
+  // 项目进度排行（已交付 / 目标）
+  const progress = projects.map((p) => {
+    const delivered = deliveryPlans.filter((dp) => dp.projectId === p.id)
+      .reduce((s, dp) => s + (dp.records?.customerAccept || []).filter(isPass).length, 0);
+    const pct = p.targetCount ? Math.round((delivered / p.targetCount) * 100) : 0;
+    return { name: p.name.replace('项目', ''), value: pct, color: pct >= 80 ? C.green : pct >= 40 ? C.blue : C.gray };
+  }).sort((a, b) => b.value - a.value);
+
+  // 项目风险摘要（每行可轻量跳转）
+  const riskRows = projects.map((p) => {
+    const flags = [];
+    if (deliveryPlans.some((dp) => dp.projectId === p.id && deliveryPlanStatus(dp) === '已延期')) flags.push('交付延期');
+    if (wpp.some((w) => w.projectId === p.id && productionPlanStatus(w) === '已延期')) flags.push('生产超期');
+    const openWOForP = workOrders.filter((w) => w.projectId === p.id && isWOOpen(w)).length;
+    if (openWOForP) flags.push(`未结工单 ${openWOForP}`);
+    const online = devices.filter((d) => d.projectId === p.id && d.status === '在线运营').length;
+    return { p, flags, online };
+  });
 
   return (
     <Page>
-      <PageHeader title="项目看板" description="按项目聚合生产、交付与在线进展，用于识别瓶颈与延期风险。" />
-      <Toolbar>
-        <span className="text-xs text-gray-400">筛选</span>
-        <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">全部项目</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
-        <Select value={type} onChange={(e) => setType(e.target.value)}><option value="">全部项目类型</option>{['智魔方', '机场', '工业场景', '遥操数采'].map((t) => <option key={t}>{t}</option>)}</Select>
-      </Toolbar>
-      <Table
-        head={['项目', '项目类型', '目标设备数', '已生产/已入库', '已交付', '在线运营', '当前瓶颈', '延期风险', '处理入口']}
-        footer={<Pagination page={pager.page} total={pager.total} totalPages={pager.totalPages} onChange={pager.setPage} />}
-      >
-        {pager.pageItems.map(({ p, produced, stored, delivered, online, delayed, bottleneck }) => (
-          <tr key={p.id} className="hover:bg-[#fafafa]">
-            <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{p.name}</td>
-            <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{p.projectType || '—'}</td>
-            <td className="px-3 py-2 text-gray-600">{p.targetCount}</td>
-            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{produced} / {stored}</td>
-            <td className="px-3 py-2 text-gray-600">{delivered}</td>
-            <td className="px-3 py-2 text-gray-600">{online}</td>
-            <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{bottleneck}</td>
-            <td className="px-3 py-2">{delayed ? <StatusBadge status="已延期" /> : <span className="text-xs text-green-600">正常</span>}</td>
-            <td className="px-3 py-2 text-xs whitespace-nowrap">
-              <div className="flex items-center gap-3">
-                <LinkAction to={`/projects/${p.id}`}>查看项目</LinkAction>
-                <LinkAction to="/projects?tab=production">生产计划</LinkAction>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </Table>
+      <PageHeader title="项目看板" description="按项目聚合类型、交付状态与进度，识别延期与风险分布。" />
+      <StatGrid cols={4}>
+        <StatCard label="项目总数" value={projects.length} />
+        <StatCard label="进行中项目" value={projects.filter((p) => p.status === '进行中').length} />
+        <StatCard label="已延期交付计划" value={deliveryPlans.filter((p) => deliveryPlanStatus(p) === '已延期').length} tone="danger" />
+        <StatCard label="未关闭售后工单" value={workOrders.filter(isWOOpen).length} tone="warning" />
+      </StatGrid>
+
+      <Grid2>
+        <ChartFrame title="项目类型分布">{donut(typeData)}</ChartFrame>
+        <ChartFrame title="项目交付状态分布">{donut(delivStatusData)}</ChartFrame>
+      </Grid2>
+
+      <ChartFrame title="项目交付进度排行" subtitle="已验收设备 / 目标设备数（%）" height={300}>
+        {hbar(progress, [0, 100])}
+      </ChartFrame>
+
+      <Section title="项目风险摘要" subtitle="按项目汇总风险标记，可轻量跳转项目详情 / 生产计划 / 交付计划。">
+        <Table head={['项目', '类型', '在线设备', '风险标记', '']} empty="暂无项目">
+          {riskRows.map(({ p, flags, online }) => (
+            <tr key={p.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{p.name}</td>
+              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{p.projectType || '—'}</td>
+              <td className="px-3 py-2 text-gray-600">{online}</td>
+              <td className="px-3 py-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {flags.length ? flags.map((f) => <Chip key={f}>{f}</Chip>) : <span className="text-xs text-green-600">正常</span>}
+                </div>
+              </td>
+              <td className="px-3 py-2 text-xs whitespace-nowrap">
+                <div className="flex items-center gap-3">
+                  <LinkAction to={`/projects/${p.id}`}>项目详情</LinkAction>
+                  <LinkAction to="/projects?tab=production">生产计划</LinkAction>
+                  <LinkAction to="/projects?tab=delivery">交付计划</LinkAction>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </Table>
+      </Section>
     </Page>
   );
 }
 
 /* ═════════ 质量看板 ═════════ */
-const stationKeyNG = (records, deviceIds, key) => records.filter((r) => deviceIds.has(r.deviceId) && r.stationKey === key && r.stationResult === 'NG').length;
-
 function QualityBoard({ state }) {
-  const { projects, wpp, deliveryPlans, devices, qualityIssues, projName } = useShared(state);
-  const [projectId, setProjectId] = useState('');
-  const [supplier, setSupplier] = useState('');
+  const { devices, qualityIssues, dtName } = useShared(state);
   const tests = (state.testRecords || []).filter((t) => t.stationKey);
   const batches = state.materialBatches || [];
-  const deviceTypes = state.deviceTypes || [];
-  const suppliers = [...new Set(batches.map((b) => b.supplier).filter(Boolean))];
+  const pwo = state.productionWorkOrders || [];
 
   const semi = tests.filter((t) => t.stationKey === 'semi');
   const oqt = tests.filter((t) => t.stationKey === 'oqt');
-  const firstPassRate = semi.length ? Math.round(semi.filter((t) => t.stationResult === 'Pass').length / semi.length * 100) : 0;
-  const finalPassRate = Math.max(oqt.length ? Math.round(oqt.filter((t) => t.stationResult === 'Pass').length / oqt.length * 100) : 0, firstPassRate);
+  const rate = (arr) => (arr.length ? Math.round(arr.filter((t) => t.stationResult === 'Pass').length / arr.length * 100) : 0);
+  const firstPassRate = rate(semi);
+  const finalPassRate = Math.max(rate(oqt), firstPassRate);
 
-  const supplierRows = suppliers.filter((s) => !supplier || s === supplier).map((sup) => {
+  // 工站 Pass / NG 分布
+  const STATIONS = [['semi', '半成品'], ['init', '初测'], ['mid', '中测'], ['oqt', 'OQT']];
+  const stationData = STATIONS.map(([k, label]) => ({
+    station: label,
+    Pass: tests.filter((t) => t.stationKey === k && t.stationResult === 'Pass').length,
+    NG: tests.filter((t) => t.stationKey === k && t.stationResult === 'NG').length,
+  }));
+
+  // 故障原因 Top（在线质量问题类型）
+  const faultData = [...new Set(qualityIssues.map((q) => q.issueType))]
+    .map((t) => ({ name: t, value: qualityIssues.filter((q) => q.issueType === t).length, color: C.purple }))
+    .sort((a, b) => b.value - a.value);
+
+  // 生产返修分布（按 NG 工站）
+  const repairData = STATIONS.map(([k, label]) => ({ name: label, value: pwo.filter((w) => w.ngStation === k).length, color: C.amber }));
+
+  // 供应商来料质量
+  const suppliers = [...new Set(batches.map((b) => b.supplier).filter(Boolean))];
+  const supplierRows = suppliers.map((sup) => {
     const b = batches.filter((x) => x.supplier === sup);
     const items = b.flatMap((x) => x.items || []);
     const pass = items.filter((it) => ['合格', '特批使用'].includes(it.result)).length;
     const fail = items.filter((it) => it.result === '不合格').length;
-    const rate = items.length ? Math.round(pass / items.length * 100) : 0;
+    const r = items.length ? Math.round(pass / items.length * 100) : 0;
     const badBatches = b.filter((x) => (x.items || []).some((it) => it.result === '不合格')).length;
-    return { sup, batchCount: b.length, itemCount: items.length, pass, fail, rate, badBatches };
-  });
-  const badSuppliers = supplierRows.filter((r) => r.badBatches > 0).length;
+    return { sup, batchCount: b.length, itemCount: items.length, pass, fail, rate: r, badBatches };
+  }).sort((a, b) => a.rate - b.rate);
+  const supplierChart = supplierRows.map((r) => ({ name: r.sup, value: r.rate, color: r.rate >= 90 ? C.green : r.rate >= 70 ? C.amber : C.red }));
 
-  const testRows = wpp.filter((p) => !projectId || p.projectId === projectId).map((p) => {
-    const devs = devices.filter((d) => d.productionPlanId === p.id);
-    const ids = new Set(devs.map((d) => d.id));
-    const type = deviceTypes.find((t) => t.id === p.deviceTypeId) || deviceTypes[0];
-    const repair = (state.productionWorkOrders || []).filter((w) => w.productionPlanId === p.id).length;
-    const finalPass = devs.filter((d) => ['待入库', '已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status)).length;
-    const semiT = tests.filter((r) => ids.has(r.deviceId) && r.stationKey === 'semi');
-    const firstRate = semiT.length ? Math.round(semiT.filter((r) => r.stationResult === 'Pass').length / semiT.length * 100) : 0;
-    return { p, typeName: type?.name || '—', total: devs.length, semiNG: stationKeyNG(tests, ids, 'semi'), initNG: stationKeyNG(tests, ids, 'init'), midNG: stationKeyNG(tests, ids, 'mid'), oqtNG: stationKeyNG(tests, ids, 'oqt'), repair, finalPass, firstRate };
-  });
-
-  const deliveryRows = deliveryPlans.filter((p) => !projectId || p.projectId === projectId).map((dp) => {
-    const ngIn = (key) => (dp.records?.[key] || []).filter((r) => isNG(r)).length;
-    const openIssues = qualityIssues.filter((q) => q.projectId === dp.projectId && q.status !== '已关闭').length;
-    return { dp, projName: projName(dp.projectId), factoryNG: ngIn('factoryInspection'), siteNG: ngIn('siteInstall'), acceptNG: ngIn('customerAccept'), openIssues };
-  });
-
-  const supPager = usePaged(supplierRows, 8);
-  const testPager = usePaged(testRows, 8);
+  // 高风险设备摘要
+  const RISK_STATUS = ['生产返修中', 'NG待返修', '测试NG', '复测中', '维修中', '售后中'];
+  const riskDevices = devices.filter((d) => RISK_STATUS.includes(d.status)).slice(0, 10);
 
   return (
     <Page>
-      <PageHeader title="质量看板" description="来料、装配测试与交付质量聚合，追踪通过率、NG 与问题分布。" />
-      <Toolbar>
-        <span className="text-xs text-gray-400">筛选</span>
-        <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">全部项目</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
-        <Select value={supplier} onChange={(e) => setSupplier(e.target.value)}><option value="">全部供应商</option>{suppliers.map((s) => <option key={s}>{s}</option>)}</Select>
-      </Toolbar>
-
-      <StatGrid cols={6}>
+      <PageHeader title="质量看板" description="来料、装配测试与在线质量聚合，追踪通过率、NG 分布与问题来源。" />
+      <StatGrid cols={4}>
         <StatCard label="一次通过率" value={`${firstPassRate}%`} tone="success" />
         <StatCard label="最终通过率" value={`${finalPassRate}%`} tone="success" />
-        <StatCard label="NG 次数" value={tests.filter((t) => t.stationResult === 'NG').length} tone="danger" />
-        <StatCard label="返修中设备" value={devices.filter((d) => d.status === '生产返修中').length} tone="warning" />
+        <StatCard label="测试 NG 次数" value={tests.filter((t) => t.stationResult === 'NG').length} tone="danger" />
         <StatCard label="未关闭质量问题" value={qualityIssues.filter((q) => q.status !== '已关闭').length} tone="warning" />
-        <StatCard label="问题供应商" value={badSuppliers} tone={badSuppliers ? 'warning' : 'default'} />
       </StatGrid>
 
-      <Section title="供应商来料质量" bodyClassName="p-0">
-        <Table head={['供应商', '到货批次', '到货件数', '合格', '不合格', '来料合格率', '问题批次', '处理入口']}
-          footer={<Pagination page={supPager.page} total={supPager.total} totalPages={supPager.totalPages} onChange={supPager.setPage} />}>
-          {supPager.pageItems.map((r) => (
-            <tr key={r.sup} className="hover:bg-[#fafafa]">
-              <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{r.sup}</td>
-              <td className="px-3 py-2 text-gray-600">{r.batchCount}</td>
-              <td className="px-3 py-2 text-gray-600">{r.itemCount}</td>
-              <td className="px-3 py-2 text-green-600">{r.pass}</td>
-              <td className="px-3 py-2 text-red-600">{r.fail}</td>
-              <td className="px-3 py-2"><span className={`font-medium ${r.rate >= 90 ? 'text-green-600' : r.rate >= 70 ? 'text-amber-600' : 'text-red-600'}`}>{r.rate}%</span></td>
-              <td className="px-3 py-2 text-gray-600">{r.badBatches}</td>
-              <td className="px-3 py-2 text-xs whitespace-nowrap"><LinkAction to="/assets?tab=materials">物料与部件台账</LinkAction></td>
-            </tr>
-          ))}
-        </Table>
-      </Section>
+      <Grid2>
+        <ChartFrame title="工站 Pass / NG 分布" subtitle="半成品 / 初测 / 中测 / OQT">
+          <BarChart data={stationData} margin={{ top: 8, right: 8, left: -18, bottom: 4 }} barGap={2}>
+            <CartesianGrid vertical={false} stroke="#f2f2f2" />
+            <XAxis dataKey="station" tick={AXIS} axisLine={{ stroke: '#eee' }} tickLine={false} />
+            <YAxis tick={AXIS} axisLine={false} tickLine={false} allowDecimals={false} />
+            <Tooltip {...TT} />
+            <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+            <Bar dataKey="Pass" name="Pass" fill={C.green} radius={[4, 4, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="NG" name="NG" fill={C.red} radius={[4, 4, 0, 0]} maxBarSize={28} />
+          </BarChart>
+        </ChartFrame>
+        <ChartFrame title="在线故障原因 Top">{hbar(faultData)}</ChartFrame>
+      </Grid2>
 
-      <Section title="装配 / 测试质量" bodyClassName="p-0">
-        <Table head={['设备类型', '生产计划', '测试设备', '半成品NG', '初测NG', '中测NG', 'OQT NG', '生产返修', '最终通过', '一次通过率', '处理入口']}
-          footer={<Pagination page={testPager.page} total={testPager.total} totalPages={testPager.totalPages} onChange={testPager.setPage} />}>
-          {testPager.pageItems.map((r) => (
-            <tr key={r.p.id} className="hover:bg-[#fafafa]">
-              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.typeName}</td>
-              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{r.p.name}</td>
-              <td className="px-3 py-2 text-gray-600">{r.total}</td>
-              <td className="px-3 py-2 text-red-600">{r.semiNG}</td>
-              <td className="px-3 py-2 text-red-600">{r.initNG}</td>
-              <td className="px-3 py-2 text-red-600">{r.midNG}</td>
-              <td className="px-3 py-2 text-red-600">{r.oqtNG}</td>
-              <td className="px-3 py-2 text-amber-600">{r.repair}</td>
-              <td className="px-3 py-2 text-green-600">{r.finalPass}</td>
-              <td className="px-3 py-2"><span className={`font-medium ${r.firstRate >= 90 ? 'text-green-600' : r.firstRate >= 70 ? 'text-amber-600' : 'text-red-600'}`}>{r.firstRate}%</span></td>
-              <td className="px-3 py-2 text-xs whitespace-nowrap"><LinkAction to={`/production-plans/${r.p.id}?node=quality`}>生产计划</LinkAction></td>
-            </tr>
-          ))}
-        </Table>
-      </Section>
+      <Grid2>
+        <ChartFrame title="生产返修分布" subtitle="返修工单按 NG 工站">{hbar(repairData)}</ChartFrame>
+        <ChartFrame title="供应商来料合格率排行" subtitle="来料合格率（%）">{hbar(supplierChart, [0, 100])}</ChartFrame>
+      </Grid2>
 
-      <Section title="交付质量" bodyClassName="p-0">
-        <Table head={['项目', '交付计划', '出厂检验NG', '现场安装NG', '客户验收NG', '未关闭问题', '处理入口']}>
-          {deliveryRows.map((r) => (
-            <tr key={r.dp.id} className="hover:bg-[#fafafa]">
-              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.projName}</td>
-              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{r.dp.batchNo || r.dp.name}</td>
-              <td className="px-3 py-2 text-red-600">{r.factoryNG}</td>
-              <td className="px-3 py-2 text-red-600">{r.siteNG}</td>
-              <td className="px-3 py-2 text-red-600">{r.acceptNG}</td>
-              <td className="px-3 py-2 text-purple-600">{r.openIssues}</td>
-              <td className="px-3 py-2 text-xs whitespace-nowrap"><LinkAction to={`/delivery-plans/${r.dp.id}`}>交付计划</LinkAction></td>
+      <Section title="高风险设备摘要" subtitle="处于返修 / NG / 维修 / 售后状态的设备，可跳转设备详情查看。">
+        <Table head={['设备 SN', '设备类型', '生命周期', '当前状态', '']} empty="暂无高风险设备">
+          {riskDevices.map((d) => (
+            <tr key={d.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{d.sn || d.id}</td>
+              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{dtName(d.deviceTypeId)}</td>
+              <td className="px-3 py-2"><StatusBadge status={deviceLifecycleStatus(d)} /></td>
+              <td className="px-3 py-2"><StatusBadge status={d.status} /></td>
+              <td className="px-3 py-2 text-xs whitespace-nowrap"><LinkAction to={`/devices/${d.id}`}>设备详情</LinkAction></td>
             </tr>
           ))}
         </Table>
@@ -255,27 +370,27 @@ function QualityBoard({ state }) {
 
 /* ═════════ 交付看板 ═════════ */
 function DeliveryBoard({ state }) {
-  const { projects, deliveryPlans, projName } = useShared(state);
-  const [projectId, setProjectId] = useState('');
+  const { deliveryPlans, projName } = useShared(state);
   const dwo = state.deliveryWorkOrders || [];
 
-  const plans = deliveryPlans.filter((p) => !projectId || p.projectId === projectId);
   const delivering = deliveryPlans.filter((p) => deliveryPlanStatus(p) === '交付中').length;
   const accepted = deliveryPlans.filter((p) => deliveryPlanStatus(p) === '已验收').length;
   const delayed = deliveryPlans.filter((p) => deliveryPlanStatus(p) === '已延期').length;
-  const awaitingAccept = deliveryPlans.reduce((s, p) => s + Math.max((p.boundDeviceIds || []).length - (p.records?.customerAccept || []).filter(isPass).length, 0), 0);
+  const boundTotal = deliveryPlans.reduce((s, p) => s + (p.boundDeviceIds || []).length, 0);
   const acceptedDevices = deliveryPlans.reduce((s, p) => s + (p.records?.customerAccept || []).filter(isPass).length, 0);
+  const acceptRate = boundTotal ? Math.round((acceptedDevices / boundTotal) * 100) : 0;
 
-  const planRows = plans.map((dp) => {
-    const bind = (dp.records?.binding || []).length;
-    const fiPass = (dp.records?.factoryInspection || []).filter(isPass).length;
-    const siPass = (dp.records?.siteInstall || []).filter(isPass).length;
-    const caPass = (dp.records?.customerAccept || []).filter(isPass).length;
-    return { dp, bind, fiPass, siPass, caPass, status: deliveryPlanStatus(dp) };
-  });
+  // 交付计划状态分布
+  const planStatusData = ['交付中', '已验收', '已延期', '未开始', '已作废']
+    .map((k) => ({ name: k, value: deliveryPlans.filter((p) => deliveryPlanStatus(p) === k).length, color: sHex(k) }))
+    .filter((d) => d.value > 0);
 
-  // 交付风险清单（仅看板聚合，不是新的业务流程）
-  // 风险类型对齐口径：延期 / 节点超时 / 现场条件未满足 / 验收不通过 / 已转售后 / 其他（有数据才展示，均取 StatusBadge 内置配色）
+  // 子工单状态分布
+  const woStatusData = [...new Set(dwo.map((w) => w.status))]
+    .map((s) => ({ name: s, value: dwo.filter((w) => w.status === s).length, color: sHex(s) }))
+    .sort((a, b) => b.value - a.value);
+
+  // 交付风险清单 + 类型分布
   const risks = [];
   deliveryPlans.forEach((dp) => {
     const status = deliveryPlanStatus(dp);
@@ -287,50 +402,40 @@ function DeliveryBoard({ state }) {
       if (dp.currentNode === '现场安装调试' && dp.siteInstallDate && dp.siteInstallDate < TODAY && siPass < bound) risks.push({ type: '节点超时', target: dp.batchNo || dp.name, project: projName(dp.projectId), detail: `现场安装调试滞后（计划 ${dp.siteInstallDate}）`, to: `/delivery-plans/${dp.id}?node=siteInstall` });
       else if (dp.currentNode === '出厂检验' && dp.factoryDate && dp.factoryDate < TODAY && fiPass < bound) risks.push({ type: '节点超时', target: dp.batchNo || dp.name, project: projName(dp.projectId), detail: `出厂检验滞后（计划出厂 ${dp.factoryDate}）`, to: `/delivery-plans/${dp.id}?node=factoryInspection` });
     }
-    (dp.records?.factoryInspection || []).filter(isNG).forEach((r) => risks.push({ type: '其他', target: r.deviceSN || r.deviceId, project: projName(dp.projectId), detail: `出厂检验NG：${r.notes || '出厂检验未通过'}`, to: `/delivery-plans/${dp.id}?node=factoryInspection` }));
     (dp.records?.siteInstall || []).filter(isNG).forEach((r) => risks.push({ type: '现场条件未满足', target: r.deviceSN || r.deviceId, project: projName(dp.projectId), detail: r.notes || '现场安装调试异常', to: `/delivery-plans/${dp.id}?node=siteInstall` }));
     (dp.records?.customerAccept || []).filter(isNG).forEach((r) => risks.push({ type: '验收不通过', target: r.deviceSN || r.deviceId, project: projName(dp.projectId), detail: r.notes || '客户验收未通过', to: `/delivery-plans/${dp.id}?node=customerAccept` }));
+    (dp.records?.factoryInspection || []).filter(isNG).forEach((r) => risks.push({ type: '其他', target: r.deviceSN || r.deviceId, project: projName(dp.projectId), detail: `出厂检验NG：${r.notes || '出厂检验未通过'}`, to: `/delivery-plans/${dp.id}?node=factoryInspection` }));
   });
   dwo.filter((w) => !WO_CLOSED.includes(w.status)).forEach((w) => risks.push({ type: '已转售后', target: w.deviceSN || w.id, project: projName(w.projectId), detail: `${w.id}｜${w.description || '交付异常已转售后工单'}`, to: '/after-sales?tab=orders' }));
-  const riskRows = risks.filter((r) => !projectId || r.project === projName(projectId));
+
+  const RISK_HEX = { 延期: C.amber, 节点超时: C.red, 现场条件未满足: C.amber, 验收不通过: C.red, 已转售后: C.slate, 其他: C.gray };
+  const riskTypeData = ['延期', '节点超时', '现场条件未满足', '验收不通过', '已转售后', '其他']
+    .map((t) => ({ name: t, value: risks.filter((r) => r.type === t).length, color: RISK_HEX[t] }))
+    .filter((d) => d.value > 0);
 
   return (
     <Page>
-      <PageHeader title="交付看板" description="按交付计划聚合出厂检验、现场安装与客户验收进度。" />
-      <Toolbar>
-        <span className="text-xs text-gray-400">筛选</span>
-        <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">全部项目</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
-      </Toolbar>
+      <PageHeader title="交付看板" description="按交付计划聚合出厂检验、现场安装与客户验收，追踪状态与风险分布。" />
       <StatGrid cols={5}>
         <StatCard label="交付中计划" value={delivering} />
         <StatCard label="已验收计划" value={accepted} tone="success" />
         <StatCard label="已延期计划" value={delayed} tone={delayed ? 'danger' : 'default'} />
-        <StatCard label="待客户验收设备" value={awaitingAccept} tone={awaitingAccept ? 'warning' : 'default'} />
+        <StatCard label="验收通过率" value={`${acceptRate}%`} tone="success" />
         <StatCard label="累计验收通过设备" value={acceptedDevices} tone="success" />
       </StatGrid>
 
-      <Section title="交付计划进展" bodyClassName="p-0">
-        <Table head={['项目', '交付计划', '目标数', '交付设备数', '出厂通过', '已部署', '验收通过', '当前节点', '状态', '处理入口']}>
-          {planRows.map(({ dp, bind, fiPass, siPass, caPass, status }) => (
-            <tr key={dp.id} className="hover:bg-[#fafafa]">
-              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{projName(dp.projectId)}</td>
-              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{dp.batchNo || dp.name}</td>
-              <td className="px-3 py-2 text-gray-600">{dp.targetCount}</td>
-              <td className="px-3 py-2 text-gray-600">{bind}</td>
-              <td className="px-3 py-2 text-gray-600">{fiPass}</td>
-              <td className="px-3 py-2 text-gray-600">{siPass}</td>
-              <td className="px-3 py-2 text-green-600">{caPass}</td>
-              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{dp.currentNode || '—'}</td>
-              <td className="px-3 py-2"><StatusBadge status={status} /></td>
-              <td className="px-3 py-2 text-xs whitespace-nowrap"><LinkAction to={`/delivery-plans/${dp.id}`}>交付计划</LinkAction></td>
-            </tr>
-          ))}
-        </Table>
-      </Section>
+      <Grid2>
+        <ChartFrame title="交付计划状态分布">{donut(planStatusData)}</ChartFrame>
+        <ChartFrame title="交付子工单状态分布">{hbar(woStatusData)}</ChartFrame>
+      </Grid2>
 
-      <Section title="交付风险清单" subtitle="看板聚合视图，用于集中查看交付风险，非独立业务流程。" bodyClassName="p-0">
-        <Table head={['风险类型', '关联对象', '项目', '说明', '处理入口']} empty="暂无交付风险">
-          {riskRows.map((r, i) => (
+      <ChartFrame title="交付风险类型分布" subtitle="延期 / 节点超时 / 现场条件未满足 / 验收不通过 / 已转售后 / 其他">
+        {hbar(riskTypeData)}
+      </ChartFrame>
+
+      <Section title="交付风险清单" subtitle="看板聚合视图，集中查看交付风险，仅支持轻量跳转。">
+        <Table head={['风险类型', '关联对象', '项目', '说明', '']} empty="暂无交付风险">
+          {risks.map((r, i) => (
             <tr key={i} className="hover:bg-[#fafafa]">
               <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={r.type} /></td>
               <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{r.target}</td>
@@ -347,59 +452,83 @@ function DeliveryBoard({ state }) {
 
 /* ═════════ 售后看板 ═════════ */
 function AfterSalesBoard({ state }) {
-  const { projects, workOrders, qualityIssues } = useShared(state);
-  const [projectId, setProjectId] = useState('');
+  const { workOrders, qualityIssues, projName } = useShared(state);
   const alerts = state.alerts || [];
+  const materials = state.materials || [];
+  const moduleReplacements = state.moduleReplacements || [];
 
-  const wo = workOrders.filter((w) => !projectId || w.projectId === projectId);
-  const openWO = wo.filter(isWOOpen);
-  const replacementWO = wo.filter((w) => w.involvesReplacement).length;
-  const openQI = qualityIssues.filter((q) => q.status !== '已关闭' && (!projectId || q.projectId === projectId)).length;
-  const openAlerts = alerts.filter((a) => !['已关闭', '已解决'].includes(a.status)).length;
+  const openWO = workOrders.filter(isWOOpen);
+  const replacementWO = workOrders.filter((w) => w.involvesReplacement).length;
+  const openQI = qualityIssues.filter((q) => q.status !== '已关闭').length;
   const severeAlerts = alerts.filter((a) => a.severity === '严重' && !['已关闭', '已解决'].includes(a.status)).length;
 
-  // 按项目聚合工单
-  const rows = projects.filter((p) => !projectId || p.id === projectId).map((p) => {
-    const list = workOrders.filter((w) => w.projectId === p.id);
-    return {
-      p,
-      open: list.filter(isWOOpen).length,
-      replace: list.filter((w) => w.involvesReplacement).length,
-      closed: list.filter((w) => WO_CLOSED.includes(w.status)).length,
-      issues: qualityIssues.filter((q) => q.projectId === p.id && q.status !== '已关闭').length,
-    };
-  }).filter((r) => r.open + r.replace + r.closed + r.issues > 0);
+  // 问题处理漏斗
+  const funnelData = [
+    { name: '问题上报', value: qualityIssues.length, color: '#1d4ed8' },
+    { name: '已受理', value: qualityIssues.filter((q) => q.status !== '待处理').length, color: '#2563eb' },
+    { name: '转售后工单', value: workOrders.length, color: '#3b82f6' },
+    { name: '已关单', value: workOrders.filter((w) => WO_CLOSED.includes(w.status)).length, color: '#60a5fa' },
+  ];
+
+  // 售后工单状态分布（归并为标准态）
+  const WO_BUCKET = (s) => {
+    if (['待处理', '待分派', '待接单', '待上门'].includes(s)) return '待接单';
+    if (['处理中', '现场处理中'].includes(s)) return '处理中';
+    if (s === '复检中') return '复检中';
+    if (['已关闭', '已关单'].includes(s)) return '已关单';
+    if (s === '已作废') return '已作废';
+    return '已取消';
+  };
+  const woStatusData = ['待接单', '处理中', '复检中', '已关单', '已作废', '已取消']
+    .map((k) => ({ name: k, value: workOrders.filter((w) => WO_BUCKET(w.status) === k).length, color: sHex(k) }))
+    .filter((d) => d.value > 0);
+
+  // 高频故障原因（在线告警类型）
+  const faultData = [...new Set(alerts.map((a) => a.alertType))]
+    .map((t) => ({ name: t, value: alerts.filter((a) => a.alertType === t).length, color: C.amber }))
+    .sort((a, b) => b.value - a.value);
+
+  // 换件部件分布（按核心部件类型）
+  const matCat = {};
+  materials.forEach((m) => { matCat[m.id] = m.category; });
+  const partCount = {};
+  moduleReplacements.forEach((r) => { const c = matCat[r.addedMaterialId] || matCat[r.removedMaterialId] || '其他'; partCount[c] = (partCount[c] || 0) + 1; });
+  workOrders.filter((w) => w.involvesReplacement).forEach((w) => { const c = (w.needReplaceModuleType || '其他').replace('模块', ''); partCount[c] = (partCount[c] || 0) + 1; });
+  const partData = Object.entries(partCount).map(([name, value]) => ({ name, value, color: C.teal })).sort((a, b) => b.value - a.value);
+
+  // 超时工单摘要（未关闭且创建早于 TODAY）
+  const agedWO = openWO.filter((w) => day(w.createdAt) && day(w.createdAt) < TODAY).sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '')).slice(0, 10);
 
   return (
     <Page>
-      <PageHeader title="售后看板" description="按项目聚合售后工单、换件与在线质量问题、告警。" />
-      <Toolbar>
-        <span className="text-xs text-gray-400">筛选</span>
-        <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">全部项目</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
-      </Toolbar>
-      <StatGrid cols={5}>
+      <PageHeader title="售后看板" description="聚合售后工单处理漏斗、状态分布、故障原因与换件部件。" />
+      <StatGrid cols={4}>
         <StatCard label="未关闭工单" value={openWO.length} tone={openWO.length ? 'warning' : 'default'} />
         <StatCard label="换件工单" value={replacementWO} />
         <StatCard label="未关闭质量问题" value={openQI} tone={openQI ? 'warning' : 'default'} />
-        <StatCard label="未关闭告警" value={openAlerts} tone={openAlerts ? 'warning' : 'default'} />
         <StatCard label="严重告警" value={severeAlerts} tone={severeAlerts ? 'danger' : 'default'} />
       </StatGrid>
 
-      <Section title="项目售后概览" bodyClassName="p-0">
-        <Table head={['项目', '未关闭工单', '换件工单', '已关单', '未关闭质量问题', '处理入口']} empty="暂无售后数据">
-          {rows.map(({ p, open, replace, closed, issues }) => (
-            <tr key={p.id} className="hover:bg-[#fafafa]">
-              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{p.name}</td>
-              <td className="px-3 py-2 text-amber-600">{open}</td>
-              <td className="px-3 py-2 text-gray-600">{replace}</td>
-              <td className="px-3 py-2 text-gray-500">{closed}</td>
-              <td className="px-3 py-2 text-purple-600">{issues}</td>
-              <td className="px-3 py-2 text-xs whitespace-nowrap">
-                <div className="flex items-center gap-3">
-                  <LinkAction to="/after-sales?tab=orders">售后工单</LinkAction>
-                  <LinkAction to="/after-sales?tab=issues">问题池</LinkAction>
-                </div>
-              </td>
+      <Grid2>
+        <ChartFrame title="问题处理漏斗" subtitle="问题上报 → 受理 → 转售后工单 → 已关单">{hbar(funnelData)}</ChartFrame>
+        <ChartFrame title="售后工单状态分布">{hbar(woStatusData)}</ChartFrame>
+      </Grid2>
+
+      <Grid2>
+        <ChartFrame title="高频故障原因" subtitle="在线告警类型分布">{hbar(faultData)}</ChartFrame>
+        <ChartFrame title="换件部件分布" subtitle="按核心部件类型">{hbar(partData)}</ChartFrame>
+      </Grid2>
+
+      <Section title="超时工单摘要" subtitle="未关闭且创建较早的工单，可跳转售后工单查看。">
+        <Table head={['工单号', '设备 SN', '项目', '严重度', '创建时间', '']} empty="暂无超时工单">
+          {agedWO.map((w) => (
+            <tr key={w.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{w.id}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{w.deviceSN || w.deviceId || '—'}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{projName(w.projectId)}</td>
+              <td className="px-3 py-2"><StatusBadge status={w.severity} /></td>
+              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{w.createdAt || '—'}</td>
+              <td className="px-3 py-2 text-xs whitespace-nowrap"><LinkAction to="/after-sales?tab=orders">查看</LinkAction></td>
             </tr>
           ))}
         </Table>
