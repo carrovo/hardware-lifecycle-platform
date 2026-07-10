@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import StatusBadge from '../components/StatusBadge';
+import ModuleDetailDrawer from '../components/ModuleDetailDrawer';
 import OperationLog from '../components/OperationLog';
 import { Pagination, usePaged } from '../components/Pagination';
 import { Page, PageHeader, Section, DescList, Table, StatCard, StatGrid, Chip, Btn, LinkAction, Select, EmptyState } from '../components/ui';
-import { productionPlanStatus, deviceBusinessNode, planBottleneck, planDeviceDistribution, assemblyProgress, TODAY } from '../utils/status';
+import { productionPlanStatus, deviceBusinessNode, planBottleneck, planDeviceDistribution, assemblyProgress, deviceModuleBindings, TODAY } from '../utils/status';
 
 // 生产计划详情（只读追溯视图）
 // 定位：平台不创建 ERP 生产订单、不维护 BOM / 入库 / 出库 / 检验。
@@ -58,6 +59,7 @@ export default function ProductionPlanDetail() {
 
   const devPaged = usePaged(planDevices, 8);
   const [selectedDeviceId, setSelectedDeviceId] = useState(null);
+  const [moduleDrawerId, setModuleDrawerId] = useState(null);
 
   if (!plan) {
     return (
@@ -238,6 +240,10 @@ export default function ProductionPlanDetail() {
         {!selectedDevice ? <EmptyState>该生产计划暂无设备</EmptyState> : (() => {
           const dt = deviceTypes.find((t) => t.id === selectedDevice.deviceTypeId);
           const progress = assemblyProgress(selectedDevice, deviceTypes, moduleTypes, moduleInstances, moduleReplacements);
+          // 逐槽位绑定明细（传第 6 参 materialBatches，补全物料编码/名称/批次/ERP 库存状态）
+          const bindingRows = deviceModuleBindings(selectedDevice, deviceTypes, moduleTypes, moduleInstances, moduleReplacements, state.materialBatches || []);
+          const lastBindTime = bindingRows
+            .map((r) => r.bindTime).filter((t) => t && t !== '—').sort().at(-1) || '—';
           const lt = latestTest[selectedDevice.id];
           const rc = repairCount[selectedDevice.id] || 0;
           const repaired = rc > 0 || ['生产返修中', '返修中'].includes(selectedDevice.status);
@@ -286,38 +292,49 @@ export default function ProductionPlanDetail() {
                 />
               </div>
 
-              {/* 装配模板进度 */}
+              {/* 装配与模块绑定 */}
               <div className="pt-3 border-t border-[#f2f2f2]">
-                <div className="text-xs font-medium text-gray-500 mb-2">装配模板进度</div>
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="text-xs font-medium text-gray-500">装配与模块绑定</div>
+                  <Btn size="sm" variant="secondary" onClick={() => window.open('/mobile/assembly')}>查看移动端扫码入口 / 模拟扫码登记</Btn>
+                </div>
+                <p className="text-xs text-gray-400 mb-3">装配绑定由工厂人员通过移动端扫码完成，PC 端用于查看绑定进度、异常和追溯记录。</p>
                 <DescList
                   cols={4}
                   items={[
-                    ['装配模板名称', `${dt?.name || selectedDevice.deviceTypeId} 装配模板`],
+                    ['当前查看设备 SN', <span className="font-mono text-xs">{selectedDevice.sn}</span>],
+                    ['装配模板', `${dt?.name || selectedDevice.deviceTypeId} 装配模板`],
                     ['应绑定模块数', progress.total],
                     ['已绑定模块数', progress.bound],
                     ['绑定完成率', `${progress.rate}%`],
-                    ['异常槽位数', progress.exception],
+                    ['异常槽位数', progress.exception ? <span className="text-red-600 font-medium">{progress.exception}</span> : 0],
+                    ['最近绑定时间', lastBindTime],
                   ]}
                 />
-              </div>
-
-              {/* 模块绑定明细 */}
-              <div className="pt-3 border-t border-[#f2f2f2]">
-                <div className="text-xs font-medium text-gray-500 mb-2">模块绑定明细</div>
-                <Table head={['槽位名称', '应绑定部件类型', '模块SN · 内部ID', '绑定状态', '绑定时间', '绑定人', '异常说明', '操作']} empty="暂无模块绑定明细">
-                  {progress.rows.map((row, i) => (
-                    <tr key={i} className="hover:bg-[#fafafa]">
-                      <td className="px-3 py-2 whitespace-nowrap text-gray-600 text-xs">{row.slotName}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-gray-700">{row.corePartType}{row.moduleTypeName && row.moduleTypeName !== '—' && <span className="ml-2 text-xs text-gray-400">{row.moduleTypeName}</span>}</td>
-                      <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600">{row.moduleSN}{row.moduleId && <span className="text-gray-400"> · {row.moduleId}</span>}</td>
-                      <td className="px-3 py-2"><StatusBadge status={row.bindStatus} /></td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">{row.bindTime}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-gray-600 text-xs">{row.operator}</td>
-                      <td className="px-3 py-2 text-xs text-gray-500">{row.exception || '—'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{row.moduleId ? <span className="text-xs text-gray-400">查看模块详情</span> : <span className="text-gray-300 text-xs">—</span>}</td>
-                    </tr>
-                  ))}
-                </Table>
+                <div className="mt-3">
+                  <Table
+                    head={['槽位名称', '应绑定部件类型', '物料编码', '物料名称', '批次号', 'ERP 库存状态', '平台占用状态', '模块 SN / 内部 ID', '绑定状态', '绑定人', '绑定时间', '异常说明', '操作']}
+                    empty="暂无模块绑定明细"
+                  >
+                    {bindingRows.map((row, i) => (
+                      <tr key={i} className="hover:bg-[#fafafa]">
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-600 text-xs">{row.slotName}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-700">{row.corePartType}{row.moduleTypeName && row.moduleTypeName !== '—' && <span className="ml-2 text-xs text-gray-400">{row.moduleTypeName}</span>}</td>
+                        <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600">{row.materialCode}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-700">{row.materialName}</td>
+                        <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600">{row.batchNo}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">{row.erpStockStatus}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.platformStatus && row.platformStatus !== '—' ? <StatusBadge status={row.platformStatus} /> : <span className="text-gray-300 text-xs">—</span>}</td>
+                        <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600">{row.moduleSN}{row.moduleId && <span className="text-gray-400"> · {row.moduleId}</span>}</td>
+                        <td className="px-3 py-2"><StatusBadge status={row.bindStatus} /></td>
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-600 text-xs">{row.operator}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">{row.bindTime}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{row.exception || '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.moduleId ? <LinkAction onClick={() => setModuleDrawerId(row.moduleId)}>查看模块详情</LinkAction> : <span className="text-gray-300 text-xs">—</span>}</td>
+                      </tr>
+                    ))}
+                  </Table>
+                </div>
               </div>
 
               {/* 工站测试进度 */}
@@ -382,6 +399,8 @@ export default function ProductionPlanDetail() {
       <Section title="操作日志" subtitle={`共 ${planLogs.length} 条`}>
         {planLogs.length ? <OperationLog logs={planLogs} /> : <EmptyState>暂无操作日志</EmptyState>}
       </Section>
+
+      {moduleDrawerId && <ModuleDetailDrawer moduleId={moduleDrawerId} onClose={() => setModuleDrawerId(null)} />}
     </Page>
   );
 }
