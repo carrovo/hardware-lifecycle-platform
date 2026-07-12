@@ -6,7 +6,7 @@ import {
 import { useApp } from '../context/AppContext';
 import StatusBadge from '../components/StatusBadge';
 import { Page, PageHeader, Section, StatCard, StatGrid, Table, LinkAction, Chip } from '../components/ui';
-import { productionPlanStatus, deliveryPlanStatus, deviceLifecycleStatus, isPass, isNG, TODAY } from '../utils/status';
+import { productionPlanStatus, deliveryPlanStatus, deviceLifecycleStatus, platformOccupancyStatus, isPass, isNG, TODAY } from '../utils/status';
 
 // 看板中心：总览 / 项目 / 质量 / 交付 / 售后 五个看板。
 // 定位为「数据可视化 dashboard」：以分布 / 趋势 / 漏斗 / Top / 占比图表为主体，
@@ -40,6 +40,37 @@ const WO_CLOSED = ['已关闭', '已关单', '已作废', '已取消'];
 const isWOOpen = (w) => !WO_CLOSED.includes(w.status);
 const day = (s) => (s || '').slice(0, 10);
 const sevWeight = (s) => (['严重', '高'].includes(s) ? 3 : s === '中' ? 2 : 1);
+
+/* ── 时长辅助（解析 'YYYY-MM-DD HH:mm' → Date，计算区间小时数；供各看板时效指标复用） ── */
+const parseDT = (s) => {
+  if (!s || typeof s !== 'string') return null;
+  const m = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0));
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+const hoursBetween = (from, to) => {
+  const a = parseDT(from); const b = parseDT(to);
+  return a && b ? (b - a) / 3.6e6 : null;
+};
+// 平台占位「当前时间」（与 TODAY 口径一致；仅用于占位 SLA / 超时计算，非真实业务字段）
+const NOW = parseDT(`${TODAY} 00:00`);
+const hoursSince = (from) => { const a = parseDT(from); return a ? (NOW - a) / 3.6e6 : null; };
+// avgHours(pairs)：pairs 为 [from, to] 数组，返回平均小时数（忽略 null / 无效 / 负值），无数据返回 null
+function avgHours(pairs) {
+  const xs = (pairs || []).map(([f, t]) => hoursBetween(f, t)).filter((h) => h != null && h >= 0);
+  return xs.length ? xs.reduce((s, h) => s + h, 0) / xs.length : null;
+}
+// fmtDur(hours)：小时 → '2.5 小时' / '1.3 天'（无数据显示 '—'）
+function fmtDur(hours) {
+  if (hours == null || Number.isNaN(hours)) return '—';
+  return hours < 24 ? `${Math.round(hours * 10) / 10} 小时` : `${Math.round((hours / 24) * 10) / 10} 天`;
+}
+const pctOf = (num, den) => (den ? Math.round((num / den) * 100) : 0);
+const topN = (obj, n, color) => Object.entries(obj)
+  .map(([name, value]) => ({ name, value, color }))
+  .sort((a, b) => b.value - a.value)
+  .slice(0, n);
 
 function useShared(state) {
   const projects = state.projects || [];
@@ -277,10 +308,12 @@ function ProjectBoard({ state }) {
 
 /* ═════════ 质量看板 ═════════ */
 function QualityBoard({ state }) {
-  const { devices, qualityIssues, dtName } = useShared(state);
+  const { devices, qualityIssues, workOrders, dtName } = useShared(state);
   const tests = (state.testRecords || []).filter((t) => t.stationKey);
   const batches = state.materialBatches || [];
   const pwo = state.productionWorkOrders || [];
+  const moduleInstances = state.moduleInstances || [];
+  const moduleReplacements = state.moduleReplacements || [];
 
   const semi = tests.filter((t) => t.stationKey === 'semi');
   const oqt = tests.filter((t) => t.stationKey === 'oqt');
@@ -317,6 +350,41 @@ function QualityBoard({ state }) {
   }).sort((a, b) => a.rate - b.rate);
   const supplierChart = supplierRows.map((r) => ({ name: r.sup, value: r.rate, color: r.rate >= 90 ? C.green : r.rate >= 70 ? C.amber : C.red }));
 
+  // 一次通过率趋势（半成品工站按测试日聚合 Pass 占比）
+  const semiByDay = {};
+  semi.forEach((t) => { const d = day(t.testTime); if (!d) return; (semiByDay[d] = semiByDay[d] || { pass: 0, total: 0 }).total += 1; if (t.stationResult === 'Pass') semiByDay[d].pass += 1; });
+  const passTrend = Object.keys(semiByDay).sort().map((d) => ({ date: d.slice(5), rate: pctOf(semiByDay[d].pass, semiByDay[d].total) }));
+
+  // 故障原因 Top10（问题池 faultL2 + 工单 faultL2/faultL3，细粒度，区别于粗分类 issueType 图）
+  const faultL2Count = {};
+  qualityIssues.forEach((q) => { const k = q.faultL2; if (k && k !== '待业务补充') faultL2Count[k] = (faultL2Count[k] || 0) + 1; });
+  workOrders.forEach((w) => { const k = w.faultL2 || w.faultL3; if (k && k !== '待业务补充') faultL2Count[k] = (faultL2Count[k] || 0) + 1; });
+  const faultL2Data = topN(faultL2Count, 10, C.red);
+
+  // 返修次数分布（优先 device.repairCount，否则按换件记录 + 生产返修工单数派生，分桶 0/1/2/3+）
+  const repairBucketOrder = ['0 次', '1 次', '2 次', '3 次以上'];
+  const repairBucket = { '0 次': 0, '1 次': 0, '2 次': 0, '3 次以上': 0 };
+  devices.forEach((d) => {
+    const rc = d.repairCount != null ? d.repairCount
+      : moduleReplacements.filter((r) => r.deviceId === d.id).length + pwo.filter((w) => w.deviceId === d.id).length;
+    const key = rc <= 0 ? '0 次' : rc === 1 ? '1 次' : rc === 2 ? '2 次' : '3 次以上';
+    repairBucket[key] += 1;
+  });
+  const repairCountData = repairBucketOrder.map((k) => ({ name: k, value: repairBucket[k], color: k === '0 次' ? C.gray : k === '3 次以上' ? C.red : C.amber }));
+
+  // 模块占用异常计数（源自模块实例平台占用状态）
+  const moduleBindException = moduleInstances.filter((mi) => platformOccupancyStatus(mi) === '绑定异常').length;
+  const moduleReplaced = moduleInstances.filter((mi) => platformOccupancyStatus(mi) === '已更换').length;
+  const modulePendingRepair = moduleInstances.filter((mi) => platformOccupancyStatus(mi) === '旧件待返修').length;
+
+  // 故障原因与模块类型关联（换件工单 faultL2 × 需换模块类型，原型推断）
+  const faultModuleCount = {};
+  workOrders.filter((w) => w.involvesReplacement && w.faultL2).forEach((w) => {
+    const part = (w.needReplaceModuleType || '其他').replace('模块', '');
+    faultModuleCount[`${w.faultL2}｜${part}`] = (faultModuleCount[`${w.faultL2}｜${part}`] || 0) + 1;
+  });
+  const faultModuleData = topN(faultModuleCount, 8, C.purple);
+
   // 高风险设备摘要
   const RISK_STATUS = ['生产返修中', 'NG待返修', '测试NG', '复测中', '维修中', '售后中'];
   const riskDevices = devices.filter((d) => RISK_STATUS.includes(d.status)).slice(0, 10);
@@ -331,6 +399,22 @@ function QualityBoard({ state }) {
         <StatCard label="未关闭质量问题" value={qualityIssues.filter((q) => q.status !== '已关闭').length} tone="warning" />
       </StatGrid>
 
+      <StatGrid cols={3}>
+        <StatCard label="绑定异常模块数" value={moduleBindException} tone={moduleBindException ? 'danger' : 'default'} hint="模块实例平台占用状态 = 绑定异常" />
+        <StatCard label="已更换模块数" value={moduleReplaced} hint="模块实例平台占用状态 = 已更换" />
+        <StatCard label="旧件待返修数" value={modulePendingRepair} tone={modulePendingRepair ? 'warning' : 'default'} hint="下机旧件平台占用状态 = 旧件待返修" />
+      </StatGrid>
+
+      <ChartFrame title="一次通过率趋势" subtitle="半成品工站按测试日 Pass 占比（%）">
+        <LineChart data={passTrend} margin={{ top: 8, right: 16, left: -18, bottom: 4 }}>
+          <CartesianGrid vertical={false} stroke="#f2f2f2" />
+          <XAxis dataKey="date" tick={AXIS} axisLine={{ stroke: '#eee' }} tickLine={false} />
+          <YAxis tick={AXIS} axisLine={false} tickLine={false} domain={[0, 100]} width={32} />
+          <Tooltip {...TT} />
+          <Line type="monotone" dataKey="rate" name="一次通过率" stroke={C.green} strokeWidth={2} dot={{ r: 2 }} />
+        </LineChart>
+      </ChartFrame>
+
       <Grid2>
         <ChartFrame title="工站 Pass / NG 分布" subtitle="半成品 / 初测 / 中测 / OQT">
           <BarChart data={stationData} margin={{ top: 8, right: 8, left: -18, bottom: 4 }} barGap={2}>
@@ -343,13 +427,22 @@ function QualityBoard({ state }) {
             <Bar dataKey="NG" name="NG" fill={C.red} radius={[4, 4, 0, 0]} maxBarSize={28} />
           </BarChart>
         </ChartFrame>
-        <ChartFrame title="在线故障原因 Top">{hbar(faultData)}</ChartFrame>
+        <ChartFrame title="在线故障原因 Top" subtitle="按问题类型（issueType）粗分类">{hbar(faultData)}</ChartFrame>
+      </Grid2>
+
+      <Grid2>
+        <ChartFrame title="故障原因 Top10" subtitle="问题池 + 工单细粒度故障点（faultL2/faultL3）">{hbar(faultL2Data)}</ChartFrame>
+        <ChartFrame title="返修次数分布" subtitle="设备按返修次数分桶（repairCount / 换件·返修工单派生）">{hbar(repairCountData)}</ChartFrame>
       </Grid2>
 
       <Grid2>
         <ChartFrame title="生产返修分布" subtitle="返修工单按 NG 工站">{hbar(repairData)}</ChartFrame>
         <ChartFrame title="供应商来料合格率排行" subtitle="来料合格率（%）">{hbar(supplierChart, [0, 100])}</ChartFrame>
       </Grid2>
+
+      <ChartFrame title="故障原因与模块类型关联" subtitle="换件工单：故障点（faultL2）× 需换模块类型（原型推断）">
+        {hbar(faultModuleData)}
+      </ChartFrame>
 
       <Section title="高风险设备摘要" subtitle="处于返修 / NG / 维修 / 售后状态的设备，可跳转设备详情查看。">
         <Table head={['设备 SN', '设备类型', '生命周期', '当前状态', '']} empty="暂无高风险设备">
@@ -372,6 +465,7 @@ function QualityBoard({ state }) {
 function DeliveryBoard({ state }) {
   const { deliveryPlans, projName } = useShared(state);
   const dwo = state.deliveryWorkOrders || [];
+  const deliveryExceptions = state.deliveryExceptions || [];
 
   const delivering = deliveryPlans.filter((p) => deliveryPlanStatus(p) === '交付中').length;
   const accepted = deliveryPlans.filter((p) => deliveryPlanStatus(p) === '已验收').length;
@@ -413,6 +507,46 @@ function DeliveryBoard({ state }) {
     .map((t) => ({ name: t, value: risks.filter((r) => r.type === t).length, color: RISK_HEX[t] }))
     .filter((d) => d.value > 0);
 
+  // ── 交付异常（item 十二）──
+  const exTotal = deliveryExceptions.length;
+  const exToCS = deliveryExceptions.filter((e) => e.submittedToCS === true).length;
+  const exToIssue = deliveryExceptions.filter((e) => e.linkedIssueId).length;
+  const exToWO = deliveryExceptions.filter((e) => e.linkedWorkOrderId).length;
+  // 交付异常平均关闭时长：已闭环状态自 occurTime/recordTime 至最后一条处理日志时间
+  const EX_CLOSED = ['已关闭', '已远程解决', '已退回交付继续处理'];
+  const exCloseHours = avgHours(deliveryExceptions.filter((e) => EX_CLOSED.includes(e.status)).map((e) => {
+    const logs = e.processLogs || [];
+    return [e.occurTime || e.recordTime, logs.length ? logs[logs.length - 1].time : null];
+  }));
+
+  // 交付异常类型 Top5
+  const exTypeCount = {};
+  deliveryExceptions.forEach((e) => { const k = e.exceptionType || '未标注'; exTypeCount[k] = (exTypeCount[k] || 0) + 1; });
+  const exTypeData = topN(exTypeCount, 5, C.amber);
+
+  // 交付延期原因分布：已延期计划的异常按类型聚合（无异常记「未标注」，原型推断）
+  const delayedPlans = deliveryPlans.filter((p) => deliveryPlanStatus(p) === '已延期');
+  const delayReasonCount = {};
+  delayedPlans.forEach((p) => {
+    const exs = deliveryExceptions.filter((e) => e.deliveryPlanId === p.id);
+    if (exs.length) exs.forEach((e) => { const k = e.exceptionType || '未标注'; delayReasonCount[k] = (delayReasonCount[k] || 0) + 1; });
+    else delayReasonCount['未标注'] = (delayReasonCount['未标注'] || 0) + 1;
+  });
+  const delayReasonData = topN(delayReasonCount, 8, C.red);
+
+  // 交付子工单按时完成率（占位：无 SLA/期望完成字段，以已关闭且回填 closedAt 的占比近似）
+  const closedDwo = dwo.filter((w) => WO_CLOSED.includes(w.status));
+  const dwoOnTimeRate = pctOf(closedDwo.filter((w) => w.closedAt).length, closedDwo.length);
+
+  // 交付工程师处理量排行（子工单按处理人计数）
+  const dwoEngCount = {};
+  dwo.forEach((w) => { if (w.assignedTo) dwoEngCount[w.assignedTo] = (dwoEngCount[w.assignedTo] || 0) + 1; });
+  const dwoEngData = topN(dwoEngCount, 8, C.blue);
+
+  // 模板超时数（占位：按交付流程模板统计已延期计划数）
+  const cubeDelayCount = deliveryPlans.filter((p) => p.templateName === '智魔方交付流程模板' && deliveryPlanStatus(p) === '已延期').length;
+  const genDelayCount = deliveryPlans.filter((p) => p.templateName === '通用部署流程模板' && deliveryPlanStatus(p) === '已延期').length;
+
   return (
     <Page>
       <PageHeader title="交付看板" description="按交付计划聚合出厂检验、现场安装与客户验收，追踪状态与风险分布。" />
@@ -424,6 +558,20 @@ function DeliveryBoard({ state }) {
         <StatCard label="累计验收通过设备" value={acceptedDevices} tone="success" />
       </StatGrid>
 
+      <StatGrid cols={5}>
+        <StatCard label="交付异常数" value={exTotal} tone={exTotal ? 'warning' : 'default'} />
+        <StatCard label="提交技术客服数" value={exToCS} hint="submittedToCS = true" />
+        <StatCard label="转问题池数" value={exToIssue} hint="已生成质量问题" />
+        <StatCard label="转售后工单数" value={exToWO} hint="已生成售后工单" />
+        <StatCard label="异常平均关闭时长" value={fmtDur(exCloseHours)} hint="已闭环异常 occur→末条日志" />
+      </StatGrid>
+
+      <StatGrid cols={3}>
+        <StatCard label="子工单按时完成率" value={`${dwoOnTimeRate}%`} hint="占位：无 SLA 字段，按已关闭回填近似" />
+        <StatCard label="智魔方前置准备超时数" value={cubeDelayCount} tone={cubeDelayCount ? 'danger' : 'default'} hint="占位：智魔方交付流程模板已延期计划" />
+        <StatCard label="通用部署超时数" value={genDelayCount} tone={genDelayCount ? 'danger' : 'default'} hint="占位：通用部署流程模板已延期计划" />
+      </StatGrid>
+
       <Grid2>
         <ChartFrame title="交付计划状态分布">{donut(planStatusData)}</ChartFrame>
         <ChartFrame title="交付子工单状态分布">{hbar(woStatusData)}</ChartFrame>
@@ -431,6 +579,15 @@ function DeliveryBoard({ state }) {
 
       <ChartFrame title="交付风险类型分布" subtitle="延期 / 节点超时 / 现场条件未满足 / 验收不通过 / 已转售后 / 其他">
         {hbar(riskTypeData)}
+      </ChartFrame>
+
+      <Grid2>
+        <ChartFrame title="交付异常类型 Top5" subtitle="按 exceptionType 计数">{hbar(exTypeData)}</ChartFrame>
+        <ChartFrame title="交付工程师处理量排行" subtitle="交付子工单按处理人计数">{hbar(dwoEngData)}</ChartFrame>
+      </Grid2>
+
+      <ChartFrame title="交付延期原因分布" subtitle="已延期计划关联异常按类型聚合（原型推断）">
+        {hbar(delayReasonData)}
       </ChartFrame>
 
       <Section title="交付风险清单" subtitle="看板聚合视图，集中查看交付风险，仅支持轻量跳转。">
@@ -483,10 +640,57 @@ function AfterSalesBoard({ state }) {
     .map((k) => ({ name: k, value: workOrders.filter((w) => WO_BUCKET(w.status) === k).length, color: sHex(k) }))
     .filter((d) => d.value > 0);
 
-  // 高频故障原因（在线告警类型）
-  const faultData = [...new Set(alerts.map((a) => a.alertType))]
-    .map((t) => ({ name: t, value: alerts.filter((a) => a.alertType === t).length, color: C.amber }))
-    .sort((a, b) => b.value - a.value);
+  // 高频故障原因 Top10（工单 faultL2/L3/L1 + 问题池 faultL2，取代原告警类型口径）
+  const faultCount = {};
+  workOrders.forEach((w) => { const k = w.faultL2 || w.faultL3 || w.faultL1; if (k && k !== '待业务补充') faultCount[k] = (faultCount[k] || 0) + 1; });
+  qualityIssues.forEach((q) => { const k = q.faultL2; if (k && k !== '待业务补充') faultCount[k] = (faultCount[k] || 0) + 1; });
+  const faultData = topN(faultCount, 10, C.amber);
+
+  // ── 问题池指标（item 十三，源自 qualityIssues）──
+  const qiTotal = qualityIssues.length;
+  const qiPre = qualityIssues.filter((q) => q.status === '待预处理').length;
+  const qiProcessing = qualityIssues.filter((q) => q.status === '预处理中').length;
+  const qiMoreInfo = qualityIssues.filter((q) => q.status === '待补充信息').length;
+  const qiNewToday = qualityIssues.filter((q) => day(q.enterPoolTime || q.reportTime) === TODAY).length;
+  const qiRemoteToday = qualityIssues.filter((q) => day(q.remoteCloseTime) === TODAY).length;
+  const qiToWOToday = qualityIssues.filter((q) => day(q.toWorkOrderTime) === TODAY).length;
+  const csFirstRespHours = avgHours(qualityIssues.map((q) => [q.enterPoolTime, q.csFirstResponseTime]));
+  const preprocessHours = avgHours(qualityIssues.map((q) => [q.csFirstResponseTime, q.preprocessDoneTime]));
+  const poolStayHours = avgHours(qualityIssues.map((q) => [q.enterPoolTime, q.closeTime || q.toWorkOrderTime || q.remoteCloseTime]));
+  const remoteCloseRate = pctOf(qualityIssues.filter((q) => q.remoteCloseTime).length, qiTotal);
+  const toWORate = pctOf(qualityIssues.filter((q) => q.toWorkOrderTime).length, qiTotal);
+  const qiNoRespOverdue = qualityIssues.filter((q) => !q.csFirstResponseTime && (hoursSince(q.enterPoolTime) || 0) > 48).length;
+
+  // ── 工单时效指标（源自合并后的 workOrders，含交付子工单）──
+  const leaderDispatchHours = avgHours(workOrders.map((w) => [w.createTime, w.dispatchTime]));
+  const engAcceptHours = avgHours(workOrders.map((w) => [w.dispatchTime, w.acceptTime]));
+  const visitHours = avgHours(workOrders.map((w) => [w.acceptTime, w.actualVisitTime]));
+  const visitPairs = workOrders.filter((w) => parseDT(w.expectVisitTime) && parseDT(w.actualVisitTime));
+  const visitOnTimeRate = pctOf(visitPairs.filter((w) => parseDT(w.actualVisitTime) <= parseDT(w.expectVisitTime)).length, visitPairs.length);
+  const onsiteHours = avgHours(workOrders.map((w) => [w.onsiteStartTime, w.onsiteDoneTime]));
+  const closeHours = avgHours(workOrders.filter((w) => w.closeTime).map((w) => [w.createTime, w.closeTime]));
+  const woOverSLA = workOrders.filter((w) => isWOOpen(w) && (hoursSince(w.createTime || w.createdAt) || 0) > 48).length;
+
+  // 技术客服 / 工程师处理量排行
+  const csAgentCount = {};
+  qualityIssues.forEach((q) => { if (q.csAgent) csAgentCount[q.csAgent] = (csAgentCount[q.csAgent] || 0) + 1; });
+  const csAgentData = topN(csAgentCount, 8, C.teal);
+  const engCount = {};
+  workOrders.forEach((w) => { const k = w.engineer || w.assignedTo; if (k) engCount[k] = (engCount[k] || 0) + 1; });
+  const engData = topN(engCount, 8, C.blue);
+
+  // 工程师关单及时率排行（占位：已关单工单中 create→close ≤ 48h 占比）
+  const engClose = {};
+  workOrders.filter((w) => w.closeTime || w.closedAt).forEach((w) => {
+    const k = w.engineer || w.assignedTo; if (!k) return;
+    const h = hoursBetween(w.createTime || w.createdAt, w.closeTime || w.closedAt);
+    const rec = (engClose[k] = engClose[k] || { closed: 0, onTime: 0 });
+    rec.closed += 1;
+    if (h != null && h >= 0 && h <= 48) rec.onTime += 1;
+  });
+  const engCloseData = Object.entries(engClose)
+    .map(([name, r]) => ({ name, value: pctOf(r.onTime, r.closed), color: C.green }))
+    .sort((a, b) => b.value - a.value).slice(0, 8);
 
   // 换件部件分布（按核心部件类型）
   const matCat = {};
@@ -502,11 +706,39 @@ function AfterSalesBoard({ state }) {
   return (
     <Page>
       <PageHeader title="售后看板" description="聚合售后工单处理漏斗、状态分布、故障原因与换件部件。" />
-      <StatGrid cols={4}>
+      <StatGrid cols={5}>
         <StatCard label="未关闭工单" value={openWO.length} tone={openWO.length ? 'warning' : 'default'} />
         <StatCard label="换件工单" value={replacementWO} />
         <StatCard label="未关闭质量问题" value={openQI} tone={openQI ? 'warning' : 'default'} />
         <StatCard label="严重告警" value={severeAlerts} tone={severeAlerts ? 'danger' : 'default'} />
+        <StatCard label="超 SLA 工单数" value={woOverSLA} tone={woOverSLA ? 'danger' : 'default'} hint="占位：未关闭且已过 48h" />
+      </StatGrid>
+
+      <StatGrid cols={6}>
+        <StatCard label="待预处理数" value={qiPre} />
+        <StatCard label="预处理中数" value={qiProcessing} />
+        <StatCard label="待补充信息数" value={qiMoreInfo} />
+        <StatCard label="今日新增问题" value={qiNewToday} hint={`口径日 ${TODAY}`} />
+        <StatCard label="今日远程关闭" value={qiRemoteToday} />
+        <StatCard label="今日转售后工单" value={qiToWOToday} />
+      </StatGrid>
+
+      <StatGrid cols={6}>
+        <StatCard label="客服平均首次响应" value={fmtDur(csFirstRespHours)} hint="enterPool→首次响应" />
+        <StatCard label="平均预处理时长" value={fmtDur(preprocessHours)} hint="首次响应→预处理完成" />
+        <StatCard label="问题池平均停留" value={fmtDur(poolStayHours)} hint="enterPool→关闭/转单/远程闭环" />
+        <StatCard label="远程关闭率" value={`${remoteCloseRate}%`} />
+        <StatCard label="转售后工单率" value={`${toWORate}%`} />
+        <StatCard label="超时未响应问题数" value={qiNoRespOverdue} tone={qiNoRespOverdue ? 'danger' : 'default'} hint="占位：未响应且已过 48h" />
+      </StatGrid>
+
+      <StatGrid cols={6}>
+        <StatCard label="Leader 平均分派时长" value={fmtDur(leaderDispatchHours)} hint="create→dispatch" />
+        <StatCard label="工程师平均接单时长" value={fmtDur(engAcceptHours)} hint="dispatch→accept" />
+        <StatCard label="平均上门时长" value={fmtDur(visitHours)} hint="accept→实际上门" />
+        <StatCard label="上门准时率" value={`${visitOnTimeRate}%`} hint="占位：实际≤期望上门" />
+        <StatCard label="平均现场处理时长" value={fmtDur(onsiteHours)} hint="现场开始→完成" />
+        <StatCard label="平均关单时长" value={fmtDur(closeHours)} hint="create→close（已关单）" />
       </StatGrid>
 
       <Grid2>
@@ -515,9 +747,18 @@ function AfterSalesBoard({ state }) {
       </Grid2>
 
       <Grid2>
-        <ChartFrame title="高频故障原因" subtitle="在线告警类型分布">{hbar(faultData)}</ChartFrame>
+        <ChartFrame title="高频故障原因 Top10" subtitle="工单 + 问题池故障点（faultL2/L3/L1）">{hbar(faultData)}</ChartFrame>
         <ChartFrame title="换件部件分布" subtitle="按核心部件类型">{hbar(partData)}</ChartFrame>
       </Grid2>
+
+      <Grid2>
+        <ChartFrame title="技术客服处理量排行" subtitle="问题池按技术客服计数">{hbar(csAgentData)}</ChartFrame>
+        <ChartFrame title="工程师处理量排行" subtitle="工单按工程师计数">{hbar(engData)}</ChartFrame>
+      </Grid2>
+
+      <ChartFrame title="工程师关单及时率排行" subtitle="占位：已关单工单 create→close ≤ 48h 占比（%）">
+        {hbar(engCloseData, [0, 100])}
+      </ChartFrame>
 
       <Section title="超时工单摘要" subtitle="未关闭且创建较早的工单，可跳转售后工单查看。">
         <Table head={['工单号', '设备 SN', '项目', '严重度', '创建时间', '']} empty="暂无超时工单">
