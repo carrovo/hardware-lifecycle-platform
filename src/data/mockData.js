@@ -507,6 +507,25 @@ const _boundDEV301 = [
   _mk({ id: 'MOD-B30109', sn: 'SN-MOD-B30109', moduleTypeId: 'MT-004', category: '末端', sourceBatchId: 'BATCH-004', boundDeviceId: 'DEV-301', boundSlot: '右手末端槁位', binder: '王五', bindTime: '2026-04-10 10:22', updatedAt: '2026-04-10 10:22' }),
   _mk({ id: 'MOD-B30110', sn: 'SN-MOD-B30110', moduleTypeId: 'MT-006', category: '预控', sourceBatchId: 'BATCH-006', boundDeviceId: 'DEV-301', boundSlot: '预控槁位', binder: '王五', bindTime: '2026-04-10 10:25', updatedAt: '2026-04-10 10:25' }),
 ];
+// DEV-307（AlphaBot 2，在线运营 / 售后中）· 全 16 槽位绑定，关节电机B槽位为已更换（关联 MR-004 / WO-008，旧件 MOD-R02 待返修）
+const _boundDEV307 = [
+  _mk({ id: 'MOD-B30701', sn: 'SN-MOD-B30701', moduleTypeId: 'MT-001', category: '底盘', sourceBatchId: 'BATCH-009', boundDeviceId: 'DEV-307', boundSlot: '底盘槁位', binder: '王五', bindTime: '2026-04-18 10:05', updatedAt: '2026-04-18 10:05' }),
+  _mk({ id: 'MOD-B30702', sn: 'SN-MOD-B30702', moduleTypeId: 'MT-002', category: '机械臂', sourceBatchId: 'BATCH-010', boundDeviceId: 'DEV-307', boundSlot: '左臂槁位', binder: '王五', bindTime: '2026-04-18 10:08', updatedAt: '2026-04-18 10:08' }),
+  _mk({ id: 'MOD-B30703', sn: 'SN-MOD-B30703', moduleTypeId: 'MT-002', category: '机械臂', sourceBatchId: 'BATCH-016', boundDeviceId: 'DEV-307', boundSlot: '右臂槁位', binder: '王五', bindTime: '2026-04-18 10:10', updatedAt: '2026-04-18 10:10' }),
+  _mk({ id: 'MOD-B30704', sn: 'SN-MOD-B30704', moduleTypeId: 'MT-003', category: '电机', sourceBatchId: 'BATCH-007', boundDeviceId: 'DEV-307', boundSlot: '关节电机A槁位', binder: '王五', bindTime: '2026-04-18 10:12', updatedAt: '2026-04-18 10:12' }),
+  _mk({ id: 'MOD-B30705', sn: 'SN-MOD-B30705', moduleTypeId: 'MT-003', category: '电机', sourceBatchId: 'BATCH-007', boundDeviceId: 'DEV-307', boundSlot: '关节电机B槁位', status: '已更换', platformStatus: '已更换', erpStockStatus: '已占用', removedMaterialId: 'MAT-016', addedMaterialId: 'MAT-017', replacementId: 'MR-004', workOrderId: 'WO-008', binder: '王五', bindTime: '2026-06-21 10:00', updatedAt: '2026-06-21 10:00' }),
+  _mk({ id: 'MOD-B30706', sn: 'SN-MOD-B30706', moduleTypeId: 'MT-003', category: '电机', sourceBatchId: 'BATCH-007', boundDeviceId: 'DEV-307', boundSlot: '关节电机C槁位', binder: '王五', bindTime: '2026-04-18 10:16', updatedAt: '2026-04-18 10:16' }),
+  _mk({ id: 'MOD-B30707', sn: 'SN-MOD-B30707', moduleTypeId: 'MT-003', category: '电机', sourceBatchId: 'BATCH-007', boundDeviceId: 'DEV-307', boundSlot: '关节电机D槁位', binder: '王五', bindTime: '2026-04-18 10:18', updatedAt: '2026-04-18 10:18' }),
+  _mk({ id: 'MOD-B30708', sn: 'SN-MOD-B30708', moduleTypeId: 'MT-003', category: '电机', sourceBatchId: 'BATCH-007', boundDeviceId: 'DEV-307', boundSlot: '关节电机E槁位', binder: '王五', bindTime: '2026-04-18 10:20', updatedAt: '2026-04-18 10:20' }),
+  _mk({ id: 'MOD-B30709', sn: 'SN-MOD-B30709', moduleTypeId: 'MT-003', category: '电机', sourceBatchId: 'BATCH-007', boundDeviceId: 'DEV-307', boundSlot: '关节电机F槁位', binder: '王五', bindTime: '2026-04-18 10:22', updatedAt: '2026-04-18 10:22' }),
+  _mk({ id: 'MOD-B30710', sn: 'SN-MOD-B30710', moduleTypeId: 'MT-004', category: '末端', sourceBatchId: 'BATCH-004', boundDeviceId: 'DEV-307', boundSlot: '左手末端槁位', binder: '王五', bindTime: '2026-04-18 10:24', updatedAt: '2026-04-18 10:24' }),
+  _mk({ id: 'MOD-B30711', sn: 'SN-MOD-B30711', moduleTypeId: 'MT-004', category: '末端', sourceBatchId: 'BATCH-004', boundDeviceId: 'DEV-307', boundSlot: '右手末端槁位', binder: '王五', bindTime: '2026-04-18 10:26', updatedAt: '2026-04-18 10:26' }),
+  _mk({ id: 'MOD-B30712', sn: 'SN-MOD-B30712', moduleTypeId: 'MT-005', category: '全身相机', sourceBatchId: 'BATCH-011', boundDeviceId: 'DEV-307', boundSlot: '左腕相机槁位', binder: '王五', bindTime: '2026-04-18 10:28', updatedAt: '2026-04-18 10:28' }),
+  _mk({ id: 'MOD-B30713', sn: 'SN-MOD-B30713', moduleTypeId: 'MT-005', category: '全身相机', sourceBatchId: 'BATCH-011', boundDeviceId: 'DEV-307', boundSlot: '右腕相机槁位', binder: '王五', bindTime: '2026-04-18 10:30', updatedAt: '2026-04-18 10:30' }),
+  _mk({ id: 'MOD-B30714', sn: 'SN-MOD-B30714', moduleTypeId: 'MT-005B', category: '全身相机', sourceBatchId: 'BATCH-011', boundDeviceId: 'DEV-307', boundSlot: '头部相机槁位', binder: '王五', bindTime: '2026-04-18 10:32', updatedAt: '2026-04-18 10:32' }),
+  _mk({ id: 'MOD-B30715', sn: 'SN-MOD-B30715', moduleTypeId: 'MT-005C', category: '全身相机', sourceBatchId: 'BATCH-011', boundDeviceId: 'DEV-307', boundSlot: '胸部相机槁位', binder: '王五', bindTime: '2026-04-18 10:34', updatedAt: '2026-04-18 10:34' }),
+  _mk({ id: 'MOD-B30716', sn: 'SN-MOD-B30716', moduleTypeId: 'MT-006', category: '预控', sourceBatchId: 'BATCH-006', boundDeviceId: 'DEV-307', boundSlot: '预控槁位', binder: '王五', bindTime: '2026-04-18 10:36', updatedAt: '2026-04-18 10:36' }),
+];
 // 旧件待返修 / 已返修 追溯样例（下机旧件，关联售后工单 / 换件记录）
 const _moduleInstancesTrace = [
   _mk({ id: 'MOD-R01', sn: 'SN-MOD-R01', moduleTypeId: 'MT-006', category: '预控', sourceBatchId: 'BATCH-006', status: '维修中', platformStatus: '旧件待返修', erpStockStatus: '已占用', boundDeviceId: null, removedFromDeviceId: 'DEV-303', slotName: '预控槁位', replacementId: 'MR-002', workOrderId: 'WO-001', repairNote: '预控散热异常下机，旧件待返修' }),
@@ -522,7 +541,7 @@ const _moduleInstancesExtra = [
   _mk({ id: 'MOD-E05', sn: 'SN-MOD-EX-05', moduleTypeId: 'MT-006', category: '预控', sourceBatchId: 'BATCH-020', status: '已返修', platformStatus: '已返修', erpStockStatus: '合格可用', boundDeviceId: null, repairNote: '固件返修完成，追溯保留' }),
 ];
 export const moduleInstances = [
-  ..._boundDEV007, ..._boundDEV025, ..._boundDEV503, ..._boundDEV301, ..._moduleInstancesTrace,
+  ..._boundDEV007, ..._boundDEV025, ..._boundDEV503, ..._boundDEV301, ..._boundDEV307, ..._moduleInstancesTrace,
   ..._buildModuleInstances(), ..._moduleInstancesExtra,
 ];
 
@@ -815,4 +834,27 @@ export const deliveryExceptions = [
   { id: 'DEX-006', deliveryPlanId: 'DP-003', subOrderId: 'DP-003-S01', sourceNode: '现场安装调试', deviceSN: 'SN-DEV-208', exceptionType: '使用问题', description: '现场调试时客户反馈语音提示音量偏小', occurTime: '2026-07-09 10:05', recordTime: '2026-07-09 10:25', recorder: '王五', status: '待技术客服预处理', submittedToCS: true, submitCSTime: '2026-07-09 10:25', linkedIssueId: 'QI-020', linkedWorkOrderId: null, attachments: [], processLogs: [{ time: '2026-07-09 10:25', operator: '王五', fromStatus: '已记录', toStatus: '待技术客服预处理', notes: '提交技术客服预处理，等待接单' }] },
   { id: 'DEX-007', deliveryPlanId: 'DP-008', subOrderId: 'DP-008-S02', sourceNode: '现场安装调试', deviceSN: 'SN-DEV-210', exceptionType: '质量问题', description: '遥操数据采集现场，采集端与主控偶发时间戳不同步', occurTime: '2026-07-08 10:55', recordTime: '2026-07-08 11:15', recorder: '赵六', status: '技术客服预处理中', submittedToCS: true, submitCSTime: '2026-07-08 11:15', linkedIssueId: 'QI-021', linkedWorkOrderId: null, attachments: ['dex007_ntp.log'], processLogs: [{ time: '2026-07-08 11:15', operator: '赵六', fromStatus: '已记录', toStatus: '待技术客服预处理', notes: '提交技术客服预处理' }, { time: '2026-07-08 11:40', operator: '赵六', fromStatus: '待技术客服预处理', toStatus: '技术客服预处理中', notes: '技术客服接单，生成问题 QI-021，远程排查中' }] },
   { id: 'DEX-008', deliveryPlanId: 'DP-001', subOrderId: 'DP-001-S03', sourceNode: '现场安装调试', deviceSN: 'SN-DEV-203', exceptionType: '现场条件', description: '现场地面不平整导致设备自检定位偏差，垫平后恢复', occurTime: '2026-06-14 13:30', recordTime: '2026-06-14 13:45', recorder: '赵六', status: '已关闭', submittedToCS: false, submitCSTime: null, linkedIssueId: null, linkedWorkOrderId: null, attachments: [], processLogs: [{ time: '2026-06-14 13:45', operator: '赵六', fromStatus: '已记录', toStatus: '交付侧处理中', notes: '现场条件问题，垫平地面处理' }, { time: '2026-06-14 15:00', operator: '赵六', fromStatus: '交付侧处理中', toStatus: '已关闭', notes: '垫平后自检定位恢复正常，交付侧闭环关闭' }] },
+];
+
+// ============ ERP 只读数据池：同步元信息 + 同步日志（平台只读展示，不写 ERP）============
+// 同步来源：ERP API / mock。本原型为 mock 模拟，真实刷新依赖 ERP API。
+export const erpSyncMeta = {
+  lastSyncTime: '2026-07-01 08:30',
+  status: '已同步', // 已同步 / 同步中 / 同步异常
+  source: 'mock 模拟', // ERP API / mock 模拟
+  syncBatchNo: 'SYNC-2026-0701-08',
+};
+
+// ERP 同步日志：同步时间 / 同步对象 / 同步类型 / 同步结果 / 成功条数 / 失败条数 / 异常说明 / 操作人 · 系统任务
+export const erpSyncLogs = [
+  { id: 'SYNC-2026-0701-08', time: '2026-07-01 08:30', object: 'ERP 项目单', syncType: '定时任务', result: '成功', successCount: 8, failCount: 0, exception: '', operator: '系统任务（每日 08:30）', batchNo: 'SYNC-2026-0701-08' },
+  { id: 'SYNC-2026-0701-06', time: '2026-07-01 06:00', object: '采购单 / 到货单', syncType: '增量同步', result: '成功', successCount: 22, failCount: 0, exception: '', operator: '系统任务（每日 06:00）', batchNo: 'SYNC-2026-0701-06' },
+  { id: 'SYNC-2026-0701-05', time: '2026-07-01 05:40', object: '入库单 / 检验单', syncType: '增量同步', result: '部分成功', successCount: 18, failCount: 2, exception: '2 条检验单缺少批次号，已跳过待人工核对', operator: '系统任务（每日 05:40）', batchNo: 'SYNC-2026-0701-05' },
+  { id: 'SYNC-2026-0701-04', time: '2026-07-01 05:20', object: '生产订单 / ERP 工单', syncType: '增量同步', result: '成功', successCount: 11, failCount: 0, exception: '', operator: '系统任务（每日 05:20）', batchNo: 'SYNC-2026-0701-04' },
+  { id: 'SYNC-2026-0701-03', time: '2026-07-01 05:00', object: '生产领料单', syncType: '增量同步', result: '成功', successCount: 6, failCount: 0, exception: '', operator: '系统任务（每日 05:00）', batchNo: 'SYNC-2026-0701-03' },
+  { id: 'SYNC-2026-0630-22', time: '2026-06-30 22:00', object: '销售出库单 / 出库申请单', syncType: '增量同步', result: '成功', successCount: 10, failCount: 0, exception: '', operator: '系统任务（每日 22:00）', batchNo: 'SYNC-2026-0630-22' },
+  { id: 'SYNC-2026-0630-16', time: '2026-06-30 16:15', object: 'ERP 全量', syncType: '全量同步', result: '成功', successCount: 96, failCount: 0, exception: '', operator: '王五（手动刷新全部）', batchNo: 'SYNC-2026-0630-16' },
+  { id: 'SYNC-2026-0629-11', time: '2026-06-29 11:30', object: '入库单', syncType: '手动刷新', result: '失败', successCount: 0, failCount: 1, exception: 'ERP 接口超时（timeout 30s），未获取到返回，稍后重试', operator: '张三（手动刷新）', batchNo: 'SYNC-2026-0629-11' },
+  { id: 'SYNC-2026-0629-06', time: '2026-06-29 06:00', object: '采购单 / 到货单', syncType: '增量同步', result: '成功', successCount: 22, failCount: 0, exception: '', operator: '系统任务（每日 06:00）', batchNo: 'SYNC-2026-0629-06' },
+  { id: 'SYNC-2026-0628-06', time: '2026-06-28 06:00', object: 'ERP 全量', syncType: '全量同步', result: '成功', successCount: 95, failCount: 0, exception: '', operator: '系统任务（每周一 06:00）', batchNo: 'SYNC-2026-0628-06' },
 ];
