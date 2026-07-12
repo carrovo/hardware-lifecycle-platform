@@ -758,7 +758,7 @@ function ModelsTab() {
                   <td className="px-2 py-1.5 align-middle"><Input className="w-32" value={s.slotName} placeholder="如：左臂" onChange={(e) => updateSlot(s._k, { slotName: e.target.value })} /></td>
                   <td className="px-2 py-1.5 align-middle">
                     <Select className="w-28" value={s.corePartType} onChange={(e) => updateSlot(s._k, { corePartType: e.target.value })}>
-                      {CORE_PART_TYPES.map((o) => <option key={o} value={o}>{o}</option>)}
+                      {[...new Set(['底盘', '机械臂', '电机', '末端', '全身相机', '预控', '传感器', ...CORE_PART_TYPES, s.corePartType].filter(Boolean))].map((o) => <option key={o} value={o}>{o}</option>)}
                     </Select>
                   </td>
                   <td className="px-2 py-1.5 align-middle">
