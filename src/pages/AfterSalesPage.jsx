@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
@@ -139,7 +139,7 @@ function ReadonlyNote({ items }) {
 }
 
 // 右侧宽抽屉：分区详情 + 可执行操作台 + 操作日志。
-function Drawer({ open, onClose, title, subtitle, chips, children }) {
+function Drawer({ open, onClose, title, subtitle, chips, children, bodyRef }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
@@ -153,7 +153,7 @@ function Drawer({ open, onClose, title, subtitle, chips, children }) {
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center text-xl leading-none flex-shrink-0 transition-colors">×</button>
         </div>
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">{children}</div>
+        <div ref={bodyRef} className="flex-1 overflow-y-auto p-5 space-y-5">{children}</div>
       </div>
     </div>
   );
@@ -230,7 +230,6 @@ function RoleViewTabs({ roles, active, onChange }) {
 }
 
 // 按当前状态派生「待处理动作 / 下一步建议」（问题池 / 售后工单）。
-const ISSUE_TABS = ['当前处理', '来源快照', '规范化信息', '时间节点', '附件与日志', '关联售后'];
 const ISSUE_TASK = {
   待预处理: { pending: '待指派技术客服 / 开始预处理', next: '指派技术客服后开始预处理并规范化问题' },
   预处理中: { pending: '技术客服预处理、规范化中', next: '可远程解决则远程关闭，否则转售后工单' },
@@ -239,12 +238,16 @@ const ISSUE_TASK = {
   已转售后工单: { pending: '已转售后工单，由现场执行闭环', next: '跟进关联售后工单进度' },
   已关闭: { pending: '问题已关闭', next: '仅可查看处理记录与日志' },
 };
-const ISSUE_ROLES = {
-  技术客服: { tab: '规范化信息', desc: '技术客服视角：聚焦规范化信息、预处理结论与转售后工单。' },
-  交付人员: { tab: '来源快照', desc: '交付人员视角：核对来源快照，判断是否退回交付或需补充信息。' },
-  售后工程师: { tab: '规范化信息', desc: '售后工程师视角：查看规范化故障、故障原因、建议方案、是否上门·换件与关联售后。' },
-  管理者: { tab: '时间节点', desc: '管理者视角：关注时间节点、SLA、责任人与操作日志。' },
+// 角色视角：每个角色渲染各自的任务卡片 + 主内容区（真正切换内容，非仅切 tab 名）。
+const ISSUE_ROLE_ORDER = ['技术客服', '交付人员', '售后工程师', '管理者'];
+const ISSUE_ROLE_DESC = {
+  技术客服: '技术客服视角：规范化问题、预处理、分流（远程关闭 / 转售后工单）。',
+  交付人员: '交付人员视角：来源交付异常、是否退回交付、需交付补充的信息与关联状态。',
+  售后工程师: '售后工程师视角：技术客服预处理建议、故障原因、是否上门 · 换件与关联售后工单。',
+  管理者: '管理者视角：时间节点、SLA、责任人流转、状态变更与操作日志。',
 };
+// 售后工单详情分区 tab（任务型分区，避免一屏长字段堆叠）。
+const ORDER_TABS = ['当前处理', '来源与预处理', '现场执行', '换件与领料', '附件与关单', '时间节点与日志'];
 const ORDER_TASK = {
   待分派: { pending: '待分派工程师', next: '分派工程师后进入待接单' },
   待接单: { pending: '工程师待接单（可改派）', next: '接单后确认上门时间' },
@@ -524,6 +527,10 @@ function CloseOrderModal({ wo, currentUser, onClose, onConfirm }) {
 // 工单详情：宽抽屉，分区明确（来源 / 技术客服预处理 / 基础 / 调度 / 时间节点 / 故障 / 现场 / 换件 / 附件 / 关单 / 日志）。
 function OrderDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose }) {
   const [modal, setModal] = useState(entry.action || null);
+  const [otab, setOtab] = useState('当前处理');
+  const bodyRef = useRef(null);
+  // 切换分区 tab 时抽屉内容区回到顶部。
+  useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = 0; }, [otab]);
   if (!entry) return null;
   const source = entry.kind === 'delivery' ? (state.deliveryWorkOrders || []) : (state.workOrders || []);
   const fresh = source.find((w) => w.id === entry.id);
@@ -575,7 +582,6 @@ function OrderDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
   const otask = ORDER_TASK[dStatus] || { pending: '—', next: '—' };
   const owner = dStatus === '待分派' ? (wo.leader || '待分派') : (wo.assignedTo || wo.leader || '—');
   const sla = slaHint(wo.createTime || wo.createdAt, !closed);
-  const scrollTo = (id) => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   const orderActions = (
     <div className="flex flex-wrap gap-2">
       {editable && dStatus === '待分派' && <>
@@ -594,16 +600,16 @@ function OrderDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
         <Btn variant="primary" size="sm" onClick={() => setModal('close')}>关单</Btn>
       </>}
       {dStatus === '已关单' && <>
-        <Btn size="sm" onClick={() => scrollTo('wo-docs')}>查看资料</Btn>
-        <Btn size="sm" onClick={() => scrollTo('wo-logs')}>查看日志</Btn>
+        <Btn size="sm" onClick={() => setOtab('附件与关单')}>查看资料</Btn>
+        <Btn size="sm" onClick={() => setOtab('时间节点与日志')}>查看日志</Btn>
       </>}
-      {dStatus === '已取消' && <Btn size="sm" onClick={() => scrollTo('wo-logs')}>查看日志</Btn>}
+      {dStatus === '已取消' && <Btn size="sm" onClick={() => setOtab('时间节点与日志')}>查看日志</Btn>}
       {!editable && !closed && <span className="text-[13px] text-gray-400">当前角色无工单处理权限，仅可查看。</span>}
     </div>
   );
 
   return (
-    <Drawer open onClose={onClose} title={wo.id}
+    <Drawer open onClose={onClose} bodyRef={bodyRef} title={wo.id}
       subtitle={srcQI ? `${srcLabel} · 来源问题 ${srcQI}` : srcLabel}
       chips={<>
         <StatusBadge status={dStatus} />
@@ -615,126 +621,136 @@ function OrderDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
       </>}>
       <TaskCard status={dStatus} owner={owner} pending={otask.pending} nextStep={otask.next} sla={sla} actions={orderActions} />
 
-      <DrawerSection title="来源信息">
-        <DescList items={[
-          ['来源类型', <Chip>{srcLabel}</Chip>],
-          ['来源问题编号', srcQI ? <LinkAction to={`/after-sales?tab=issues&highlight=${srcQI}`}>{srcQI}</LinkAction> : '—'],
-          ['来源交付计划', wo.deliveryPlanId],
-          ['来源交付子工单', wo._kind === 'delivery' ? wo.id : (wo.sourceSubOrderId || '—')],
-          ['来源异常编号', wo.sourceExceptionId],
-        ]} />
-      </DrawerSection>
+      <DrawerTabBar tabs={ORDER_TABS} active={otab} onChange={setOtab} />
 
-      <DrawerSection title="设备与项目">
-        <DescList items={[
-          ['客户名称', project?.client],
-          ['项目名称', project?.name],
-          ['设备 SN', wo.deviceSN],
-          ['点位 / 地址', locLabel(loc)],
-          ['当前状态', <StatusBadge status={dStatus} />],
-          ['严重程度', <StatusBadge status={wo.severity || '中'} />],
-        ]} />
-      </DrawerSection>
-
-      <DrawerSection title="技术客服预处理信息（只读）">
-        <DescList items={[
-          ['技术客服', wo.csAgent],
-          ['预处理完成时间', wo.preprocessDoneTime],
-          ['一级故障原因', wo.faultL1],
-          ['二级故障原因', wo.faultL2],
-          ['三级故障原因', wo.faultL3],
-          ['建议处理方案', wo.suggestedSolution || wo.solution],
-          ['是否需上门', wo.needVisit == null ? '—' : yn(wo.needVisit)],
-          ['是否需换件', wo.needReplace == null ? yn(wo.involvesReplacement) : yn(wo.needReplace)],
-        ]} />
-        <div className="mt-3 space-y-2">
-          <div><div className="text-xs text-gray-400 mb-1">规范化故障描述</div><TextBlock>{wo.normalizedDesc || wo.description}</TextBlock></div>
-          <div><div className="text-xs text-gray-400 mb-1">预处理结论</div><TextBlock>{wo.preprocessConclusion}</TextBlock></div>
-        </div>
-      </DrawerSection>
-
-      <DrawerSection title="调度与上门">
-        <DescList items={[
-          ['服务 leader', wo.leader],
-          ['工程师', wo.assignedTo],
-          ['预计上门时间', wo.expectVisitTime || wo.expectVisitAt],
-          ['接单时间', wo.acceptTime || wo.acceptAt],
-          ['实际上门时间', wo.actualVisitTime || wo.visitAt || wo.arriveTime],
-          ['现场联系人 / 电话', [wo.contactName, wo.contactPhone].filter(Boolean).join(' / ') || '—'],
-        ]} />
-      </DrawerSection>
-
-      <DrawerSection title="现场处理（工程师现场处理信息）">
-        <DescList items={[
-          ['实际故障原因', wo.actualFault],
-          ['实际处理方案', wo.actualSolution || wo.repairActions],
-          ['是否换件', wo.needReplace == null ? '—' : yn(wo.needReplace)],
-          ['现场开始 / 完成', [wo.onsiteStartTime, wo.onsiteDoneTime].filter(Boolean).join(' ~ ') || '—'],
-        ]} />
-        <div className="mt-3 space-y-2">
-          <div><div className="text-xs text-gray-400 mb-1">现场处理说明</div><TextBlock>{wo.onsiteRecord || wo.fieldRecord}</TextBlock></div>
+      {otab === '当前处理' && <>
+        <DrawerSection title="设备与项目">
           <DescList items={[
-            ['现场照片', wo.sitePhoto || wo.imageFile],
-            ['log', wo.logFile],
-            ['正常工作视频', wo.workVideo],
+            ['客户名称', project?.client],
+            ['项目名称', project?.name],
+            ['设备 SN', wo.deviceSN],
+            ['点位 / 地址', locLabel(loc)],
+            ['当前状态', <StatusBadge status={dStatus} />],
+            ['严重程度', <StatusBadge status={wo.severity || '中'} />],
           ]} />
-        </div>
-        <div className="mt-2 text-xs text-gray-400">工程师现场实测独立记录，如需修正走操作日志，不覆盖技术客服预处理信息。</div>
-      </DrawerSection>
+        </DrawerSection>
+        <DrawerSection title="调度与上门">
+          <DescList items={[
+            ['服务 leader', wo.leader],
+            ['工程师', wo.assignedTo],
+            ['预计上门时间', wo.expectVisitTime || wo.expectVisitAt],
+            ['接单时间', wo.acceptTime || wo.acceptAt],
+            ['实际上门时间', wo.actualVisitTime || wo.visitAt || wo.arriveTime],
+            ['现场联系人 / 电话', [wo.contactName, wo.contactPhone].filter(Boolean).join(' / ') || '—'],
+          ]} />
+        </DrawerSection>
+      </>}
 
-      <DrawerSection title="换件与 ERP 领料">
-        <DescList items={[
-          ['是否需换件', yn(wo.involvesReplacement || wo.needReplace)],
-          ['核心部件类型', wo.needReplaceModuleType || wo.needModuleType],
-          ['旧件 SN', wo.oldModuleSN],
-          ['新件 SN', wo.newModuleSN],
-          ['新件来源', wo.newPartSource],
-          ['换件原因', wo.replaceReason],
-          ['ERP 领料单号 / 出库申请单号', wo.erpPickingNo],
-          ['ERP 领料状态', wo.erpPickingStatus ? <StatusBadge status={wo.erpPickingStatus} /> : '—'],
-          ['换件记录', <LinkAction to="/after-sales?tab=replacements">前往换件记录 →</LinkAction>],
-        ]} />
-      </DrawerSection>
+      {otab === '来源与预处理' && <>
+        <DrawerSection title="来源信息">
+          <DescList items={[
+            ['来源类型', <Chip>{srcLabel}</Chip>],
+            ['来源问题编号', srcQI ? <LinkAction to={`/after-sales?tab=issues&highlight=${srcQI}`}>{srcQI}</LinkAction> : '—'],
+            ['来源交付计划', wo.deliveryPlanId],
+            ['来源交付子工单', wo._kind === 'delivery' ? wo.id : (wo.sourceSubOrderId || '—')],
+            ['来源异常编号', wo.sourceExceptionId],
+          ]} />
+        </DrawerSection>
+        <DrawerSection title="技术客服预处理信息（只读）">
+          <DescList items={[
+            ['技术客服', wo.csAgent],
+            ['预处理完成时间', wo.preprocessDoneTime],
+            ['一级故障原因', wo.faultL1],
+            ['二级故障原因', wo.faultL2],
+            ['三级故障原因', wo.faultL3],
+            ['建议处理方案', wo.suggestedSolution || wo.solution],
+            ['是否需上门', wo.needVisit == null ? '—' : yn(wo.needVisit)],
+            ['是否需换件', wo.needReplace == null ? yn(wo.involvesReplacement) : yn(wo.needReplace)],
+          ]} />
+          <div className="mt-3 space-y-2">
+            <div><div className="text-xs text-gray-400 mb-1">规范化故障描述</div><TextBlock>{wo.normalizedDesc || wo.description}</TextBlock></div>
+            <div><div className="text-xs text-gray-400 mb-1">预处理结论</div><TextBlock>{wo.preprocessConclusion}</TextBlock></div>
+          </div>
+        </DrawerSection>
+      </>}
 
-      <DrawerSection title="附件 / log / 视频（上传资料）" id="wo-docs">
-        <DescList items={[
-          ['资料类型', wo.docType],
-          ['资料文件名', wo.docFileName],
-          ['资料上传时间', wo.docUploadTime],
-        ]} />
-      </DrawerSection>
+      {otab === '现场执行' && (
+        <DrawerSection title="现场处理（工程师现场处理信息）">
+          <DescList items={[
+            ['实际故障原因', wo.actualFault],
+            ['实际处理方案', wo.actualSolution || wo.repairActions],
+            ['是否换件', wo.needReplace == null ? '—' : yn(wo.needReplace)],
+            ['现场开始 / 完成', [wo.onsiteStartTime, wo.onsiteDoneTime].filter(Boolean).join(' ~ ') || '—'],
+          ]} />
+          <div className="mt-3 space-y-2">
+            <div><div className="text-xs text-gray-400 mb-1">现场处理说明</div><TextBlock>{wo.onsiteRecord || wo.fieldRecord}</TextBlock></div>
+            <DescList items={[
+              ['现场照片', wo.sitePhoto || wo.imageFile],
+              ['log', wo.logFile],
+              ['正常工作视频', wo.workVideo],
+            ]} />
+          </div>
+          <div className="mt-2 text-xs text-gray-400">工程师现场实测独立记录，如需修正走操作日志，不覆盖技术客服预处理信息。</div>
+        </DrawerSection>
+      )}
 
-      <DrawerSection title="关单信息">
-        <DescList items={[
-          ['最终处理结果', wo.finalResult || wo.recheckResult],
-          ['是否恢复正常', wo.restoredNormal == null ? '—' : yn(wo.restoredNormal)],
-          ['关单说明', wo.closeNote],
-          ['取消原因', wo.cancelReason || wo.voidReason],
-          ['关单时间', wo.closeTime || wo.closedAt],
-        ]} />
-      </DrawerSection>
+      {otab === '换件与领料' && (
+        <DrawerSection title="换件与 ERP 领料">
+          <DescList items={[
+            ['是否需换件', yn(wo.involvesReplacement || wo.needReplace)],
+            ['核心部件类型', wo.needReplaceModuleType || wo.needModuleType],
+            ['旧件 SN', wo.oldModuleSN],
+            ['新件 SN', wo.newModuleSN],
+            ['新件来源', wo.newPartSource],
+            ['换件原因', wo.replaceReason],
+            ['ERP 领料单号 / 出库申请单号', wo.erpPickingNo],
+            ['ERP 领料状态', wo.erpPickingStatus ? <StatusBadge status={wo.erpPickingStatus} /> : '—'],
+            ['换件记录', <LinkAction to="/after-sales?tab=replacements">前往换件记录 →</LinkAction>],
+          ]} />
+        </DrawerSection>
+      )}
 
-      <DrawerSection title="售后时间节点">
-        <DescList cols={3} items={[
-          ['创建时间', wo.createTime || wo.createdAt],
-          ['分派时间', wo.dispatchTime || wo.dispatchAt],
-          ['接单时间', wo.acceptTime || wo.acceptAt],
-          ['预计上门时间', wo.expectVisitTime || wo.expectVisitAt],
-          ['实际上门时间', wo.actualVisitTime || wo.visitAt],
-          ['现场开始时间', wo.onsiteStartTime],
-          ['现场完成时间', wo.onsiteDoneTime],
-          ['发起换件时间', wo.replaceInitTime],
-          ['领料申请时间', wo.erpPickApplyTime],
-          ['领料完成时间', wo.erpPickDoneTime],
-          ['新件更换时间', wo.newPartReplaceTime],
-          ['资料上传时间', wo.docUploadTime],
-          ['关单提交时间', wo.closeSubmitTime],
-          ['关单时间', wo.closeTime || wo.closedAt],
-          ['取消时间', wo.cancelTime],
-        ]} />
-      </DrawerSection>
+      {otab === '附件与关单' && <>
+        <DrawerSection title="附件 / log / 视频（上传资料）">
+          <DescList items={[
+            ['资料类型', wo.docType],
+            ['资料文件名', wo.docFileName],
+            ['资料上传时间', wo.docUploadTime],
+          ]} />
+        </DrawerSection>
+        <DrawerSection title="关单信息">
+          <DescList items={[
+            ['最终处理结果', wo.finalResult || wo.recheckResult],
+            ['是否恢复正常', wo.restoredNormal == null ? '—' : yn(wo.restoredNormal)],
+            ['关单说明', wo.closeNote],
+            ['取消原因', wo.cancelReason || wo.voidReason],
+            ['关单时间', wo.closeTime || wo.closedAt],
+          ]} />
+        </DrawerSection>
+      </>}
 
-      <DrawerSection title="处理进展 / 操作日志" id="wo-logs"><LogTimeline logs={wo.processLogs} /></DrawerSection>
+      {otab === '时间节点与日志' && <>
+        <DrawerSection title="售后时间节点">
+          <DescList cols={3} items={[
+            ['创建时间', wo.createTime || wo.createdAt],
+            ['分派时间', wo.dispatchTime || wo.dispatchAt],
+            ['接单时间', wo.acceptTime || wo.acceptAt],
+            ['预计上门时间', wo.expectVisitTime || wo.expectVisitAt],
+            ['实际上门时间', wo.actualVisitTime || wo.visitAt],
+            ['现场开始时间', wo.onsiteStartTime],
+            ['现场完成时间', wo.onsiteDoneTime],
+            ['发起换件时间', wo.replaceInitTime],
+            ['领料申请时间', wo.erpPickApplyTime],
+            ['领料完成时间', wo.erpPickDoneTime],
+            ['新件更换时间', wo.newPartReplaceTime],
+            ['资料上传时间', wo.docUploadTime],
+            ['关单提交时间', wo.closeSubmitTime],
+            ['关单时间', wo.closeTime || wo.closedAt],
+            ['取消时间', wo.cancelTime],
+          ]} />
+        </DrawerSection>
+        <DrawerSection title="处理进展 / 操作日志"><LogTimeline logs={wo.processLogs} /></DrawerSection>
+      </>}
 
       {modal === 'dispatch' && <DispatchEngineerModal wo={wo} reassign={dStatus === '待接单'} onClose={close} onConfirm={doDispatch} />}
       {modal === 'confirmVisit' && <ConfirmVisitModal wo={wo} onClose={close} onConfirm={doConfirmVisit} />}
@@ -1126,7 +1142,9 @@ function ToWorkOrderModal({ qi, project, locationLabel, onClose, onConfirm }) {
 function IssueDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose }) {
   const [modal, setModal] = useState(entry.action || null);
   const [role, setRole] = useState('技术客服');
-  const [tab, setTab] = useState('当前处理');
+  const bodyRef = useRef(null);
+  // 切换角色视角时，抽屉内容区回到顶部（不随视角乱跳滚动位置）。
+  useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = 0; }, [role]);
   const qi = (state.qualityIssues || []).find((q) => q.id === entry.id);
   if (!qi) return null;
   const project = findProject(state, qi.projectId);
@@ -1141,7 +1159,6 @@ function IssueDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
   const activeIssue = ['待预处理', '预处理中', '待补充信息'].includes(dStatus);
   const sla = slaHint(enterT, activeIssue);
   const linkedWO = qi.linkedWorkOrderId ? allWorkOrders(state).find((w) => w.id === qi.linkedWorkOrderId) : null;
-  const setRoleView = (r) => { setRole(r); setTab(ISSUE_ROLES[r].tab); };
   const close = () => setModal(null);
 
   const patchQI = (p, note, forceTo) => {
@@ -1174,8 +1191,16 @@ function IssueDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
   };
   const doCloseIssue = (reason) => patchQI({ status: '已关闭', closeTime: nowText(), closeReason: reason }, `关闭问题${reason ? `：${reason}` : ''}`, '已关闭');
 
-  const goTab = (t) => setTab(t);
-  const issueActions = (
+  const scrollToLog = () => { const el = document.getElementById('qi-logs'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  // 责任人流转 / 状态变更（管理者视角，从操作日志派生）。
+  const flowOwners = [...new Set((qi.processLogs || []).map((l) => l.operator).filter(Boolean))];
+  const statusChanges = (qi.processLogs || []).filter((l) => l.fromStatus && l.toStatus);
+  const overSla = sla?.tone === 'warning';
+  // 是否退回交付继续处理：技术客服请求向交付侧补充信息时成立。
+  const returnToDelivery = !!qi.needMoreInfo && ['交付工程师', '现场人员', '客户'].includes(qi.moreInfoTarget);
+
+  // 技术客服视角操作（按状态：预处理 / 分流）。
+  const csActions = (
     <div className="flex flex-wrap gap-2">
       {editable && dStatus === '待预处理' && <>
         <Btn size="sm" onClick={() => setModal('assign')}>指派技术客服</Btn>
@@ -1195,20 +1220,52 @@ function IssueDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
         <Btn variant="primary" size="sm" onClick={() => setModal('toworkorder')}>转售后工单</Btn>
       </>}
       {dStatus === '远程已解决' && <>
-        <Btn size="sm" onClick={() => goTab('附件与日志')}>查看处理记录</Btn>
+        <Btn size="sm" onClick={scrollToLog}>查看处理记录</Btn>
         {editable && <Btn variant="primary" size="sm" onClick={() => setModal('closeissue')}>关闭问题</Btn>}
       </>}
       {dStatus === '已转售后工单' && <>
         {qi.linkedWorkOrderId && <Btn as="link" to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`} size="sm">查看售后工单</Btn>}
-        <Btn size="sm" onClick={() => goTab('附件与日志')}>查看处理记录</Btn>
+        <Btn size="sm" onClick={scrollToLog}>查看处理记录</Btn>
       </>}
-      {dStatus === '已关闭' && <Btn size="sm" onClick={() => goTab('附件与日志')}>查看日志</Btn>}
+      {dStatus === '已关闭' && <Btn size="sm" onClick={scrollToLog}>查看日志</Btn>}
       {!editable && activeIssue && <span className="text-[13px] text-gray-400">当前角色无问题处理权限，仅可查看。</span>}
     </div>
   );
+  // 交付人员视角操作。
+  const deliveryActions = (
+    <div className="flex flex-wrap gap-2">
+      {editable && dStatus === '待补充信息' && <Btn variant="primary" size="sm" onClick={() => setModal('supplement')}>补充信息</Btn>}
+      {(qi.sourceDeliveryPlanId || qi.deliveryPlanId) && <Btn as="link" to={`/delivery-plans/${qi.sourceDeliveryPlanId || qi.deliveryPlanId}`} size="sm">查看来源交付计划</Btn>}
+      {(qi.sourceDeliveryPlanId || qi.deliveryPlanId) && <Btn as="link" to={`/delivery-plans/${qi.sourceDeliveryPlanId || qi.deliveryPlanId}?node=subOrders`} size="sm">查看来源子工单</Btn>}
+      {qi.linkedWorkOrderId && <Btn as="link" to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`} size="sm">查看关联售后工单</Btn>}
+      <Btn size="sm" onClick={scrollToLog}>查看日志</Btn>
+    </div>
+  );
+  // 售后工程师视角操作。
+  const engineerActions = (
+    <div className="flex flex-wrap gap-2">
+      {qi.linkedWorkOrderId && <Btn as="link" to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`} variant="primary" size="sm">查看售后工单</Btn>}
+      {qi.deviceId && <Btn as="link" to={`/devices/${qi.deviceId}`} size="sm">查看设备详情</Btn>}
+      <Btn size="sm" onClick={scrollToLog}>查看处理记录</Btn>
+    </div>
+  );
+  // 管理者视角操作。
+  const managerActions = (
+    <div className="flex flex-wrap gap-2">
+      <Btn size="sm" onClick={scrollToLog}>查看日志</Btn>
+      {qi.linkedWorkOrderId && <Btn as="link" to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`} size="sm">查看关联售后工单</Btn>}
+      {(qi.sourceDeliveryPlanId || qi.deliveryPlanId) && <Btn as="link" to={`/delivery-plans/${qi.sourceDeliveryPlanId || qi.deliveryPlanId}`} size="sm">查看来源交付记录</Btn>}
+    </div>
+  );
+
+  const attachmentItems = [
+    ['图片 / 附件', qi.attachments || qi.originalAttachments],
+    ['log', qi.logFile],
+    ['正常工作视频', qi.workVideo],
+  ];
 
   return (
-    <Drawer open onClose={onClose} title={qi.id}
+    <Drawer open onClose={onClose} bodyRef={bodyRef} title={qi.id}
       subtitle={`${qi.sourceType || qi.source || '—'} · 进入问题池 ${enterT || '—'}`}
       chips={<>
         {(qi.sourceType || qi.source) && <StatusBadge status={qi.sourceType || qi.source} />}
@@ -1219,106 +1276,183 @@ function IssueDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
         <Chip>{linked ? '已转售后工单' : '未转工单'}</Chip>
       </>}>
       <div className="space-y-1.5">
-        <RoleViewTabs roles={Object.keys(ISSUE_ROLES)} active={role} onChange={setRoleView} />
-        <div className="text-xs text-gray-400">{ISSUE_ROLES[role].desc}</div>
+        <RoleViewTabs roles={ISSUE_ROLE_ORDER} active={role} onChange={setRole} />
+        <div className="text-xs text-gray-400">{ISSUE_ROLE_DESC[role]}</div>
       </div>
 
-      <TaskCard status={dStatus} ownerLabel="当前责任人（技术客服）" owner={qi.csAgent || qi.owner} pending={itask.pending} nextStep={itask.next} sla={sla} actions={issueActions} />
+      {role === '技术客服' && <>
+        <TaskCard status={dStatus} ownerLabel="当前责任人（技术客服）" owner={qi.csAgent || qi.owner} pending={itask.pending} nextStep={itask.next} sla={sla} actions={csActions} />
+        <DrawerSection title="规范化问题信息">
+          <DescList items={[
+            ['问题类型', qi.issueType ? <StatusBadge status={qi.issueType} /> : '—'],
+            ['严重程度', <StatusBadge status={qi.severity || '中'} />],
+            ['设备 SN', qi.deviceSN],
+            ['点位 / 地址', locLabel(location)],
+            ['一级故障原因', qi.faultL1],
+            ['二级故障原因', qi.faultL2],
+            ['三级故障原因', qi.faultL3],
+            ['处理方案', qi.solution],
+            ['是否可远程解决', (qi.remoteSolvable ?? qi.remoteClosable) == null ? '—' : yn(qi.remoteSolvable ?? qi.remoteClosable)],
+            ['是否需上门', qi.needVisit == null ? '—' : yn(qi.needVisit)],
+            ['是否需换件', qi.needReplace == null ? '—' : yn(qi.needReplace)],
+            ['是否需补充信息', qi.needMoreInfo == null ? '—' : yn(qi.needMoreInfo)],
+          ]} />
+          <div className="mt-3"><div className="text-xs text-gray-400 mb-1">规范化故障描述</div><TextBlock>{qi.normalizedDesc || qi.issueDesc}</TextBlock></div>
+        </DrawerSection>
+        <DrawerSection title="技术客服预处理">
+          <DescList items={[
+            ['技术客服', qi.csAgent || qi.owner],
+            ['技术客服首次响应', qi.csFirstResponseTime],
+            ['预处理完成时间', qi.preprocessDoneTime],
+            ['技术客服备注', qi.csNote],
+          ]} />
+          <div className="mt-3"><div className="text-xs text-gray-400 mb-1">预处理结论</div><TextBlock>{qi.preprocessConclusion}</TextBlock></div>
+        </DrawerSection>
+        <DrawerSection title="来源快照摘要">
+          <DescList items={[
+            ['来源类型', (qi.sourceType || qi.source) ? <StatusBadge status={qi.sourceType || qi.source} /> : '—'],
+            ['来源交付计划', qi.sourceDeliveryPlanId || qi.deliveryPlanId],
+            ['来源交付子工单', qi.sourceSubOrderId],
+            ['原始记录人', qi.originalRecorder || qi.reporterName],
+            ['原始发生时间', qi.originalOccurTime || qi.reportTime],
+          ]} />
+          <div className="mt-2 text-xs text-gray-400">完整来源快照见「交付人员视角」，只读不被规范化覆盖。</div>
+        </DrawerSection>
+        <DrawerSection title="附件 / log / 视频"><DescList items={attachmentItems} /></DrawerSection>
+        <DrawerSection title="操作日志" id="qi-logs"><LogTimeline logs={qi.processLogs} /></DrawerSection>
+      </>}
 
-      <div>
-        <DrawerTabBar tabs={ISSUE_TABS} active={tab} onChange={setTab} />
-        <div className="pt-4">
-          {tab === '当前处理' && <>
-            <DescList items={[
-              ['当前状态', <StatusBadge status={dStatus} />],
-              ['技术客服', qi.csAgent || qi.owner],
-              ['技术客服首次响应', qi.csFirstResponseTime],
-              ['预处理完成时间', qi.preprocessDoneTime],
-              ['是否需上门', qi.needVisit == null ? '—' : yn(qi.needVisit)],
-              ['是否需换件', qi.needReplace == null ? '—' : yn(qi.needReplace)],
-            ]} />
-            <div className="mt-3 space-y-2">
-              <div><div className="text-xs text-gray-400 mb-1">规范化故障描述</div><TextBlock>{qi.normalizedDesc || qi.issueDesc}</TextBlock></div>
-              <div><div className="text-xs text-gray-400 mb-1">处理方案</div><TextBlock>{qi.solution}</TextBlock></div>
-              <div><div className="text-xs text-gray-400 mb-1">预处理结论</div><TextBlock>{qi.preprocessConclusion}</TextBlock></div>
-            </div>
-          </>}
-
-          {tab === '来源快照' && <>
-            <div className="text-xs text-gray-400 mb-2">来源快照只读，不被技术客服规范化覆盖。</div>
-            <DescList items={[
-              ['来源类型', (qi.sourceType || qi.source) ? <StatusBadge status={qi.sourceType || qi.source} /> : '—'],
-              ['来源交付计划', qi.sourceDeliveryPlanId],
-              ['来源交付子工单', qi.sourceSubOrderId],
-              ['来源节点', qi.sourceNode || qi.sourceStage],
-              ['原始记录人', qi.originalRecorder || qi.reporterName],
-              ['原始发生时间', qi.originalOccurTime || qi.reportTime],
-              ['原始设备 SN', qi.originalDeviceSN || qi.deviceSN],
-              ['原始点位', locLabel(origLocation) !== '—' ? locLabel(origLocation) : (qi.originalLocationId || '—')],
-              ['原始附件', qi.originalAttachments],
-            ]} />
-            <div className="mt-3"><div className="text-xs text-gray-400 mb-1">原始异常描述</div><TextBlock>{qi.originalDesc || qi.issueDesc}</TextBlock></div>
-          </>}
-
-          {tab === '规范化信息' && <>
-            <DescList items={[
-              ['问题类型', qi.issueType ? <StatusBadge status={qi.issueType} /> : '—'],
-              ['严重程度', <StatusBadge status={qi.severity || '中'} />],
-              ['设备 SN', qi.deviceSN],
-              ['点位 / 地址', locLabel(location)],
-              ['一级故障原因', qi.faultL1],
-              ['二级故障原因', qi.faultL2],
-              ['三级故障原因', qi.faultL3],
-              ['处理方案', qi.solution],
-              ['是否可远程解决', (qi.remoteSolvable ?? qi.remoteClosable) == null ? '—' : yn(qi.remoteSolvable ?? qi.remoteClosable)],
-              ['是否需上门', qi.needVisit == null ? '—' : yn(qi.needVisit)],
-              ['是否需换件', qi.needReplace == null ? '—' : yn(qi.needReplace)],
-              ['是否需补充信息', qi.needMoreInfo == null ? '—' : yn(qi.needMoreInfo)],
-            ]} />
-            <div className="mt-3 space-y-2">
-              <div><div className="text-xs text-gray-400 mb-1">规范化故障描述</div><TextBlock>{qi.normalizedDesc || qi.issueDesc}</TextBlock></div>
-              <DescList items={[['预处理结论', qi.preprocessConclusion], ['技术客服备注', qi.csNote]]} />
-            </div>
-          </>}
-
-          {tab === '时间节点' && <>
-            <DescList cols={3} items={[
-              ['问题发生时间', qi.occurTime || qi.originalOccurTime || qi.reportTime],
-              ['进入问题池时间', enterT],
-              ['指派时间', qi.csAssignTime],
-              ['技术客服首次响应', qi.csFirstResponseTime],
-              ['预处理完成时间', qi.preprocessDoneTime],
-              ['转售后工单时间', qi.toWorkOrderTime],
-              ['远程关闭时间', qi.remoteCloseTime],
-              ['关闭时间', qi.closeTime],
-            ]} />
-            <div className="mt-3"><DescList cols={3} items={[
-              ['技术客服响应时长', durationText(enterT, qi.csFirstResponseTime)],
-              ['预处理时长', durationText(qi.csFirstResponseTime, qi.preprocessDoneTime)],
-              ['问题池停留时长', durationText(enterT, stayEnd)],
-            ]} /></div>
-          </>}
-
-          {tab === '附件与日志' && <>
-            <DescList items={[
-              ['图片 / 附件', qi.attachments || qi.originalAttachments],
-              ['log', qi.logFile],
-              ['正常工作视频', qi.workVideo],
-            ]} />
-            <div className="mt-4"><div className="text-xs font-semibold text-gray-500 mb-2">操作日志</div><LogTimeline logs={qi.processLogs} /></div>
-          </>}
-
-          {tab === '关联售后' && <>
-            <DescList items={[
-              ['是否已转售后工单', yn(linked)],
-              ['关联售后工单号', qi.linkedWorkOrderId ? <LinkAction to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`}>{qi.linkedWorkOrderId}</LinkAction> : '—'],
-              ['售后工单状态', linkedWO ? <StatusBadge status={displayWoStatus(linkedWO)} /> : '—'],
-              ['工程师', linkedWO?.assignedTo],
-            ]} />
-            {qi.linkedWorkOrderId && <div className="mt-3"><Btn as="link" to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`} size="sm">查看售后工单 →</Btn></div>}
-          </>}
+      {role === '交付人员' && <>
+        <TaskCard status={dStatus} ownerLabel="当前责任人" owner={qi.csAgent || qi.owner || qi.originalRecorder}
+          pending={returnToDelivery ? `需交付侧补充信息（${qi.moreInfoTarget}）` : itask.pending}
+          nextStep={returnToDelivery ? '补充信息后回到预处理中继续处理' : itask.next} sla={sla} actions={deliveryActions} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 rounded-lg border border-[#eee] bg-[#fafafa] p-3">
+          <div><div className="text-xs text-gray-400">是否需要交付补充信息</div><div className="text-[13px] text-gray-800 mt-0.5">{qi.needMoreInfo == null ? '—' : yn(qi.needMoreInfo)}</div></div>
+          <div><div className="text-xs text-gray-400">是否退回交付继续处理</div><div className="text-[13px] text-gray-800 mt-0.5">{yn(returnToDelivery)}</div></div>
         </div>
-      </div>
+        <DrawerSection title="来源交付信息">
+          <DescList items={[
+            ['来源交付计划', qi.sourceDeliveryPlanId || qi.deliveryPlanId],
+            ['来源交付子工单', qi.sourceSubOrderId],
+            ['来源节点', qi.sourceNode || qi.sourceStage],
+            ['项目名称', project?.name],
+            ['客户名称', project?.client],
+            ['设备 SN', qi.originalDeviceSN || qi.deviceSN],
+            ['点位 / 地址', locLabel(origLocation) !== '—' ? locLabel(origLocation) : locLabel(location)],
+            ['交付负责人', qi.deliveryOwner || qi.originalRecorder],
+            ['交付工程师', qi.deliveryEngineer || qi.originalRecorder || qi.reporterName],
+          ]} />
+        </DrawerSection>
+        <DrawerSection title="交付异常原始记录">
+          <div className="mb-3"><div className="text-xs text-gray-400 mb-1">原始异常描述</div><TextBlock>{qi.originalDesc || qi.issueDesc}</TextBlock></div>
+          <DescList items={[
+            ['异常发生时间', qi.originalOccurTime || qi.reportTime],
+            ['异常记录人', qi.originalRecorder || qi.reporterName],
+            ['原始附件 / 现场照片 / 验收材料', qi.originalAttachments],
+          ]} />
+        </DrawerSection>
+        <DrawerSection title="技术客服对交付侧的要求">
+          <DescList items={[
+            ['是否需补充信息', qi.needMoreInfo == null ? '—' : yn(qi.needMoreInfo)],
+            ['补充对象', qi.moreInfoTarget],
+            ['补充截止', qi.moreInfoDeadline],
+            ['技术客服备注', qi.csNote],
+          ]} />
+        </DrawerSection>
+        <DrawerSection title="关联问题 / 售后状态">
+          <DescList items={[
+            ['当前状态', <StatusBadge status={dStatus} />],
+            ['是否已转售后工单', yn(linked)],
+            ['关联售后工单号', qi.linkedWorkOrderId ? <LinkAction to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`}>{qi.linkedWorkOrderId}</LinkAction> : '—'],
+            ['售后工单状态', linkedWO ? <StatusBadge status={displayWoStatus(linkedWO)} /> : '—'],
+          ]} />
+        </DrawerSection>
+        <DrawerSection title="附件资料"><DescList items={attachmentItems} /></DrawerSection>
+        <DrawerSection title="操作日志" id="qi-logs"><LogTimeline logs={qi.processLogs} /></DrawerSection>
+      </>}
+
+      {role === '售后工程师' && <>
+        <TaskCard status={dStatus} ownerLabel="工程师" owner={linkedWO?.assignedTo || (linked ? '待分派' : '—')}
+          pending={linked ? '已转售后工单，现场执行闭环' : '尚未转售后工单'}
+          nextStep={linked ? '按预处理建议现场处理并关单' : '技术客服预处理后决定是否转售后'} sla={sla} actions={engineerActions} />
+        {!linked && <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">当前问题尚未转售后工单，售后工程师视角仅展示预处理建议。</div>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 rounded-lg border border-[#eee] bg-[#fafafa] p-3">
+          <div><div className="text-xs text-gray-400">是否已转售后工单</div><div className="text-[13px] text-gray-800 mt-0.5">{yn(linked)}</div></div>
+          <div><div className="text-xs text-gray-400">关联售后工单号</div><div className="text-[13px] text-gray-800 mt-0.5">{qi.linkedWorkOrderId ? <LinkAction to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`}>{qi.linkedWorkOrderId}</LinkAction> : '—'}</div></div>
+          <div><div className="text-xs text-gray-400">售后工单状态</div><div className="text-[13px] text-gray-800 mt-0.5">{linkedWO ? <StatusBadge status={displayWoStatus(linkedWO)} /> : '—'}</div></div>
+          <div><div className="text-xs text-gray-400">工程师</div><div className="text-[13px] text-gray-800 mt-0.5">{linkedWO?.assignedTo || '—'}</div></div>
+        </div>
+        <DrawerSection title="技术客服预处理结论">
+          <DescList items={[
+            ['严重程度', <StatusBadge status={qi.severity || '中'} />],
+            ['一级故障原因', qi.faultL1],
+            ['二级故障原因', qi.faultL2],
+            ['三级故障原因', qi.faultL3],
+            ['是否需上门', qi.needVisit == null ? '—' : yn(qi.needVisit)],
+            ['是否需换件', qi.needReplace == null ? '—' : yn(qi.needReplace)],
+          ]} />
+          <div className="mt-3 space-y-2">
+            <div><div className="text-xs text-gray-400 mb-1">规范化故障描述</div><TextBlock>{qi.normalizedDesc || qi.issueDesc}</TextBlock></div>
+            <div><div className="text-xs text-gray-400 mb-1">建议处理方案</div><TextBlock>{qi.solution}</TextBlock></div>
+            <div><div className="text-xs text-gray-400 mb-1">预处理结论</div><TextBlock>{qi.preprocessConclusion}</TextBlock></div>
+          </div>
+        </DrawerSection>
+        <DrawerSection title="设备与点位信息">
+          <DescList items={[
+            ['设备 SN', qi.deviceSN],
+            ['点位 / 地址', locLabel(location)],
+            ['项目名称', project?.name],
+            ['客户名称', project?.client],
+          ]} />
+        </DrawerSection>
+        <DrawerSection title="关联售后工单">
+          <DescList items={[
+            ['是否已转售后工单', yn(linked)],
+            ['关联售后工单号', qi.linkedWorkOrderId ? <LinkAction to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`}>{qi.linkedWorkOrderId}</LinkAction> : '—'],
+            ['售后工单状态', linkedWO ? <StatusBadge status={displayWoStatus(linkedWO)} /> : '—'],
+            ['工程师', linkedWO?.assignedTo],
+          ]} />
+          {qi.linkedWorkOrderId && <div className="mt-3"><Btn as="link" to={`/after-sales?tab=orders&highlight=${qi.linkedWorkOrderId}`} size="sm">查看售后工单 →</Btn></div>}
+        </DrawerSection>
+        <DrawerSection title="附件 / log / 视频"><DescList items={attachmentItems} /></DrawerSection>
+        <DrawerSection title="操作日志" id="qi-logs"><LogTimeline logs={qi.processLogs} /></DrawerSection>
+      </>}
+
+      {role === '管理者' && <>
+        <TaskCard status={dStatus} ownerLabel="当前责任人" owner={qi.csAgent || qi.owner} pending={itask.pending} nextStep={itask.next} sla={sla} actions={managerActions} />
+        <DrawerSection title="时间节点">
+          <DescList cols={3} items={[
+            ['问题发生时间', qi.occurTime || qi.originalOccurTime || qi.reportTime],
+            ['进入问题池时间', enterT],
+            ['技术客服指派时间', qi.csAssignTime],
+            ['技术客服首次响应时间', qi.csFirstResponseTime],
+            ['预处理完成时间', qi.preprocessDoneTime],
+            ['转售后工单时间', qi.toWorkOrderTime],
+            ['远程关闭时间', qi.remoteCloseTime],
+            ['问题关闭时间', qi.closeTime],
+          ]} />
+        </DrawerSection>
+        <DrawerSection title="SLA 指标">
+          <DescList cols={2} items={[
+            ['技术客服响应时长', durationText(enterT, qi.csFirstResponseTime)],
+            ['技术客服预处理时长', durationText(qi.csFirstResponseTime, qi.preprocessDoneTime)],
+            ['问题池停留时长', durationText(enterT, stayEnd)],
+            ['是否超时', overSla ? '是（超 48h · SLA 占位）' : '否'],
+            ['超时原因', overSla ? '问题池停留超阈值（原型 SLA 占位）' : '—'],
+          ]} />
+        </DrawerSection>
+        <DrawerSection title="责任人流转">
+          {flowOwners.length
+            ? <div className="flex flex-wrap items-center gap-2">{flowOwners.map((o, i) => <span key={i} className="inline-flex items-center gap-2 text-[13px] text-gray-700">{i > 0 && <span className="text-gray-300">→</span>}<Chip>{o}</Chip></span>)}</div>
+            : <EmptyState>暂无责任人流转记录</EmptyState>}
+        </DrawerSection>
+        <DrawerSection title="状态变更记录">
+          {statusChanges.length
+            ? <ol className="space-y-2">{statusChanges.map((l, i) => <li key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500"><span>{l.time}</span><span className="font-medium text-gray-600">{l.operator}</span><StatusBadge status={l.fromStatus} /><span className="text-gray-300">→</span><StatusBadge status={l.toStatus} /></li>)}</ol>
+            : <EmptyState>暂无状态变更记录</EmptyState>}
+        </DrawerSection>
+        <DrawerSection title="操作日志" id="qi-logs"><LogTimeline logs={qi.processLogs} /></DrawerSection>
+      </>}
 
       {modal === 'assign' && <AssignCSModal qi={qi} dStatus={dStatus} onClose={close} onConfirm={doAssign} />}
       {modal === 'start' && <Modal isOpen onClose={close} title="开始预处理"><div className="space-y-3"><Card className="bg-[#fafafa] text-xs text-gray-500">开始预处理后问题转入「预处理中」，并记录技术客服首次响应时间。</Card><div className="text-[13px] text-gray-600">技术客服：{qi.csAgent || qi.owner || '（未指派，将以当前用户记录）'}</div><ModalActions onClose={close} onConfirm={doStart} confirmLabel="开始预处理" /></div></Modal>}
