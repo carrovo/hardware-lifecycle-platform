@@ -424,7 +424,7 @@ export default function ProjectDetail() {
       {/* 当前项目交付计划 */}
       <Section title={`当前项目交付计划（${projDeliveryPlans.length}）`} bodyClassName="p-0">
         <Table
-          head={['计划ID', '交付批次', '状态', '当前节点', '验收进度', '计划验收', '操作']}
+          head={['计划ID', '交付批次', '状态', '当前阶段', '验收进度', '计划验收', '操作']}
           empty="暂无交付计划"
           footer={<Pagination page={delivPaged.page} total={delivPaged.total} totalPages={delivPaged.totalPages} onChange={delivPaged.setPage} />}
         >

@@ -234,6 +234,36 @@ function SubOrderOps({ order, onAction, onSubmitPreprocess, backType }) {
   );
 }
 
+// 当前任务卡片映射：按可操作状态派生「当前待处理动作 / 下一步建议」。
+const TASK_CARD_INFO = {
+  待分派: { pending: '待分派工程师', next: '分派工程师后进入待接单' },
+  待接单: { pending: '工程师待接单（可改派）', next: '接单后记录上门/到场' },
+  待上门: { pending: '待记录上门 / 到场', next: '到场后进入现场执行' },
+  现场执行中: { pending: '现场部署 / 调试执行中', next: '更新进度 / 上传资料，完成后提交完成' },
+  存在异常: { pending: '存在交付异常，待处理', next: '记录异常进展；设备/质量问题提交技术客服预处理' },
+  已完成: { pending: '子工单已完成', next: '查看资料与日志' },
+};
+
+// 当前任务卡片（顶部状态栏下方）：责任人 + 待处理动作 + 下一步建议 + 可执行操作。
+function CurrentTaskCard({ order, onAction, onSubmitPreprocess, backType }) {
+  const info = TASK_CARD_INFO[order.opStatus] || { pending: '—', next: '—' };
+  return (
+    <div className="rounded-lg border border-[#e0e0e0] bg-[#fafafa] p-4 space-y-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-xs font-semibold text-gray-500">当前任务</span>
+        <StatusBadge status={order.opStatus} />
+        <span className="text-xs text-gray-500">当前责任人：</span>
+        <span className="text-[13px] text-gray-800">{order.engineer || order.owner || '—'}</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+        <div><div className="text-xs text-gray-400 mb-1">当前待处理动作</div><div className="text-[13px] text-gray-800">{info.pending}</div></div>
+        <div><div className="text-xs text-gray-400 mb-1">下一步建议</div><div className="text-[13px] text-gray-800">{info.next}</div></div>
+      </div>
+      <SubOrderOps order={order} onAction={onAction} onSubmitPreprocess={onSubmitPreprocess} backType={backType} />
+    </div>
+  );
+}
+
 // 子工单操作原型占位表单弹窗：填写备注 → 确认写操作日志 + 轻提示。
 function ActionForm({ action, order, onCancel, onConfirm }) {
   const [note, setNote] = useState('');
@@ -287,9 +317,7 @@ function PreOrderDetail({ order, onAction, onSubmitPreprocess }) {
   return (
     <div className="space-y-5">
       <SubOrderHeader order={order} typeLabel="前置准备" hasException={false} />
-      <div><div className="text-xs font-semibold text-gray-700 mb-2">当前可执行操作</div>
-        <SubOrderOps order={order} onAction={onAction} onSubmitPreprocess={onSubmitPreprocess} backType="pre" />
-      </div>
+      <CurrentTaskCard order={order} onAction={onAction} onSubmitPreprocess={onSubmitPreprocess} backType="pre" />
       <div><div className="text-xs font-semibold text-gray-700 mb-2">子工单基础信息</div>
         <DescList
           cols={2}
@@ -304,17 +332,7 @@ function PreOrderDetail({ order, onAction, onSubmitPreprocess }) {
         />
       </div>
       <div><div className="text-xs font-semibold text-gray-700 mb-2">执行记录 / 时间节点</div>
-        <DescList
-          cols={2}
-          items={[
-            ['舱体发货记录', '—'],
-            ['现场进场条件确认', '—'],
-            ['舱体到场 / 卸货记录', '—'],
-            ['水电施工完成记录', '—'],
-            ['设备部署条件确认', '—'],
-            ['异常或阻塞原因', '—'],
-          ]}
-        />
+        <div className="text-xs text-gray-400">暂无前置准备执行记录（舱体进场 / 水电部署明细随现场系统接入补齐）</div>
       </div>
       <div className="text-xs text-gray-400">交付资料 / 异常记录 / 操作日志：原型占位，字段随 ERP / 现场系统接入补齐。</div>
     </div>
@@ -334,9 +352,7 @@ function DeployOrderDetail({ order, exceptions = [], logs = [], issues = [], doc
     <div className="space-y-5">
       <SubOrderHeader order={o} typeLabel="设备部署" hasException={o.exception} />
 
-      <div><div className="text-xs font-semibold text-gray-700 mb-2">当前可执行操作</div>
-        <SubOrderOps order={o} onAction={onAction} onSubmitPreprocess={onSubmitPreprocess} backType="deploy" />
-      </div>
+      <CurrentTaskCard order={o} onAction={onAction} onSubmitPreprocess={onSubmitPreprocess} backType="deploy" />
 
       <div><div className="text-xs font-semibold text-gray-700 mb-2">子工单基础信息</div>
         <DescList
@@ -365,17 +381,9 @@ function DeployOrderDetail({ order, exceptions = [], logs = [], issues = [], doc
       </div>
 
       <div><div className="text-xs font-semibold text-gray-700 mb-2">执行记录</div>
-        <DescList
-          cols={2}
-          items={[
-            ['设备摆放记录', '—'],
-            ['软件调参记录', '—'],
-            ['工作流程测试记录', '—'],
-            ['系统联调记录', '—'],
-            ['运营方培训记录', '—'],
-            ['异常说明', o.exceptionNote],
-          ]}
-        />
+        {o.exceptionNote && o.exceptionNote !== '—'
+          ? <DescList cols={1} items={[['异常说明', o.exceptionNote]]} />
+          : <div className="text-xs text-gray-400">暂无执行记录（现场执行明细随现场系统接入补齐）</div>}
       </div>
 
       <div><div className="text-xs font-semibold text-gray-700 mb-2">交付资料</div>
@@ -820,7 +828,7 @@ export default function DeliveryPlanDetail() {
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        <Chip>当前卡点 · {plan.currentNode ?? '—'}</Chip>
+        <Chip>当前阶段 · {deliveryCurrentStep}</Chip>
         {overdue && <StatusBadge status="超期" />}
       </div>
 
@@ -833,7 +841,7 @@ export default function DeliveryPlanDetail() {
 
       <Section
         title="交付流程进度"
-        subtitle={`按项目类型（${project?.projectType || (isZhimofang ? '智魔方' : '通用')}）展示交付流程节点，含设备绑定。当前节点：${deliveryCurrentStep}`}
+        subtitle={`按项目类型（${project?.projectType || (isZhimofang ? '智魔方' : '通用')}）展示交付流程节点，含设备绑定。当前阶段：${deliveryCurrentStep}`}
       >
         <Stepper steps={deliverySteps} current={deliveryCurrentStep} />
       </Section>
@@ -897,7 +905,7 @@ export default function DeliveryPlanDetail() {
             ['负责人', plan.owner],
             ['计划交付数', targetCount ? `${targetCount} 台` : '—'],
             ['交付设备数（已关联）', `${boundDevices.length} 台`],
-            ['当前节点', plan.currentNode],
+            ['当前阶段', deliveryCurrentStep],
             ['计划出厂', plan.factoryDate],
             ['计划现场安装调试', plan.siteInstallDate],
             ['计划验收', plan.acceptanceDate ?? plan.dueDate],
