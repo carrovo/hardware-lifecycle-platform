@@ -14,6 +14,7 @@ import {
   isPass, projectStatus as deriveProjectStatus,
   productionPlanStatus, deliveryPlanStatus, TODAY,
 } from '../utils/status';
+import { erpSyncMeta, erpSyncLogs } from '../data/mockData';
 
 // 生产计划「当前卡点」派生阈值：创建早于 TODAY-45 天且未完成 → 长期未结。
 const LONG_UNSETTLED_BEFORE = (() => {
@@ -1475,11 +1476,107 @@ function ErpPool({ title, subtitle, columns, rows, typeOptions, onView, onRelate
   );
 }
 
+// ERP 数据刷新 / 只读提示文案（原型仅模拟，不写回 ERP）。
+const ERP_REFRESH_MSG = '本原型仅模拟 ERP 数据刷新，真实刷新依赖 ERP API。';
+const ERP_READONLY_NOTE = 'ERP 数据只读展示，平台仅建立关联关系，不修改 ERP 单据和库存主账。';
+
+// 同步结果彩色标签：成功=绿 / 部分成功=橙 / 失败=红（只读展示，保持紧凑风格）。
+function SyncResultBadge({ result }) {
+  const tone = result === '成功'
+    ? 'bg-green-50 text-green-700 border-green-200'
+    : result === '部分成功'
+      ? 'bg-amber-50 text-amber-700 border-amber-200'
+      : 'bg-red-50 text-red-700 border-red-200';
+  return <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${tone}`}>{result}</span>;
+}
+
+// ERP 单据详情抽屉：五段式（基础信息 / 单据明细 / 关联平台对象 / 同步信息 / 只读说明），全只读。
+function ErpDetailSections({ row }) {
+  const dash = (v) => (v == null || v === '' ? '—' : v);
+  const mono = (v) => <span className="font-mono text-xs text-gray-600">{dash(v)}</span>;
+  const b = row.base || {};
+  const sync = row.sync || {};
+  const refs = row.refs || [];
+  const heading = (t) => <div className="text-[13px] font-semibold text-gray-800 mb-2">{t}</div>;
+  const refLinks = (type) => {
+    const list = refs.filter((r) => r.type === type);
+    if (list.length === 0) return '—';
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {list.map((r) => (r.to
+          ? <LinkAction key={r.id} to={r.to}>{r.label}</LinkAction>
+          : <span key={r.id} className="text-[13px] text-gray-700">{r.label}</span>))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-5">
+      <div>
+        {heading('基础信息')}
+        <DescList
+          cols={3}
+          items={[
+            ['ERP 单据号', mono(b.docNo)],
+            ['ERP 单据类型', b.docType ? <StatusBadge status={b.docType} /> : '—'],
+            ['单据状态', dash(b.docStatus)],
+            ['业务日期', dash(b.bizDate)],
+            ['单据日期', dash(b.docDate)],
+            ['创建人', dash(b.creator)],
+            ['审核人', dash(b.auditor)],
+            ['审核时间', dash(b.auditTime)],
+            ['来源组织', dash(b.sourceOrg)],
+            ['仓库', dash(b.warehouse)],
+            ['部门', dash(b.dept)],
+            ['供应商·客户', dash(b.partner)],
+          ]}
+        />
+      </div>
+      <div>
+        {heading('单据明细')}
+        <DescList cols={2} items={row.lines || []} />
+      </div>
+      <div>
+        {heading('关联平台对象')}
+        <DescList
+          cols={3}
+          items={[
+            ['关联项目', refLinks('项目')],
+            ['关联生产计划', refLinks('生产计划')],
+            ['关联设备 SN', refLinks('设备')],
+            ['关联交付计划', refLinks('交付计划')],
+            ['关联售后工单', refLinks('售后工单')],
+            ['关联换件记录', refLinks('换件记录')],
+          ]}
+        />
+      </div>
+      <div>
+        {heading('同步信息')}
+        <DescList
+          cols={3}
+          items={[
+            ['同步状态', sync.status ? <StatusBadge status={sync.status} /> : '—'],
+            ['最近同步时间', dash(sync.lastSyncTime)],
+            ['同步批次号', mono(sync.syncBatchNo)],
+            ['同步来源', dash(sync.source)],
+            ['同步结果', sync.result ? <SyncResultBadge result={sync.result} /> : '—'],
+            ['异常说明', dash(sync.exception)],
+          ]}
+        />
+      </div>
+      <div>
+        {heading('只读说明')}
+        <div className="bg-gray-50 border border-[#ececec] rounded-md p-3 text-xs text-gray-500">{ERP_READONLY_NOTE}</div>
+      </div>
+    </div>
+  );
+}
+
 function ErpFormsTab() {
   const { state } = useApp();
   const [detail, setDetail] = useState(null);
   const [related, setRelated] = useState(null);
-  const [bindOpen, setBindOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
   const [toast, setToast] = useState('');
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2600); };
 
@@ -1492,91 +1589,301 @@ function ErpFormsTab() {
   const projName = (pid) => projects.find((p) => p.id === pid)?.name ?? '—';
 
   const mono = (v) => <span className="font-mono text-xs text-gray-600">{dash(v)}</span>;
+  const typeBadge = (t) => <StatusBadge status={t} />;
   // 平台关联对象引用（可点击跳转到对应业务对象详情）。
   const devRef = (d) => ({ type: '设备', id: d.id, label: d.sn, to: `/devices/${d.id}` });
   const projRef = (p) => ({ type: '项目', id: p.id, label: p.name, to: `/projects/${p.id}` });
   const planRef = (p) => ({ type: '生产计划', id: p.id, label: p.name || p.id, to: `/production-plans/${p.id}` });
   const dpRef = (dp) => ({ type: '交付计划', id: dp.id, label: dp.batchNo || dp.name || dp.id, to: `/delivery-plans/${dp.id}` });
 
+  // 同步信息：来自 erpSyncMeta（全池只读共享）。
+  const syncBase = {
+    status: erpSyncMeta.status,
+    lastSyncTime: erpSyncMeta.lastSyncTime,
+    syncBatchNo: erpSyncMeta.syncBatchNo,
+    source: erpSyncMeta.source,
+    result: erpSyncMeta.status === '已同步' ? '成功' : erpSyncMeta.status === '同步异常' ? '失败' : '同步中',
+    exception: '',
+  };
+  const storedCount = (planId) => devices.filter((d) => d.productionPlanId === planId && ['已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status)).length;
+  const batchDate = (b) => (b.inspectionTime || '').slice(0, 10);
+  const batchInspectStatus = (b) => {
+    const items = b.items || [];
+    if (items.some((i) => i.result === '不合格')) return '不合格';
+    if (items.some((i) => i.result === '特批使用')) return '特批使用';
+    return items.length ? '合格' : '—';
+  };
+  const materialLines = (b) => [
+    ['物料编码', dash(b.model)],
+    ['物料名称', dash(b.category)],
+    ['规格型号', dash(b.model)],
+    ['批次号', dash(b.batchNo)],
+    ['数量', dash(b.quantity)],
+    ['单位', '件'],
+    ['单据行状态', batchInspectStatus(b)],
+    ['备注', dash(b.notes)],
+  ];
+
   // 池一：ERP 项目单
   const projectRows = projects.map((p) => ({
     id: `erp-proj-${p.id}`,
+    docType: 'ERP 项目单',
+    type: 'ERP 项目单',
     search: `${p.erpProjectNo ?? ''} ${p.name} ${p.client ?? ''}`,
     cells: [mono(p.erpProjectNo), <span className="text-gray-800">{p.name}</span>, dash(p.client), p.projectType ? <Chip>{p.projectType}</Chip> : '—'],
-    detail: [['ERP 项目号', dash(p.erpProjectNo)], ['项目名称', p.name], ['客户', dash(p.client)], ['项目类型', dash(p.projectType)], ['负责人', dash(p.manager)]],
+    base: {
+      docNo: p.erpProjectNo, docType: 'ERP 项目单', docStatus: '有效',
+      bizDate: (p.createdAt || '').slice(0, 10), docDate: (p.createdAt || '').slice(0, 10),
+      creator: p.manager, auditor: '—', auditTime: '—',
+      sourceOrg: 'ERP 项目管理', warehouse: '—', dept: '项目部', partner: p.client,
+    },
+    lines: [
+      ['项目', p.name],
+      ['客户', dash(p.client)],
+      ['项目类型', dash(p.projectType)],
+      ['负责人', dash(p.manager)],
+      ['目标设备数', dash(p.targetCount)],
+    ],
     refs: [
       projRef(p),
       ...wpp.filter((w) => w.projectId === p.id).map(planRef),
       ...deliveryPlans.filter((dp) => dp.projectId === p.id).map(dpRef),
     ],
+    sync: syncBase,
   }));
 
-  // 池二：ERP 生产工单（MO）
-  const moRows = wpp.map((p) => {
+  // 池二：ERP 生产订单 / 工单（每个生产计划各派生一条生产订单 + 一条 ERP 工单，均只读）
+  const productionRows = [];
+  wpp.forEach((p) => {
     const proj = projects.find((x) => x.id === p.projectId);
-    return {
-      id: `erp-mo-${p.id}`,
-      search: `${p.erpProductionOrderNo ?? ''} ${p.name} ${projName(p.projectId)}`,
-      cells: [mono(p.erpProductionOrderNo), <span className="text-gray-800">{p.name}</span>, projName(p.projectId), <StatusBadge status={productionPlanStatus(p)} />],
-      detail: [['ERP 生产工单号', dash(p.erpProductionOrderNo)], ['生产计划名称', p.name], ['关联项目', projName(p.projectId)], ['计划数量', dash(p.targetCount)], ['状态（只读）', productionPlanStatus(p)]],
-      refs: [
-        ...(proj ? [projRef(proj)] : []),
-        planRef(p),
-        ...devices.filter((d) => d.productionPlanId === p.id).map(devRef),
-      ],
+    const status = productionPlanStatus(p);
+    const woNo = p.erpWorkOrderNo || ('MO-WO-' + (p.erpProductionOrderNo || p.id));
+    const startPlan = p.startDate || (p.createdAt || '').slice(0, 10);
+    const done = storedCount(p.id);
+    const refs = [
+      ...(proj ? [projRef(proj)] : []),
+      planRef(p),
+      ...devices.filter((d) => d.productionPlanId === p.id).map(devRef),
+    ];
+    const prodLines = [
+      ['生产订单号', dash(p.erpProductionOrderNo)],
+      ['工单号', woNo],
+      ['计划数量', dash(p.targetCount)],
+      ['完工数量', done],
+      ['工单状态', status],
+      ['计划开工时间', dash(startPlan)],
+      ['计划完工时间', dash(p.endDate)],
+    ];
+    const baseCommon = {
+      docStatus: status,
+      bizDate: (p.createdAt || '').slice(0, 10),
+      docDate: (p.createdAt || '').slice(0, 10),
+      creator: p.owner, auditor: '—', auditTime: '—',
+      sourceOrg: 'ERP 生产制造', warehouse: p.warehouse, dept: '生产部', partner: '—',
     };
+    productionRows.push({
+      id: `erp-mo-${p.id}`, docType: '生产订单', type: '生产订单',
+      search: `${p.erpProductionOrderNo ?? ''} ${p.name} ${projName(p.projectId)} 生产订单`,
+      cells: [typeBadge('生产订单'), mono(p.erpProductionOrderNo), <span className="text-gray-800">{p.name}</span>, projName(p.projectId), <StatusBadge status={status} />],
+      base: { ...baseCommon, docNo: p.erpProductionOrderNo, docType: '生产订单' },
+      lines: prodLines, refs, sync: syncBase,
+    });
+    productionRows.push({
+      id: `erp-wo-${p.id}`, docType: 'ERP 工单', type: 'ERP 工单',
+      search: `${woNo} ${p.name} ${projName(p.projectId)} ERP 工单`,
+      cells: [typeBadge('ERP 工单'), mono(woNo), <span className="text-gray-800">{p.name}</span>, projName(p.projectId), <StatusBadge status={status} />],
+      base: { ...baseCommon, docNo: woNo, docType: 'ERP 工单' },
+      lines: prodLines, refs, sync: syncBase,
+    });
   });
 
-  // 池三：ERP 采购 / 入库 / 检验单（聚合 materialBatches + devices + plans）
-  const piiSrc = [];
+  // 池三：ERP 采购 / 到货 / 入库 / 检验单（聚合 materialBatches + devices + plans）
+  const piiRows = [];
+  let piiIdx = 0;
+  const pushPii = (row) => piiRows.push({ id: `erp-pii-${piiIdx++}`, sync: syncBase, ...row });
+  const deviceLines = (d) => [
+    ['物料编码', dash(d.sn)],
+    ['物料名称', dash(deviceTypeName(state, d.deviceTypeId))],
+    ['规格型号', dash(deviceTypeName(state, d.deviceTypeId))],
+    ['批次号', '—'],
+    ['数量', 1],
+    ['单位', '台'],
+    ['单据行状态', dash(d.erpStockStatus)],
+    ['备注', dash(d.exceptionNote)],
+  ];
   batches.forEach((b) => {
     const bPlan = wpp.find((p) => p.id === b.planId);
     const bRefs = bPlan ? [planRef(bPlan)] : [];
-    if (b.erpPurchaseOrderNo) piiSrc.push({ type: '采购单', no: b.erpPurchaseOrderNo, related: `${b.batchNo} · ${dash(b.supplier)}`, extra: dash(b.model), refs: bRefs });
-    if (b.erpArrivalNo) piiSrc.push({ type: '到货单', no: b.erpArrivalNo, related: `${b.batchNo} · ${dash(b.supplier)}`, extra: dash(b.warehouse), refs: bRefs });
+    const arrived = b.erpArrivalNo ? (b.quantity || 0) : 0;
+    if (b.erpPurchaseOrderNo) {
+      pushPii({
+        docType: '采购单', type: '采购单',
+        search: `${b.erpPurchaseOrderNo} ${b.batchNo} ${dash(b.supplier)} 采购单`,
+        cells: [typeBadge('采购单'), mono(b.erpPurchaseOrderNo), `${b.batchNo} · ${dash(b.supplier)}`, dash(b.model)],
+        base: { docNo: b.erpPurchaseOrderNo, docType: '采购单', docStatus: b.erpArrivalNo ? '已到货' : '采购中', bizDate: batchDate(b), docDate: batchDate(b), creator: dash(b.inspector), auditor: dash(b.inspector), auditTime: dash(b.inspectionTime), sourceOrg: 'ERP 采购', warehouse: dash(b.warehouse), dept: '采购部', partner: dash(b.supplier) },
+        lines: [
+          ['供应商', dash(b.supplier)],
+          ['采购数量', dash(b.quantity)],
+          ['已到货数量', b.erpArrivalNo ? arrived : '—'],
+          ['未到货数量', b.erpArrivalNo ? (b.quantity || 0) - arrived : '—'],
+          ...materialLines(b),
+        ],
+        refs: bRefs,
+      });
+    }
+    if (b.erpArrivalNo) {
+      pushPii({
+        docType: '到货单', type: '到货单',
+        search: `${b.erpArrivalNo} ${b.batchNo} ${dash(b.supplier)} 到货单`,
+        cells: [typeBadge('到货单'), mono(b.erpArrivalNo), `${b.batchNo} · ${dash(b.supplier)}`, dash(b.warehouse)],
+        base: { docNo: b.erpArrivalNo, docType: '到货单', docStatus: batchInspectStatus(b), bizDate: batchDate(b), docDate: batchDate(b), creator: dash(b.inspector), auditor: dash(b.inspector), auditTime: dash(b.inspectionTime), sourceOrg: 'ERP 采购', warehouse: dash(b.warehouse), dept: '仓储部', partner: dash(b.supplier) },
+        lines: [
+          ['到货数量', dash(b.quantity)],
+          ['到货日期', dash(batchDate(b))],
+          ['到货检验状态', batchInspectStatus(b)],
+          ...materialLines(b),
+        ],
+        refs: bRefs,
+      });
+    }
   });
   devices.forEach((d) => {
-    if (d.erpInboundNo) piiSrc.push({ type: '入库单', no: d.erpInboundNo, related: d.sn, extra: dash(d.erpStockStatus), refs: [devRef(d)] });
-    if (d.erpInspectionNo) piiSrc.push({ type: '检验单', no: d.erpInspectionNo, related: d.sn, extra: dash(d.erpInspectionStatus), refs: [devRef(d)] });
+    if (d.erpInboundNo) {
+      pushPii({
+        docType: '入库单', type: '入库单',
+        search: `${d.erpInboundNo} ${d.sn} 入库单`,
+        cells: [typeBadge('入库单'), mono(d.erpInboundNo), d.sn, dash(d.erpStockStatus)],
+        base: { docNo: d.erpInboundNo, docType: '入库单', docStatus: dash(d.erpStockStatus), bizDate: (d.inboundTime || '').slice(0, 10), docDate: (d.inboundTime || '').slice(0, 10), creator: dash(d.assembler), auditor: '—', auditTime: '—', sourceOrg: 'ERP 生产制造', warehouse: dash(d.warehouse), dept: '仓储部', partner: '—' },
+        lines: [
+          ['入库仓库', dash(d.warehouse)],
+          ['入库数量', 1],
+          ['入库时间', dash(d.inboundTime)],
+          ['入库状态', dash(d.erpStockStatus)],
+          ...deviceLines(d),
+        ],
+        refs: [devRef(d)],
+      });
+    }
+    if (d.erpInspectionNo) {
+      const insp = dash(d.erpInspectionStatus);
+      pushPii({
+        docType: '检验单', type: '检验单',
+        search: `${d.erpInspectionNo} ${d.sn} 检验单`,
+        cells: [typeBadge('检验单'), mono(d.erpInspectionNo), d.sn, dash(d.erpInspectionStatus)],
+        base: { docNo: d.erpInspectionNo, docType: '检验单', docStatus: insp, bizDate: (d.inboundTime || '').slice(0, 10), docDate: (d.inboundTime || '').slice(0, 10), creator: '—', auditor: '—', auditTime: '—', sourceOrg: 'ERP 质量管理', warehouse: dash(d.warehouse), dept: '质检部', partner: '—' },
+        lines: [
+          ['检验结果', insp],
+          ['检验人', '—'],
+          ['检验时间', '—'],
+          ['不合格数量', d.erpInspectionStatus === '合格' ? 0 : '—'],
+          ['不合格原因', dash(d.exceptionNote)],
+          ...deviceLines(d),
+        ],
+        refs: [devRef(d)],
+      });
+    }
   });
   wpp.forEach((p) => {
     const pRefs = [planRef(p), ...devices.filter((d) => d.productionPlanId === p.id).map(devRef)];
-    if (p.erpInboundNo) piiSrc.push({ type: '入库单', no: p.erpInboundNo, related: p.name, extra: dash(p.erpStockStatus), refs: pRefs });
-    if (p.erpInspectionNo) piiSrc.push({ type: '检验单', no: p.erpInspectionNo, related: p.name, extra: dash(p.erpInspectionStatus ?? p.erpStockStatus), refs: pRefs });
+    if (p.erpInboundNo) {
+      pushPii({
+        docType: '入库单', type: '入库单',
+        search: `${p.erpInboundNo} ${p.name} 入库单`,
+        cells: [typeBadge('入库单'), mono(p.erpInboundNo), p.name, dash(p.erpStockStatus)],
+        base: { docNo: p.erpInboundNo, docType: '入库单', docStatus: dash(p.erpStockStatus), bizDate: (p.updatedAt || '').slice(0, 10), docDate: (p.updatedAt || '').slice(0, 10), creator: dash(p.owner), auditor: '—', auditTime: '—', sourceOrg: 'ERP 生产制造', warehouse: dash(p.warehouse), dept: '仓储部', partner: '—' },
+        lines: [
+          ['入库仓库', dash(p.warehouse)],
+          ['入库数量', dash(p.targetCount)],
+          ['入库时间', dash((p.updatedAt || '').slice(0, 16))],
+          ['入库状态', dash(p.erpStockStatus)],
+          ['物料名称', dash(p.name)],
+          ['数量', dash(p.targetCount)],
+          ['单位', '台'],
+          ['备注', dash(p.notes)],
+        ],
+        refs: pRefs,
+      });
+    }
+    if (p.erpInspectionNo) {
+      const insp = dash(p.erpInspectionStatus ?? p.erpStockStatus);
+      pushPii({
+        docType: '检验单', type: '检验单',
+        search: `${p.erpInspectionNo} ${p.name} 检验单`,
+        cells: [typeBadge('检验单'), mono(p.erpInspectionNo), p.name, insp],
+        base: { docNo: p.erpInspectionNo, docType: '检验单', docStatus: insp, bizDate: (p.updatedAt || '').slice(0, 10), docDate: (p.updatedAt || '').slice(0, 10), creator: '—', auditor: dash(p.owner), auditTime: dash(p.updatedAt), sourceOrg: 'ERP 质量管理', warehouse: dash(p.warehouse), dept: '质检部', partner: '—' },
+        lines: [
+          ['检验结果', insp],
+          ['检验人', dash(p.owner)],
+          ['检验时间', dash(p.updatedAt)],
+          ['不合格数量', '—'],
+          ['不合格原因', '—'],
+          ['物料名称', dash(p.name)],
+          ['数量', dash(p.targetCount)],
+          ['单位', '台'],
+        ],
+        refs: pRefs,
+      });
+    }
   });
-  const purchaseRows = piiSrc.map((r, i) => ({
-    id: `erp-pii-${i}`,
-    type: r.type,
-    search: `${r.no} ${r.related} ${r.type}`,
-    cells: [<Chip>{r.type}</Chip>, mono(r.no), r.related, dash(r.extra)],
-    detail: [['单据类型', r.type], ['ERP 单号', r.no], ['关联对象', r.related], ['状态 / 备注', dash(r.extra)]],
-    refs: r.refs || [],
-  }));
 
-  // 池四：ERP 出库 / 领料单（materialBatches.erpDeliveryNo + deliveryPlans.erpOutboundNo）
-  const outSrc = [];
+  // 池四：ERP 出库 / 领料单（生产领料单 / 销售出库单 / 出库申请单，均只读）
+  const outRows = [];
+  let outIdx = 0;
+  const pushOut = (row) => outRows.push({ id: `erp-out-${outIdx++}`, sync: syncBase, ...row });
   batches.forEach((b) => {
     if (b.erpDeliveryNo) {
       const bPlan = wpp.find((p) => p.id === b.planId);
-      outSrc.push({ type: '生产领料单', no: b.erpDeliveryNo, related: `${b.batchNo}${b.planId ? ` · ${b.planId}` : ''}`, extra: b.overIssued ? '超额领料' : dash(b.warehouse), refs: bPlan ? [planRef(bPlan)] : [] });
+      pushOut({
+        docType: '生产领料单', type: '生产领料单',
+        search: `${b.erpDeliveryNo} ${b.batchNo} ${b.planId ?? ''} 生产领料单`,
+        cells: [typeBadge('生产领料单'), mono(b.erpDeliveryNo), `${b.batchNo}${b.planId ? ` · ${b.planId}` : ''}`, b.overIssued ? '超额领料' : dash(b.warehouse)],
+        base: { docNo: b.erpDeliveryNo, docType: '生产领料单', docStatus: b.overIssued ? '超额领料' : '已领料', bizDate: batchDate(b), docDate: batchDate(b), creator: dash(b.inspector), auditor: '—', auditTime: '—', sourceOrg: 'ERP 生产制造', warehouse: dash(b.warehouse), dept: '生产部', partner: dash(b.supplier) },
+        lines: [
+          ['领料部门', '生产部'],
+          ['领料数量', dash(b.quantity)],
+          ['领料状态', b.overIssued ? '超额领料' : '已领料'],
+          ['关联生产订单·工单', dash(bPlan?.erpProductionOrderNo || b.planId)],
+          ...materialLines(b),
+        ],
+        refs: bPlan ? [planRef(bPlan)] : [],
+      });
     }
   });
   deliveryPlans.forEach((dp) => {
+    const dpProj = projects.find((x) => x.id === dp.projectId);
+    const dpStatus = deliveryPlanStatus(dp);
+    const boundCount = dp.boundDeviceIds?.length || dp.records?.binding?.length || 0;
+    const outLines = [
+      ['客户名称', dash(dpProj?.client)],
+      ['出库仓库', '成品库'],
+      ['出库数量', dash(dp.targetCount)],
+      ['出库状态', dpStatus],
+      ['关联项目·交付计划', `${projName(dp.projectId)} · ${dp.id}`],
+    ];
+    const outRefs = [dpRef(dp), ...(dpProj ? [projRef(dpProj)] : [])];
+    const outBaseCommon = { docStatus: dpStatus, bizDate: dash(dp.factoryDate), docDate: dash(dp.factoryDate), creator: dash(dp.owner), auditor: '—', auditTime: '—', sourceOrg: 'ERP 销售', warehouse: '成品库', dept: '交付部', partner: dash(dpProj?.client) };
     if (dp.erpOutboundNo) {
-      const dpProj = projects.find((x) => x.id === dp.projectId);
-      outSrc.push({ type: '销售出库单', no: dp.erpOutboundNo, related: `${dp.batchNo || dp.name} · ${projName(dp.projectId)}`, extra: deliveryPlanStatus(dp), refs: [dpRef(dp), ...(dpProj ? [projRef(dpProj)] : [])] });
+      pushOut({
+        docType: '销售出库单', type: '销售出库单',
+        search: `${dp.erpOutboundNo} ${dp.batchNo || dp.name} ${projName(dp.projectId)} 销售出库单`,
+        cells: [typeBadge('销售出库单'), mono(dp.erpOutboundNo), `${dp.batchNo || dp.name} · ${projName(dp.projectId)}`, dpStatus],
+        base: { ...outBaseCommon, docNo: dp.erpOutboundNo, docType: '销售出库单' },
+        lines: [...outLines, ['已绑定设备数', boundCount]],
+        refs: outRefs,
+      });
     }
+    const reqNo = dp.erpOutboundRequestNo || ('OA-' + (dp.erpOutboundNo || dp.id));
+    pushOut({
+      docType: '出库申请单', type: '出库申请单',
+      search: `${reqNo} ${dp.batchNo || dp.name} ${projName(dp.projectId)} 出库申请单`,
+      cells: [typeBadge('出库申请单'), mono(reqNo), `${dp.batchNo || dp.name} · ${projName(dp.projectId)}`, dpStatus],
+      base: { ...outBaseCommon, docNo: reqNo, docType: '出库申请单', dept: '销售部' },
+      lines: [...outLines, ['申请数量', dash(dp.targetCount)]],
+      refs: outRefs,
+    });
   });
-  const outboundRows = outSrc.map((r, i) => ({
-    id: `erp-out-${i}`,
-    type: r.type,
-    search: `${r.no} ${r.related} ${r.type}`,
-    cells: [<Chip>{r.type}</Chip>, mono(r.no), r.related, dash(r.extra)],
-    detail: [['单据类型', r.type], ['ERP 单号', r.no], ['关联对象', r.related], ['状态 / 仓库', dash(r.extra)]],
-    refs: r.refs || [],
-  }));
 
-  const openDetail = (poolTitle, r) => setDetail({ title: `${poolTitle} · 详情`, items: r.detail });
+  const openDetail = (poolTitle, r) => setDetail({ title: `${poolTitle} · 详情`, row: r });
   const openRelated = (poolTitle, r) => setRelated({ title: `${poolTitle} · 关联的平台对象`, items: r.refs || [] });
 
   return (
@@ -1584,8 +1891,26 @@ function ErpFormsTab() {
       <PageHeader
         title="ERP 表单"
         description="ERP 只读数据池：汇总项目、生产、采购入库检验、出库领料等 ERP 单据，供平台各业务模块建立关联关系。"
-        actions={<Btn variant="primary" onClick={() => setBindOpen(true)}>绑定到业务对象</Btn>}
+        actions={
+          <>
+            <Btn variant="secondary" onClick={() => showToast(ERP_REFRESH_MSG)}>手动刷新</Btn>
+            <Btn variant="secondary" onClick={() => showToast(ERP_REFRESH_MSG)}>刷新全部</Btn>
+            <Btn variant="primary" onClick={() => setLogOpen(true)}>查看同步日志</Btn>
+          </>
+        }
       />
+
+      <Card>
+        <DescList
+          cols={4}
+          items={[
+            ['最近同步时间', erpSyncMeta.lastSyncTime],
+            ['同步状态', <StatusBadge status={erpSyncMeta.status} />],
+            ['同步来源', erpSyncMeta.source],
+            ['同步批次号', <span className="font-mono text-xs text-gray-600">{erpSyncMeta.syncBatchNo}</span>],
+          ]}
+        />
+      </Card>
 
       <Card className="border-amber-200 bg-amber-50">
         <div className="flex items-start gap-2.5">
@@ -1606,39 +1931,35 @@ function ErpFormsTab() {
         onRelated={(r) => openRelated('ERP 项目单', r)}
       />
       <ErpPool
-        title="ERP 生产工单（MO）"
-        subtitle="来源：ERP 生产制造订单"
-        columns={['ERP 生产工单号', '生产计划名称', '关联项目', '状态（只读）']}
-        rows={moRows}
-        onView={(r) => openDetail('ERP 生产工单', r)}
-        onRelated={(r) => openRelated('ERP 生产工单', r)}
+        title="ERP 生产订单 / 工单"
+        subtitle="来源：ERP 生产制造订单与工单"
+        columns={['单据类型', 'ERP 单号', '生产计划名称', '关联项目', '状态（只读）']}
+        rows={productionRows}
+        typeOptions={['生产订单', 'ERP 工单']}
+        onView={(r) => openDetail('ERP 生产订单 / 工单', r)}
+        onRelated={(r) => openRelated('ERP 生产订单 / 工单', r)}
       />
       <ErpPool
         title="ERP 采购 / 入库 / 检验单"
         subtitle="来源：ERP 采购、到货、入库与质量检验单据"
         columns={['单据类型', 'ERP 单号', '关联对象', '状态 / 备注']}
-        rows={purchaseRows}
+        rows={piiRows}
         typeOptions={['采购单', '到货单', '入库单', '检验单']}
         onView={(r) => openDetail('ERP 采购 / 入库 / 检验单', r)}
         onRelated={(r) => openRelated('ERP 采购 / 入库 / 检验单', r)}
       />
       <ErpPool
         title="ERP 出库 / 领料单"
-        subtitle="来源：ERP 生产领料与销售出库单据"
+        subtitle="来源：ERP 生产领料、销售出库与出库申请单据"
         columns={['单据类型', 'ERP 单号', '关联对象', '状态 / 仓库']}
-        rows={outboundRows}
-        typeOptions={['生产领料单', '销售出库单']}
+        rows={outRows}
+        typeOptions={['生产领料单', '销售出库单', '出库申请单']}
         onView={(r) => openDetail('ERP 出库 / 领料单', r)}
         onRelated={(r) => openRelated('ERP 出库 / 领料单', r)}
       />
 
-      <Modal isOpen={!!detail} onClose={() => setDetail(null)} title={detail?.title || 'ERP 单据详情'}>
-        {detail && (
-          <div className="space-y-4">
-            <DescList items={detail.items} cols={2} />
-            <div className="bg-gray-50 border border-[#ececec] rounded-md p-3 text-xs text-gray-500">ERP 数据只读；平台只建立关联关系，不修改 ERP 单据本身。此处数据同步自 ERP，仅供查看。</div>
-          </div>
-        )}
+      <Modal isOpen={!!detail} onClose={() => setDetail(null)} title={detail?.title || 'ERP 单据详情'} size="xl">
+        {detail && <ErpDetailSections row={detail.row} />}
       </Modal>
 
       <Modal isOpen={!!related} onClose={() => setRelated(null)} title={related?.title || '关联的平台对象'}>
@@ -1663,21 +1984,29 @@ function ErpFormsTab() {
         )}
       </Modal>
 
-      <SimpleFormModal
-        key="erp-bind"
-        isOpen={bindOpen}
-        onClose={() => setBindOpen(false)}
-        title="绑定到业务对象"
-        submitText="提交绑定"
-        note="原型占位：平台仅建立 ERP 单据与业务对象的关联关系，不会新增或修改 ERP 单据本身。提交后仅作演示提示。"
-        fields={[
-          { key: 'targetType', label: '绑定对象类型 *', required: true, options: ['项目', '生产计划', '设备', '售后工单', '换件记录'] },
-          { key: 'targetNo', label: '绑定对象编号 *', required: true, full: true },
-          { key: 'erpNo', label: '关联 ERP 单号', full: true },
-          { key: 'remark', label: '绑定说明', type: 'textarea', full: true },
-        ]}
-        onSubmit={(form) => showToast(`已提交绑定：${form.targetType} ${form.targetNo}${form.erpNo ? ` ↔ ERP ${form.erpNo}` : ''}（原型占位）`)}
-      />
+      <Modal isOpen={logOpen} onClose={() => setLogOpen(false)} title="ERP 同步日志" size="xl">
+        <div className="space-y-3">
+          <div className="text-xs text-gray-500">ERP 同步日志为只读记录，展示定时任务与手动刷新的同步结果，平台不写回 ERP。</div>
+          <Table
+            head={['同步时间', '同步对象', '同步类型', '同步结果', '成功条数', '失败条数', '异常说明', '操作人·系统任务']}
+            empty="暂无同步日志"
+          >
+            {erpSyncLogs.map((log) => (
+              <tr key={log.id} className="hover:bg-[#fafafa]">
+                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{log.time}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-gray-700">{log.object}</td>
+                <td className="px-3 py-2 whitespace-nowrap"><Chip tone="outline">{log.syncType}</Chip></td>
+                <td className="px-3 py-2 whitespace-nowrap"><SyncResultBadge result={log.result} /></td>
+                <td className="px-3 py-2 text-gray-600">{log.successCount}</td>
+                <td className="px-3 py-2 text-gray-600">{log.failCount}</td>
+                <td className="px-3 py-2 text-gray-600 min-w-[200px] whitespace-normal">{log.exception || '—'}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{log.operator}</td>
+              </tr>
+            ))}
+          </Table>
+          <div className="bg-gray-50 border border-[#ececec] rounded-md p-3 text-xs text-gray-500">手动刷新 / 刷新全部在本原型中仅为模拟；真实刷新依赖 ERP API。</div>
+        </div>
+      </Modal>
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-slate-800 text-white text-[13px] px-4 py-2 rounded-md shadow-lg">
