@@ -8,7 +8,7 @@ import OperationLog from '../components/OperationLog';
 import { Pagination, usePaged } from '../components/Pagination';
 import {
   Page, PageHeader, Section, Card, Toolbar, Input, Select, SearchInput,
-  Btn, LinkAction, Chip, StatCard, StatGrid, DescList, Table,
+  Btn, LinkAction, Chip, StatCard, StatGrid, DescList, Table, EmptyState,
 } from '../components/ui';
 import {
   isPass, projectStatus as deriveProjectStatus,
@@ -730,7 +730,68 @@ function ProductionPlanTab() {
 const DELIVERY_BINDABLE_STATUSES = ['已入库', '待分配项目', '已分配项目'];
 const DELIVERY_VOID_REASONS = ['客户取消', '项目变更', '重复创建', '计划信息错误', '设备无法交付', '其他'];
 const DELIVERY_OWNERS = ['张三', '李四', '王五', '赵六'];
-const DELIVERY_SUBORDER_OPS = ['分派工程师', '更新进度', '上传资料', '记录异常', '提交技术客服预处理'];
+
+// 交付子工单状态归一：把合成状态映射到统一处理阶段（决定右侧任务区提供哪些操作）。
+function normalizeSubOrderStatus(status) {
+  const map = {
+    未开始: '待分派',
+    待分派: '待分派',
+    待出厂检验: '待分派',
+    待接单: '待接单',
+    待上门: '待上门',
+    已出厂: '待上门',
+    进行中: '现场执行中',
+    现场执行中: '现场执行中',
+    现场处理中: '现场执行中',
+    待客户验收: '现场执行中',
+    存在异常: '存在异常',
+    安装异常: '存在异常',
+    验收异常: '存在异常',
+    不可出厂: '存在异常',
+    已完成: '已完成',
+    已验收: '已完成',
+  };
+  return map[status] || '现场执行中';
+}
+
+// 各处理阶段：当前待处理动作 / 下一步建议 / 状态化操作按钮（原型占位）。
+// op.to → 页面跳转；op.toast → 自定义提示；否则默认「原型环境：{label} · {子工单号}」提示。
+const SUBORDER_PHASE_OPS = {
+  待分派: {
+    action: '待分派现场工程师',
+    next: '为该子工单分派现场工程师，分派后进入接单环节',
+    ops: [{ label: '分派工程师' }],
+  },
+  待接单: {
+    action: '等待工程师接单',
+    next: '工程师接单后进入上门排期；如需可改派其他工程师',
+    ops: [{ label: '工程师接单' }, { label: '改派工程师' }],
+  },
+  待上门: {
+    action: '等待工程师上门 / 到场',
+    next: '工程师到场后记录上门时间，进入现场执行',
+    ops: [{ label: '记录上门 / 到场' }],
+  },
+  现场执行中: {
+    action: '现场执行中',
+    next: '更新进度、上传交付资料，完成后提交完成',
+    ops: [{ label: '更新进度' }, { label: '上传资料' }, { label: '记录异常' }, { label: '提交完成' }],
+  },
+  存在异常: {
+    action: '存在交付异常，待处理',
+    next: '记录异常进展，或提交技术客服预处理生成问题池记录',
+    ops: [
+      { label: '记录异常进展' },
+      { label: '提交技术客服预处理', toast: '原型环境：提交技术客服预处理，将生成问题池记录（在交付计划详情页执行完整流程）' },
+      { label: '查看关联问题', to: '/after-sales?tab=issues' },
+    ],
+  },
+  已完成: {
+    action: '子工单已完成',
+    next: '可查看交付资料与操作日志',
+    ops: [{ label: '查看资料' }, { label: '查看日志' }],
+  },
+};
 
 // 绑定设备集合：boundDeviceIds ∪ records.binding。
 function deliveryBoundIds(plan) {
@@ -893,13 +954,20 @@ function ManageDeliverySubOrdersModal({ planId, state, onClose, onToast }) {
     };
   });
   const orders = [...preOrders, ...deployOrders];
-  const paged = usePaged(orders, 6);
+
+  const [selectedId, setSelectedId] = useState(orders[0]?.id);
 
   if (!plan) return null;
 
+  const selectedOrder = orders.find((o) => o.id === selectedId) || orders[0];
+  const phase = selectedOrder ? normalizeSubOrderStatus(selectedOrder.status) : null;
+  const phaseInfo = phase ? SUBORDER_PHASE_OPS[phase] : null;
+
+  const runOp = (op) => onToast(op.toast || `原型环境：${op.label} · ${selectedOrder.id}`);
+
   return (
     <Modal isOpen onClose={onClose} title="管理交付子工单" size="xl">
-      <div className="space-y-5">
+      <div className="space-y-4">
         <DescList
           cols={4}
           items={[
@@ -907,34 +975,119 @@ function ManageDeliverySubOrdersModal({ planId, state, onClose, onToast }) {
             ['所属项目', project?.name || '—'],
             ['项目类型 · 业务场景', project?.projectType ? <Chip>{project.projectType}</Chip> : '—'],
             ['使用流程模板', templateName],
+            ['当前阶段', plan.currentNode || '—'],
           ]}
         />
-        <Table
-          head={['子工单编号', '子工单类型', '关联设备SN', '当前状态', '负责人 · 工程师', '预计上门时间', '实际上门时间', '最近更新时间', '操作']}
-          empty="暂无交付子工单"
-          footer={<Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} pageSize={6} onChange={paged.setPage} />}
-        >
-          {paged.pageItems.map((o) => (
-            <tr key={o.id} className="hover:bg-[#fafafa]">
-              <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-gray-700">{o.id}</td>
-              <td className="px-3 py-2 whitespace-nowrap"><Chip tone="outline">{o.type}</Chip></td>
-              <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-gray-600">{o.deviceSN}</td>
-              <td className="px-3 py-2"><StatusBadge status={o.status} /></td>
-              <td className="px-3 py-2 whitespace-nowrap text-gray-600">{o.owner}</td>
-              <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{o.eta}</td>
-              <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{o.actual}</td>
-              <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{o.updated}</td>
-              <td className="px-3 py-2 whitespace-nowrap">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <LinkAction to={`/delivery-plans/${plan.id}?node=subOrders`}>查看详情</LinkAction>
-                  {DELIVERY_SUBORDER_OPS.map((op) => <LinkAction key={op} onClick={() => onToast(`原型环境：${op} · ${o.id}`)}>{op}</LinkAction>)}
+
+        {orders.length === 0 ? (
+          <EmptyState>暂无交付子工单（请先在「管理设备」中绑定设备）</EmptyState>
+        ) : (
+          <div className="flex gap-4">
+            {/* 左侧：子工单卡片列表（仅用于选择，不承载操作） */}
+            <div className="w-64 flex-shrink-0 space-y-2 max-h-[52vh] overflow-y-auto pr-1">
+              {orders.map((o) => {
+                const active = selectedOrder && o.id === selectedOrder.id;
+                const hasException = normalizeSubOrderStatus(o.status) === '存在异常';
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => setSelectedId(o.id)}
+                    className={`w-full text-left rounded-lg border px-3 py-2.5 transition-colors ${active ? 'border-gray-900 bg-gray-50' : 'border-[#ececec] hover:bg-[#fafafa]'}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-[11px] text-gray-500 truncate">{o.id}</span>
+                      {hasException && <span className="text-[11px] font-medium text-red-600 flex-shrink-0">异常</span>}
+                    </div>
+                    <div className="mt-1.5"><Chip tone="outline">{o.type}</Chip></div>
+                    <div className="mt-1.5 font-mono text-[11px] text-gray-500 truncate">SN：{o.deviceSN}</div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <StatusBadge status={o.status} />
+                      <span className="text-[11px] text-gray-400 truncate">{o.owner}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* 右侧：选中子工单任务详情 + 状态化操作区 */}
+            <div className="flex-1 min-w-0 space-y-4">
+              {/* 当前任务卡片 */}
+              <div className="rounded-lg border border-[#e0e0e0] bg-[#fafafa] p-4 space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <StatusBadge status={selectedOrder.status} />
+                  <span className="text-xs text-gray-500">当前责任人：{selectedOrder.owner}</span>
                 </div>
-              </td>
-            </tr>
-          ))}
-        </Table>
+                <div className="text-[13px] text-gray-800">当前待处理动作：{phaseInfo?.action || '—'}</div>
+                <div className="text-xs text-gray-500">下一步建议：{phaseInfo?.next || '—'}</div>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  {(phaseInfo?.ops || []).map((op) => (
+                    op.to
+                      ? <Btn key={op.label} as="link" to={op.to} size="sm">{op.label}</Btn>
+                      : <Btn key={op.label} size="sm" onClick={() => runOp(op)}>{op.label}</Btn>
+                  ))}
+                </div>
+              </div>
+
+              {/* 子工单基础信息 */}
+              <div>
+                <div className="text-[13px] font-semibold text-gray-800 mb-2">子工单基础信息</div>
+                <DescList
+                  cols={2}
+                  items={[
+                    ['子工单编号', <span className="font-mono text-xs">{selectedOrder.id}</span>],
+                    ['子工单类型', <Chip tone="outline">{selectedOrder.type}</Chip>],
+                    ['关联设备 SN', <span className="font-mono text-xs">{selectedOrder.deviceSN}</span>],
+                    ['所属交付计划', <span className="font-mono text-xs">{plan.id}</span>],
+                    ['负责人 / 工程师', selectedOrder.owner],
+                    ['预计上门时间', selectedOrder.eta],
+                    ['实际上门时间', selectedOrder.actual],
+                    ['最近更新时间', selectedOrder.updated],
+                  ]}
+                />
+              </div>
+
+              {/* 时间节点 */}
+              <div>
+                <div className="text-[13px] font-semibold text-gray-800 mb-2">时间节点</div>
+                <DescList
+                  cols={2}
+                  items={[
+                    ['预计上门时间', selectedOrder.eta],
+                    ['实际上门时间', selectedOrder.actual],
+                    ['最近更新时间', selectedOrder.updated],
+                  ]}
+                />
+              </div>
+
+              {/* 执行记录 / 交付资料 / 异常记录 / 关联问题（合成子工单无明细，给出清晰空态 + 跳转） */}
+              <div className="space-y-3">
+                <div>
+                  <div className="text-[13px] font-semibold text-gray-800 mb-1">执行记录</div>
+                  <div className="text-xs text-gray-400">暂无执行记录（详情见交付计划详情页对应子工单）</div>
+                </div>
+                <div>
+                  <div className="text-[13px] font-semibold text-gray-800 mb-1">交付资料</div>
+                  <div className="text-xs text-gray-400">暂无交付资料</div>
+                </div>
+                <div>
+                  <div className="text-[13px] font-semibold text-gray-800 mb-1">异常记录</div>
+                  <div className="text-xs text-gray-400">暂无交付异常</div>
+                </div>
+                <div>
+                  <div className="text-[13px] font-semibold text-gray-800 mb-1">关联问题 · 售后工单</div>
+                  <div className="text-xs text-gray-400">暂无关联问题池记录 / 售后工单</div>
+                </div>
+                <div className="pt-1">
+                  <LinkAction to={`/delivery-plans/${plan.id}?node=subOrders`}>在交付计划详情中查看完整子工单 →</LinkAction>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-          子工单由交付计划记录合成：{isZhimofang ? '智魔方含前置准备子工单，' : ''}按已绑定设备各生成一条机器人 / 设备部署子工单。分派 / 更新进度 / 上传资料 / 记录异常 / 提交技术客服预处理为原型占位操作。
+          子工单由交付计划记录合成：{isZhimofang ? '智魔方含前置准备子工单，' : ''}按已绑定设备各生成一条机器人 / 设备部署子工单。左侧选择子工单，右侧按当前状态提供分派 / 接单 / 上门 / 现场执行 / 异常处理等操作，均为原型占位，完整流程请在交付计划详情页执行。
         </div>
         <div className="flex justify-end"><button onClick={onClose} className={BTN_PRIMARY}>完成</button></div>
       </div>
@@ -1088,6 +1241,7 @@ function VoidDeliveryModal({ planId, state, dispatch, onClose, onToast }) {
             ['所属项目', project?.name || '—'],
             ['当前状态', <StatusBadge status={deliveryPlanStatus(plan)} />],
             ['操作人', state.currentUser],
+            ['操作时间', nowText()],
           ]}
         />
         <div>
@@ -1213,7 +1367,7 @@ function DeliveryPlanTab() {
           <option value="">全部状态</option>{DELIVERY_STATUSES.map((s) => <option key={s}>{s}</option>)}
         </Select>
         <Select value={filters.node} onChange={(e) => setFilters({ ...filters, node: e.target.value })}>
-          <option value="">当前节点</option>{DELIVERY_NODES.map((n) => <option key={n}>{n}</option>)}
+          <option value="">当前阶段</option>{DELIVERY_NODES.map((n) => <option key={n}>{n}</option>)}
         </Select>
         <Select value={filters.owner} onChange={(e) => setFilters({ ...filters, owner: e.target.value })}>
           <option value="">全部负责人</option>{owners.map((o) => <option key={o}>{o}</option>)}
