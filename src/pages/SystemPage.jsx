@@ -207,10 +207,18 @@ const MODEL_DESC = {
   AlphaBot1: '第一代服务机器人，适用于商场 / 展厅导览与巡检',
   AlphaBot2: '第二代服务机器人，增强导航与感知，适用于机场 / 工业等复杂场景',
 };
-const MODEL_ROWS = ROBOT_MODELS.map((m, i) => ({ id: `RM-${i + 1}`, name: m, desc: MODEL_DESC[m] || '', enabled: true }));
-// 型号名 → 设备类型 name 关键字（用于从 useApp() state 的 deviceTypes 派生装配模板）与适用项目类型。
+// 型号名 → 设备类型 name 关键字（用于从 useApp() state 的 deviceTypes 派生装配模板）、展示名与适用项目类型。
 const MODEL_DT_KEY = { AlphaBot1: 'AlphaBot 1', AlphaBot2: 'AlphaBot 2' };
 const MODEL_SCOPE = { AlphaBot1: '全部', AlphaBot2: '机场 · 工业场景 · 遥操数采' };
+// 机器人型号字典种子（保持 AlphaBot1 / AlphaBot2 两条）：name=型号键，displayName=展示名，scope=适用项目类型 / 业务场景。
+const MODEL_ROWS = ROBOT_MODELS.map((m, i) => ({
+  id: `RM-${i + 1}`,
+  name: m,
+  displayName: MODEL_DT_KEY[m] || m,
+  desc: MODEL_DESC[m] || '',
+  scope: MODEL_SCOPE[m] || '全部',
+  enabled: true,
+}));
 
 const PROJECT_TYPE_DESC = {
   智魔方: '商场 / 零售场景的智能服务机器人项目',
@@ -332,6 +340,10 @@ const STATUS_DICT = [
     ['已解决', '告警已恢复 / 处理完成，终态', true],
     ['已忽略', '人工确认忽略，终态', true],
   ] },
+  { object: '机器人型号启用状态', kind: 'status', items: [
+    ['启用', '型号可用于新建生产 / 交付', false],
+    ['停用', '型号不可用于新建，历史数据保留', false],
+  ] },
   { object: 'ERP 单据类型', kind: 'value', items: [
     ['ERP 项目单', 'ERP 项目主单据'],
     ['生产订单', 'ERP 生产订单'],
@@ -361,6 +373,12 @@ const STATUS_DICT = [
     ['结构', '结构 / 机械类故障'],
     ['使用', '使用 / 操作不当'],
     ['其他', '其他未分类原因'],
+  ] },
+  { object: '工站测试结果', kind: 'value', items: [
+    ['Pass', '工站测试通过（合格）'],
+    ['NG', '工站测试不通过（不合格）'],
+    ['待测试', '尚未进行工站测试'],
+    ['复测中', 'NG 后返修 / 复测处理中'],
   ] },
 ];
 
@@ -560,28 +578,68 @@ function ModelsTab() {
   const [viewId, setViewId] = useState(null);
   const [modal, setModal] = useState(null); // null | { mode: 'add' } | { mode: 'edit', id }
   const [form, setForm] = useState({});
+  const [slots, setSlots] = useState([]); // 装配模板编辑态（原型：仅存于 modal state，不回写 deviceTypes）
   const seq = useRef(0);
+  const slotSeq = useRef(0);
+  const setF = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
 
   const viewing = rows.find((r) => r.id === viewId) || null;
   // AlphaBot1 → name 含 'AlphaBot 1' 的 DT（DT-001 先于 AlphaBot 1S，find 命中基础款）；AlphaBot2 → 'AlphaBot 2'。
-  const deviceType = viewing
-    ? state.deviceTypes.find((t) => (t.name || '').includes(MODEL_DT_KEY[viewing.name] || viewing.name))
-    : null;
-  const template = assemblyTemplateFor(deviceType, state.moduleTypes);
+  const dtForModel = (name) => state.deviceTypes.find((t) => (t.name || '').includes(MODEL_DT_KEY[name] || name));
+  const template = assemblyTemplateFor(viewing ? dtForModel(viewing.name) : null, state.moduleTypes);
 
-  const openAdd = () => { setForm({ name: '', desc: '' }); setModal({ mode: 'add' }); };
-  const openEdit = (row) => { setForm({ name: row.name, desc: row.desc }); setModal({ mode: 'edit', id: row.id }); };
+  // 新建一个空装配槽位（_k 为本地稳定 key，供增删 / 排序用）。
+  const newSlot = (o = {}) => {
+    slotSeq.current += 1;
+    return { _k: `SL-${slotSeq.current}`, slotName: '', corePartType: CORE_PART_TYPES[0], required: true, quantity: 1, needSN: true, replaceable: true, remark: '', ...o };
+  };
+  // 由派生装配模板映射为可编辑槽位；无模板则给一个空行供从零搭建。
+  const slotsFromTemplate = (name) => {
+    const tmpl = assemblyTemplateFor(dtForModel(name), state.moduleTypes);
+    return tmpl.length
+      ? tmpl.map((s) => newSlot({ slotName: s.slotName, corePartType: s.corePartType, required: s.required, quantity: s.quantity, needSN: s.needSN, replaceable: s.replaceable, remark: s.bindRule || '' }))
+      : [newSlot()];
+  };
+
+  const openAdd = () => { setForm({ name: '', displayName: '', desc: '', scope: '全部', enabled: true }); setSlots([newSlot()]); setModal({ mode: 'add' }); };
+  const openEdit = (row) => {
+    setForm({ name: row.name, displayName: row.displayName || '', desc: row.desc || '', scope: row.scope || MODEL_SCOPE[row.name] || '全部', enabled: row.enabled });
+    setSlots(slotsFromTemplate(row.name));
+    setModal({ mode: 'edit', id: row.id });
+  };
   const close = () => setModal(null);
   const canSave = !!String(form.name || '').trim();
+
+  // 装配模板槽位操作：新增 / 删除 / 字段更新 / 上下调序。
+  const addSlot = () => setSlots((s) => [...s, newSlot()]);
+  const removeSlot = (k) => setSlots((s) => s.filter((x) => x._k !== k));
+  const updateSlot = (k, patch) => setSlots((s) => s.map((x) => (x._k === k ? { ...x, ...patch } : x)));
+  const moveSlot = (idx, dir) => setSlots((s) => {
+    const j = idx + dir;
+    if (j < 0 || j >= s.length) return s;
+    const next = [...s];
+    [next[idx], next[j]] = [next[j], next[idx]];
+    return next;
+  });
+
   const save = () => {
     if (!canSave) return;
+    const payload = {
+      name: form.name.trim(),
+      displayName: form.displayName || '',
+      desc: form.desc || '',
+      scope: form.scope || '全部',
+      enabled: form.enabled !== false,
+    };
     if (modal.mode === 'add') {
       seq.current += 1;
-      setRows((r) => [{ id: `RM-${Date.now()}-${seq.current}`, enabled: true, desc: '', ...form }, ...r]);
+      setRows((r) => [{ id: `RM-${Date.now()}-${seq.current}`, ...payload }, ...r]);
     } else {
-      setRows((r) => r.map((x) => (x.id === modal.id ? { ...x, ...form } : x)));
+      setRows((r) => r.map((x) => (x.id === modal.id ? { ...x, ...payload } : x)));
     }
     close();
+    // 原型：基础信息回写前端状态；装配模板改动随保存生效（不持久化到 deviceTypes）。
+    window.alert(`型号已保存（原型：更新前端状态） · 装配模板共 ${slots.length} 个槽位`);
   };
   const toggle = (id) => setRows((r) => r.map((x) => (x.id === id ? { ...x, enabled: !x.enabled } : x)));
   const remove = (id) => setRows((r) => r.filter((x) => x.id !== id));
@@ -616,10 +674,11 @@ function ModelsTab() {
               <DescList
                 cols={2}
                 items={[
-                  ['型号名称', viewing.name],
-                  ['适用项目类型', MODEL_SCOPE[viewing.name] || '全部'],
-                  ['说明', viewing.desc || '—'],
+                  ['机器人型号', viewing.name],
+                  ['型号名称', viewing.displayName || viewing.name],
+                  ['适用项目类型 / 业务场景', viewing.scope || MODEL_SCOPE[viewing.name] || '全部'],
                   ['是否启用', <EnabledBadge key="e" on={viewing.enabled} />],
+                  ['说明', viewing.desc || '—'],
                 ]}
               />
             </div>
@@ -644,16 +703,90 @@ function ModelsTab() {
         )}
       </Modal>
 
-      <Modal isOpen={!!modal} onClose={close} title={`${modal?.mode === 'edit' ? '编辑' : '新增'}型号`}>
-        <div className="space-y-4">
+      <Modal isOpen={!!modal} onClose={close} title={`${modal?.mode === 'edit' ? '编辑' : '新增'}机器人型号`} size="xl">
+        <div className="space-y-5">
           <div>
-            <label className="block text-[13px] font-medium text-gray-700 mb-1">型号 *</label>
-            <Input className="w-full" value={form.name ?? ''} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} />
+            <div className="text-[13px] font-semibold text-gray-700 mb-2">基础信息</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">机器人型号 *</label>
+                <Input className="w-full" value={form.name ?? ''} placeholder="型号键，如：AlphaBot1" onChange={setF('name')} />
+              </div>
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">型号名称</label>
+                <Input className="w-full" value={form.displayName ?? ''} placeholder="展示名，如：AlphaBot 1" onChange={setF('displayName')} />
+              </div>
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">适用项目类型 / 业务场景</label>
+                <Input className="w-full" value={form.scope ?? ''} placeholder="如：全部 或 机场 · 工业场景 · 遥操数采" onChange={setF('scope')} />
+              </div>
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">是否启用</label>
+                <Select className="w-full" value={String(form.enabled ?? true)} onChange={(e) => setForm((s) => ({ ...s, enabled: e.target.value === 'true' }))}>
+                  <option value="true">启用</option>
+                  <option value="false">停用</option>
+                </Select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">说明</label>
+                <Input className="w-full" value={form.desc ?? ''} placeholder="型号用途 / 适用场景说明" onChange={setF('desc')} />
+              </div>
+            </div>
           </div>
+
           <div>
-            <label className="block text-[13px] font-medium text-gray-700 mb-1">说明</label>
-            <Input className="w-full" value={form.desc ?? ''} onChange={(e) => setForm((s) => ({ ...s, desc: e.target.value }))} />
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="min-w-0">
+                <div className="text-[13px] font-semibold text-gray-700">装配模板配置</div>
+                <p className="text-xs text-gray-400 mt-0.5">定义该型号的槽位、核心部件类型与绑定规则；随「保存」一并生效（原型：仅更新前端状态，不回写设备类型）。</p>
+              </div>
+              <Btn variant="secondary" size="sm" onClick={addSlot}>+ 新增槽位</Btn>
+            </div>
+            <Table
+              head={['排序', '槽位名称', '核心部件类型', '是否必装', '数量', '是否需要 SN / 内部ID', '是否支持换件', '备注', '操作']}
+              empty="暂无槽位，点击「新增槽位」添加"
+            >
+              {slots.map((s, idx) => (
+                <tr key={s._k} className="hover:bg-[#fafafa]">
+                  <td className="px-2 py-1.5 align-middle whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500 text-xs w-4 text-center">{idx + 1}</span>
+                      <button type="button" onClick={() => moveSlot(idx, -1)} disabled={idx === 0} className="text-gray-400 hover:text-gray-800 disabled:opacity-25 disabled:cursor-not-allowed leading-none px-0.5" title="上移">↑</button>
+                      <button type="button" onClick={() => moveSlot(idx, 1)} disabled={idx === slots.length - 1} className="text-gray-400 hover:text-gray-800 disabled:opacity-25 disabled:cursor-not-allowed leading-none px-0.5" title="下移">↓</button>
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5 align-middle"><Input className="w-32" value={s.slotName} placeholder="如：左臂" onChange={(e) => updateSlot(s._k, { slotName: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 align-middle">
+                    <Select className="w-28" value={s.corePartType} onChange={(e) => updateSlot(s._k, { corePartType: e.target.value })}>
+                      {CORE_PART_TYPES.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </Select>
+                  </td>
+                  <td className="px-2 py-1.5 align-middle">
+                    <Select className="w-16" value={String(s.required)} onChange={(e) => updateSlot(s._k, { required: e.target.value === 'true' })}>
+                      <option value="true">是</option>
+                      <option value="false">否</option>
+                    </Select>
+                  </td>
+                  <td className="px-2 py-1.5 align-middle"><Input type="number" min="1" className="w-16" value={s.quantity} onChange={(e) => updateSlot(s._k, { quantity: Math.max(1, Number(e.target.value) || 1) })} /></td>
+                  <td className="px-2 py-1.5 align-middle">
+                    <Select className="w-16" value={String(s.needSN)} onChange={(e) => updateSlot(s._k, { needSN: e.target.value === 'true' })}>
+                      <option value="true">是</option>
+                      <option value="false">否</option>
+                    </Select>
+                  </td>
+                  <td className="px-2 py-1.5 align-middle">
+                    <Select className="w-16" value={String(s.replaceable)} onChange={(e) => updateSlot(s._k, { replaceable: e.target.value === 'true' })}>
+                      <option value="true">是</option>
+                      <option value="false">否</option>
+                    </Select>
+                  </td>
+                  <td className="px-2 py-1.5 align-middle"><Input className="w-36" value={s.remark} placeholder="绑定规则 / 备注" onChange={(e) => updateSlot(s._k, { remark: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 align-middle whitespace-nowrap"><LinkAction onClick={() => removeSlot(s._k)}>删除</LinkAction></td>
+                </tr>
+              ))}
+            </Table>
           </div>
+
           <div className="flex justify-end gap-2 pt-1">
             <Btn variant="secondary" onClick={close}>取消</Btn>
             <Btn variant="primary" onClick={save} disabled={!canSave}>保存</Btn>
