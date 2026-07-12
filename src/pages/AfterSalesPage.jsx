@@ -733,8 +733,8 @@ function OrderDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
           <div className="mt-3 space-y-2">
             <div><div className="text-xs text-gray-400 mb-1">现场处理说明</div><TextBlock>{wo.onsiteRecord || wo.fieldRecord}</TextBlock></div>
             <DescList items={[
-              ['现场照片', wo.sitePhoto || wo.imageFile],
-              ['log', wo.logFile],
+              ['现场照片', wo.sitePhoto || wo.imageFile || (wo.photos && wo.photos.length ? wo.photos.join('、') : '')],
+              ['log', wo.logFile || wo.log],
               ['正常工作视频', wo.workVideo],
             ]} />
           </div>
@@ -746,13 +746,13 @@ function OrderDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
         <DrawerSection title="换件与 ERP 领料">
           <DescList items={[
             ['是否需换件', yn(wo.involvesReplacement || wo.needReplace)],
-            ['核心部件类型', wo.needReplaceModuleType || wo.needModuleType],
-            ['旧件 SN', wo.oldModuleSN],
-            ['新件 SN', wo.newModuleSN],
+            ['核心部件类型', wo.needReplaceModuleType || wo.needModuleType || wo.corePartType],
+            ['旧件 SN', wo.oldModuleSN || wo.oldPartSN],
+            ['新件 SN', wo.newModuleSN || wo.newPartSN],
             ['新件来源', wo.newPartSource],
             ['换件原因', wo.replaceReason],
-            ['ERP 领料单号 / 出库申请单号', wo.erpPickingNo],
-            ['ERP 领料状态', wo.erpPickingStatus ? <StatusBadge status={wo.erpPickingStatus} /> : '—'],
+            ['ERP 领料单号 / 出库申请单号', wo.erpPickingNo || wo.erpPickNo],
+            ['ERP 领料状态', (wo.erpPickingStatus || wo.erpPickStatus) ? <StatusBadge status={wo.erpPickingStatus || wo.erpPickStatus} /> : '—'],
             ['换件记录', <LinkAction to="/after-sales?tab=replacements">前往换件记录 →</LinkAction>],
           ]} />
         </DrawerSection>
@@ -769,7 +769,7 @@ function OrderDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
         <DrawerSection title="关单信息">
           <DescList items={[
             ['最终处理结果', wo.finalResult || wo.recheckResult],
-            ['是否恢复正常', wo.restoredNormal == null ? '—' : yn(wo.restoredNormal)],
+            ['是否恢复正常', (wo.restoredNormal ?? wo.recovered) == null ? '—' : yn(wo.restoredNormal ?? wo.recovered)],
             ['关单说明', wo.closeNote],
             ['取消原因', wo.cancelReason || wo.voidReason],
             ['关单时间', wo.closeTime || wo.closedAt],
@@ -1455,11 +1455,11 @@ function IssueDetailDrawer({ entry, state, dispatch, currentUser, canDo, onClose
                 ['现场处理状态', linkedWoStatus],
                 ['是否换件', linkedWO ? yn(linkedWO.involvesReplacement || linkedWO.needReplace) : '—'],
                 ['换件记录编号', linkedWO?.replaceRecordId],
-                ['ERP 领料单号 / 出库申请单号', linkedWO?.erpPickingNo],
+                ['ERP 领料单号 / 出库申请单号', linkedWO?.erpPickingNo || linkedWO?.erpPickNo],
               ]} />
               <div className="mt-3"><DescList items={[
-                ['现场照片', linkedWO?.sitePhoto || linkedWO?.imageFile],
-                ['log', linkedWO?.logFile],
+                ['现场照片', linkedWO?.sitePhoto || linkedWO?.imageFile || (linkedWO?.photos && linkedWO.photos.length ? linkedWO.photos.join('、') : '')],
+                ['log', linkedWO?.logFile || linkedWO?.log],
                 ['正常工作视频', linkedWO?.workVideo],
               ]} /></div>
             </DrawerSection>
@@ -1798,7 +1798,7 @@ function ReplacementDetailDrawer({ id, state, onClose }) {
           ['换件说明', mr.notes],
           ['换件时间', mr.timestamp],
           ['操作人', mr.operator],
-          ['现场照片 / log', mr.photo || mr.logFile],
+          ['现场照片 / log', mr.photo || mr.photoLog || mr.logFile],
         ]} />
       </DrawerSection>
       <DrawerSection title="操作日志"><LogTimeline logs={logs} /></DrawerSection>
@@ -1882,7 +1882,7 @@ function ReplacementsTab({ state }) {
               <td className="px-3 py-2 text-gray-600 max-w-[200px]"><div className="truncate" title={mr.notes}>{mr.notes || '—'}</div></td>
               <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{mr.timestamp || '—'}</td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{mr.operator || '—'}</td>
-              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{mr.photo || mr.logFile || '—'}</td>
+              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{mr.photo || mr.photoLog || mr.logFile || '—'}</td>
               <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{mr.operator ? `${mr.operator} · ${mr.timestamp}` : '—'}</td>
               <td className="px-3 py-2 whitespace-nowrap"><LinkAction onClick={() => setDetail(mr.id)}>查看详情</LinkAction></td>
             </tr>

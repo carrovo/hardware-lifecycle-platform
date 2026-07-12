@@ -265,12 +265,12 @@ export default function DeviceDetail() {
           cols={4}
           items={[
             ['生产计划编号', device.productionPlanId ? (plan ? <Link to={`/production-plans/${plan.id}`} className="ui-link">{device.productionPlanId}</Link> : device.productionPlanId) : '—'],
-            ['装配开始时间', device.assemblyStartTime ?? '—'],
+            ['装配开始时间', device.assemblyStartTime || device.assemblyTime || '—'],
             ['装配完成时间', device.assemblyTime ?? '—'],
             ['装配人', device.assembler ?? '—'],
             ['装配模板', deviceType ? `${deviceType.name} 装配模板` : '—'],
             ['模块绑定进度', `${progress.bound}/${progress.total}`],
-            ['异常说明', device.assemblyException ?? '—'],
+            ['异常说明', device.assemblyException || device.exceptionNote || '—'],
             ['附件', device.photoName ?? '—'],
             ['操作日志入口', <a key="oplog" href="#device-oplog" className="ui-link text-[13px]">查看操作日志（{operationLogs.length}）</a>],
           ]}
