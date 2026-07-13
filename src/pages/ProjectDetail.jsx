@@ -27,6 +27,62 @@ function nowText() {
   return new Date().toISOString().slice(0, 16).replace('T', ' ');
 }
 
+/* ── 点位关联设备（平台补充记录） ───────────────────────────
+ * 按项目点位聚合的现场设备清单，仅项目详情页使用的确定性 mock，
+ * 不扩展全局设备台账、不改设备详情、不改售后 mock。
+ * 使用通用字段：设备 SN/编号、设备名称、型号/规格；不引入设备类型枚举，不写死具体设备品类。 */
+const LOC_DEV_STATUSES = ['在线运营', '现场安装调试中', '维修中', '待交付'];
+const LOC_DEV_MODELS = ['M-100', 'M-200', 'S-300', 'S-320'];
+const LOC_DEV_ISSUES = ['传感器读数异常', '网络连接不稳定', '现场校准待复核', '电机异响待排查'];
+
+// 稳定哈希：同一点位 id 每次生成相同结果（纯函数，渲染期可安全调用）。
+function hashId(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+// 依据点位 id 确定性生成 1-3 台关联设备。
+function buildLocationDevices(loc) {
+  const seed = hashId(loc.id);
+  const count = 1 + (seed % 3); // 1..3
+  const suffix = ((loc.id.match(/\d+/g) || ['00']).join('').slice(-4) || '0000').padStart(4, '0');
+  const list = [];
+  for (let i = 0; i < count; i += 1) {
+    const s = hashId(`${loc.id}#${i}`);
+    const status = LOC_DEV_STATUSES[s % LOC_DEV_STATUSES.length];
+    const online = status === '在线运营';
+    const openIssues = (s >>> 4) % 3 === 0 ? (s >>> 6) % 2 : 0; // 多数为 0，部分点位设备存在未关闭问题
+    const day = 10 + ((s >>> 8) % 18);
+    list.push({
+      sn: `SN-${suffix}-${String(i + 1).padStart(2, '0')}`,
+      name: `${loc.name}-现场设备${i + 1}`,
+      model: LOC_DEV_MODELS[s % LOC_DEV_MODELS.length],
+      status,
+      online,
+      lastIssue: openIssues > 0 ? LOC_DEV_ISSUES[s % LOC_DEV_ISSUES.length] : '—',
+      openIssues,
+      updatedAt: `2026-06-${String(day).padStart(2, '0')} 10:${String(s % 60).padStart(2, '0')}`,
+    });
+  }
+  return list;
+}
+
+// 为一组点位构建「点位 -> 关联设备」映射，并确定性兜底保证至少一个点位存在未关闭问题。
+function buildLocDeviceMap(locList) {
+  const map = {};
+  locList.forEach((loc) => { map[loc.id] = buildLocationDevices(loc); });
+  const anyOpen = locList.some((loc) => map[loc.id].some((d) => d.openIssues > 0));
+  if (!anyOpen && locList.length) {
+    const first = map[locList[0].id];
+    if (first.length) first[0] = { ...first[0], openIssues: 1, lastIssue: LOC_DEV_ISSUES[0] };
+  }
+  return map;
+}
+
 function erpChip(linked) {
   return (
     <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${linked ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
@@ -136,6 +192,42 @@ function LocationFormModal({ isOpen, onClose, initial, projectName, onSave }) {
   );
 }
 
+// 点位关联设备清单弹窗（复用现有 Modal + Table，无新路由、不跳转资产管理）。
+function LocationDevicesModal({ isOpen, onClose, location, devices }) {
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="点位关联设备" size="xl">
+      <div className="space-y-3">
+        <p className="text-xs text-gray-500 leading-relaxed">
+          {location ? <>点位「<span className="text-gray-700">{location.name}</span>」共 {devices.length} 台关联设备。</> : null}
+          {' '}点位关联设备为平台补充记录，用于按现场点位聚合设备，便于售后维护、设备流转与问题追溯。
+        </p>
+        <Table
+          head={['设备 SN / 编号', '设备名称', '型号 / 规格', '当前状态', '在线状态', '最近问题', '未关闭问题数', '最近更新时间', '操作']}
+          empty="该点位暂无关联设备"
+        >
+          {devices.map((d) => (
+            <tr key={d.sn} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{d.sn}</td>
+              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{d.name}</td>
+              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{d.model}</td>
+              <td className="px-3 py-2"><StatusBadge status={d.status} /></td>
+              <td className="px-3 py-2">{d.online ? <StatusBadge status="在线" /> : <span className="text-gray-300 text-xs">—</span>}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs max-w-[200px]"><div className="truncate">{d.lastIssue}</div></td>
+              <td className="px-3 py-2">{d.openIssues > 0 ? <span className="text-amber-600 font-medium">{d.openIssues}</span> : <span className="text-gray-400">0</span>}</td>
+              <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">{d.updatedAt}</td>
+              <td className="px-3 py-2 text-xs whitespace-nowrap">
+                {d.openIssues > 0
+                  ? <LinkAction to="/after-sales?tab=quality">查看问题</LinkAction>
+                  : <span className="text-gray-300">查看问题</span>}
+              </td>
+            </tr>
+          ))}
+        </Table>
+      </div>
+    </Modal>
+  );
+}
+
 export default function ProjectDetail() {
   const { id } = useParams();
   const { state, dispatch } = useApp();
@@ -180,6 +272,9 @@ export default function ProjectDetail() {
   if (!project) {
     return <div className="p-6 text-gray-400">项目不存在</div>;
   }
+
+  // 点位关联设备映射（点位维度聚合，表格计数与「查看设备」弹窗共用同一份数据，保证一致）。
+  const locDeviceMap = buildLocDeviceMap(projLocations);
 
   const status = projectStatus(project, allProductionPlans, deliveryPlans);
   const erpLinked = Boolean(project.erpProjectNo || project.erpPurchaseOrderNo);
@@ -287,13 +382,19 @@ export default function ProjectDetail() {
         right={canManageLoc && <Btn variant="primary" size="sm" onClick={() => { setLocTarget('new'); setModal('locationForm'); }}>新增点位</Btn>}
         bodyClassName="p-0"
       >
+        <p className="px-4 pt-3 text-xs text-gray-500 leading-relaxed">
+          点位关联设备用于按项目点位聚合现场设备，方便后续售后维护、设备流转和问题追溯。
+        </p>
         <Table
-          head={['点位名称', '地址', '计划数', '负责人', '关联交付计划', '在位设备数', '更新时间', '操作']}
+          head={['点位名称', '地址', '计划数', '负责人', '关联交付计划', '关联设备数', '在线设备数', '未关闭问题数', '更新时间', '操作']}
           empty="暂无点位"
           footer={<Pagination page={locPaged.page} total={locPaged.total} totalPages={locPaged.totalPages} onChange={locPaged.setPage} />}
         >
           {locPaged.pageItems.map((loc) => {
-            const boundDevices = devices.filter((d) => d.locationId === loc.id || (loc.deviceIds || []).includes(d.id));
+            const locDevs = locDeviceMap[loc.id] || [];
+            const linkedCount = locDevs.length;
+            const onlineCount = locDevs.filter((d) => d.online).length;
+            const openIssueCount = locDevs.reduce((sum, d) => sum + d.openIssues, 0);
             const planned = loc.plannedCount ?? (loc.deviceIds || []).length ?? 0;
             const planLinks = (loc.deliveryPlanIds || []).map((pid) => deliveryPlans.find((dp) => dp.id === pid)).filter(Boolean);
             return (
@@ -307,17 +408,18 @@ export default function ProjectDetail() {
                     ? <div className="flex flex-wrap gap-x-3 gap-y-1">{planLinks.map((dp) => <Link key={dp.id} to={`/delivery-plans/${dp.id}`} className="ui-link">{dp.batchNo || dp.name}</Link>)}</div>
                     : '—'}
                 </td>
-                <td className="px-3 py-2 text-gray-600">{boundDevices.length}</td>
+                <td className="px-3 py-2 text-gray-600">{linkedCount}</td>
+                <td className="px-3 py-2 text-gray-600">{onlineCount}</td>
+                <td className="px-3 py-2">{openIssueCount > 0 ? <span className="text-amber-600 font-medium">{openIssueCount}</span> : <span className="text-gray-400">0</span>}</td>
                 <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">{loc.updatedAt || '—'}</td>
                 <td className="px-3 py-2 text-xs whitespace-nowrap">
-                  {canManageLoc
-                    ? (
-                      <div className="flex items-center gap-x-3">
-                        <LinkAction onClick={() => { setLocTarget(loc); setModal('locationForm'); }}>编辑</LinkAction>
-                        <LinkAction onClick={() => { setLocTarget(loc); setModal('deleteLoc'); }}>删除</LinkAction>
-                      </div>
-                    )
-                    : <span className="text-gray-300">只读</span>}
+                  <div className="flex items-center gap-x-3">
+                    <LinkAction onClick={() => { setLocTarget(loc); setModal('locDevices'); }}>查看设备</LinkAction>
+                    {canManageLoc && <>
+                      <LinkAction onClick={() => { setLocTarget(loc); setModal('locationForm'); }}>编辑</LinkAction>
+                      <LinkAction onClick={() => { setLocTarget(loc); setModal('deleteLoc'); }}>删除</LinkAction>
+                    </>}
+                  </div>
                 </td>
               </tr>
             );
@@ -491,6 +593,13 @@ export default function ProjectDetail() {
         danger
         text={`确认删除点位「${locTarget && locTarget !== 'new' ? locTarget.name : ''}」？删除后该点位主数据将不再可用。`}
         onConfirm={() => { if (locTarget && locTarget !== 'new') deleteLocation(locTarget); }}
+      />
+
+      <LocationDevicesModal
+        isOpen={modal === 'locDevices'}
+        onClose={() => { setModal(null); setLocTarget(null); }}
+        location={locTarget && locTarget !== 'new' ? locTarget : null}
+        devices={locTarget && locTarget !== 'new' ? (locDeviceMap[locTarget.id] || []) : []}
       />
 
       <Modal isOpen={modal === 'logs'} onClose={() => setModal(null)} title="操作日志" size="lg">
