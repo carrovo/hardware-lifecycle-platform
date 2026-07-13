@@ -124,10 +124,58 @@ export default function ProductionPlanDetail() {
         )}
         title={<span className="inline-flex items-center gap-3">{plan.name ?? plan.id}<StatusBadge status={planStatus} size="md" /></span>}
         description="生产计划仅关联 ERP 工单并记录平台生产过程与质量测试追溯，不创建 ERP 生产订单，也不维护 BOM / 入库 / 出库 / 检验。"
-        actions={<Btn as="link" to="/projects?tab=production" variant="secondary">返回生产计划</Btn>}
+        actions={(
+          <>
+            <Btn variant="secondary" onClick={() => alert('请在 ERP 中维护生产订单，平台在此关联已同步的 ERP 生产订单。')}>关联 ERP 生产订单</Btn>
+            <Btn as="link" to="/erp-center?tab=production" variant="secondary">查看 ERP 源单据</Btn>
+            <Btn variant="secondary" onClick={() => document.getElementById('single-device-records')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>补充生产过程记录</Btn>
+            <Btn as="link" to="/projects?tab=production" variant="secondary">返回生产计划</Btn>
+          </>
+        )}
       />
 
-      <Section title="生产计划进度概览" subtitle="平台派生的计划进度快照（左：测试完成进度 · 中：设备状态分布 · 右：卡点与 ERP 同步）">
+      <Section
+        title="ERP 生产订单信息（ERP 只读同步）"
+        subtitle="以下字段均来自 ERP 生产订单，平台只读同步展示，不创建、不编辑 ERP 单据（枚举以后以 ERP API 为准）。"
+        right={<Chip>ERP 只读同步</Chip>}
+      >
+        <DescList
+          cols={4}
+          items={[
+            ['生产订单号', plan.erpProductionOrderNo],
+            ['项目名称', project ? <Link to={`/projects/${project.id}`} className="ui-link">{project.name}</Link> : '—'],
+            ['项目编码', project?.erpProjectNo || project?.id || '—'],
+            ['ERP 产品入库单号', plan.erpInboundNo],
+            ['ERP 产品检验单号', plan.erpInspectionNo],
+            ['ERP 库存状态', plan.erpStockStatus],
+            ['入库仓库', plan.warehouse],
+            ['ERP 同步状态', <StatusBadge status={erpSync} />],
+          ]}
+        />
+        <p className="text-xs text-gray-400 mt-4 pt-3 border-t border-[#f2f2f2]">ERP 负责生产订单、BOM、出库、入库、检验等正式单据；平台只补充设备级生产过程和质量追溯记录。</p>
+      </Section>
+
+      <Section
+        title="关联 ERP 单据"
+        subtitle="该生产订单在 ERP 中的关联源单据，均为 ERP 只读来源，平台不创建、不编辑。"
+      >
+        <div className="flex flex-wrap gap-2">
+          <Btn as="link" to="/erp-center?tab=production" variant="secondary">订单 BOM</Btn>
+          <Btn as="link" to="/erp-center?tab=production" variant="secondary">LRP 计划</Btn>
+          <Btn as="link" to="/erp-center?tab=production" variant="secondary">材料出库单</Btn>
+          <Btn as="link" to="/erp-center?tab=production" variant="secondary">出库申请单</Btn>
+          <Btn as="link" to="/erp-center?tab=inspection" variant="secondary">产品入库单</Btn>
+          <Btn as="link" to="/erp-center?tab=inspection" variant="secondary">产品检验单</Btn>
+        </div>
+        <p className="text-xs text-gray-400 mt-4 pt-3 border-t border-[#f2f2f2]">以上为该生产订单在 ERP 中的关联源单据，点击前往 ERP 单据中心查看。</p>
+      </Section>
+
+      <div className="pt-1">
+        <h2 className="text-sm font-semibold text-gray-800">平台补充生产记录</h2>
+        <p className="text-xs text-gray-400 mt-0.5">ERP 正式单据之外，平台补充的设备级生产过程与质量追溯记录：进度快照 / 计划信息 / 设备列表 / 单机生产记录（装配 · 测试 · 返修 · 附件 · 日志）。</p>
+      </div>
+
+      <Section title="生产计划进度概览" subtitle="平台派生的计划进度快照（左：测试完成进度 · 中：设备状态分布 · 右：卡点与超期）">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="space-y-2">
             <div className="text-xs text-gray-400">已完成测试 / 计划数量</div>
@@ -151,7 +199,6 @@ export default function ProductionPlanDetail() {
             <div className="flex items-center gap-2"><span className="text-xs text-gray-400 w-24 flex-shrink-0">当前卡点</span><StatusBadge status={bottleneck} /></div>
             <div className="flex items-center gap-2"><span className="text-xs text-gray-400 w-24 flex-shrink-0">是否长期未结</span>{longUnsettled ? <StatusBadge status="长期未结" /> : <span className="text-gray-500">否</span>}</div>
             <div className="flex items-center gap-2"><span className="text-xs text-gray-400 w-24 flex-shrink-0">是否超期</span>{overdue ? <StatusBadge status="超期" /> : <span className="text-gray-500">否</span>}</div>
-            <div className="flex items-center gap-2"><span className="text-xs text-gray-400 w-24 flex-shrink-0">ERP 同步状态</span><StatusBadge status={erpSync} />{plan.erpStockStatus && <span className="text-xs text-gray-400">{plan.erpStockStatus}</span>}</div>
           </div>
         </div>
         <p className="text-xs text-gray-400 mt-4 pt-3 border-t border-[#f2f2f2]">该状态为平台派生状态，基于设备进度与 ERP 同步信息计算，非 ERP 字段，不代表所有设备统一节点。</p>
@@ -180,24 +227,6 @@ export default function ProductionPlanDetail() {
             ['计划周期', cycle],
             ['更新时间', plan.updatedAt],
             ['备注', plan.notes],
-          ]}
-        />
-      </Section>
-
-      <Section
-        title="ERP 工单 / 入库 / 检验信息"
-        subtitle="ERP 工单状态 / 入库状态 / 检验状态均来自 ERP，平台只读同步展示，不创建 ERP 单据（枚举以后以 ERP API 为准）。"
-        right={<Chip>ERP 只读同步</Chip>}
-      >
-        <DescList
-          cols={3}
-          items={[
-            ['ERP 生产订单号', plan.erpProductionOrderNo],
-            ['ERP 产品入库单号', plan.erpInboundNo],
-            ['ERP 产品检验单号', plan.erpInspectionNo],
-            ['ERP 库存状态', plan.erpStockStatus],
-            ['入库仓库', plan.warehouse],
-            ['同步口径', '只读同步'],
           ]}
         />
       </Section>
@@ -233,6 +262,7 @@ export default function ProductionPlanDetail() {
         </Table>
       </Section>
 
+      <div id="single-device-records">
       <Section
         title={`单机生产记录${selectedDevice ? `：${selectedDevice.sn}` : ''}`}
         subtitle="选择生产计划下的某台设备，查看其装配、模块绑定、工站测试、返修与日志记录"
@@ -395,6 +425,7 @@ export default function ProductionPlanDetail() {
           );
         })()}
       </Section>
+      </div>
 
       <Section title="操作日志" subtitle={`共 ${planLogs.length} 条`}>
         {planLogs.length ? <OperationLog logs={planLogs} /> : <EmptyState>暂无操作日志</EmptyState>}

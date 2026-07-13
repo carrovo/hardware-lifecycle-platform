@@ -9,10 +9,10 @@ import { Pagination, usePaged } from '../components/Pagination';
 import { Page, PageHeader, Toolbar, Select, SearchInput, StatCard, StatGrid, Table, Btn, LinkAction } from '../components/ui';
 import { deviceLifecycleStatus } from '../utils/status';
 
-// 资产管理二级：仅「物料与部件台账」「设备台账」两个 tab（物料在前、设备在后，默认设备）。
+// 资产管理二级：仅「物料零部件」「设备台账」两个 tab（物料在前、设备在后，默认设备）。
 // 设备类型 / 点位管理已从资产管理移除，不在此渲染。
 const TABS = [
-  { key: 'materials', label: '物料与部件台账' },
+  { key: 'materials', label: '物料零部件' },
   { key: 'devices', label: '设备台账' },
 ];
 

@@ -4,10 +4,10 @@ import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import ModuleDetailDrawer from '../components/ModuleDetailDrawer';
 import { Pagination, usePaged } from '../components/Pagination';
-import { PageHeader, Section, Toolbar, Select, SearchInput, StatCard, StatGrid, Table, LinkAction, DescList } from '../components/ui';
+import { PageHeader, Section, Toolbar, Select, SearchInput, StatCard, StatGrid, Table, LinkAction, DescList, Chip } from '../components/ui';
 import { platformOccupancyStatus } from '../utils/status';
 
-// 物料与部件台账：两个只读台账区块。
+// 物料零部件：两个只读台账区块。
 //  区块1 物料信息       —— 供应商来料物料条目，入库 / 库存 / 同步时间以 ERP 为准（平台只读同步）。
 //  区块2 核心部件追溯   —— SN 级核心部件（moduleInstances），追踪批次来源、装配绑定、换件与返修。
 // 平台不新增 / 编辑 / 删除 ERP 正式单据，本页为只读台账视图。
@@ -56,6 +56,11 @@ export default function Materials() {
   const uniq = (arr) => [...new Set(arr.filter((v) => v && v !== '—'))];
   const yesNoMatch = (v, actual) => v === '' || (v === '是' ? !!actual : !actual);
 
+  // ERP 库存显示字段的轻量默认值（无 mock 来源时的安全兜底，不修改 mockData）。
+  const INV_ORG = '智元制造库存组织';
+  const WHOLE_MODULE_CATS = ['底盘', '机械臂']; // 整机级模块按「台」，其余零部件按「件」
+  const unitOf = (cat) => (WHOLE_MODULE_CATS.includes(cat) ? '台' : '件');
+
   // 概览
   const boundCount = moduleInstances.filter((m) => m.boundDeviceId).length;
   const repairingCount = moduleInstances.filter((m) => /维修|返修/.test(m.status || '')).length;
@@ -101,6 +106,15 @@ export default function Materials() {
       model: batch?.model || '—',
       supplierName: batch?.supplier || '—',
       batchNo: batch?.batchNo || '—',
+      // ERP 库存显示字段：库存组织 / 库存单位 / 主计量 / 生产日期 / 有效期至 无 mock 来源，轻量兜底（不写入 mockData）
+      invOrg: INV_ORG,
+      warehouse: batch?.warehouse || '原料库',
+      unit: unitOf(mi.category),
+      qty: 1,
+      // 来源 ERP 单据：批次采购订单号优先，回退到货单号
+      erpDocNo: batch?.erpPurchaseOrderNo || batch?.erpArrivalNo || '—',
+      prodDate: '—',
+      expiryDate: '—',
       // ERP 三状态（模块实例缺失时按 ERP 主数据默认回退，与 ModuleDetailDrawer 一致）
       erpInbound: mi.erpInboundStatus ?? '已入库',
       erpInspection: mi.erpInspectionStatus ?? '检验合格',
@@ -131,13 +145,11 @@ export default function Materials() {
     && (!partKw || (p.sn || '').toLowerCase().includes(partKw) || (p.id || '').toLowerCase().includes(partKw) || (p.device?.sn || '').toLowerCase().includes(partKw) || (p.materialCode || '').toLowerCase().includes(partKw) || (p.name || '').toLowerCase().includes(partKw)));
   const partPaged = usePaged(partRows, 8);
 
-  const yesNo = (v) => (v ? <span className="text-gray-700">是</span> : <span className="text-gray-300">否</span>);
-
   return (
     <div className="space-y-5">
       <PageHeader
-        title="物料与部件台账"
-        description="物料信息与核心部件 SN 级追溯。入库 / 库存 / 同步时间只读同步自 ERP，本页为只读台账视图。"
+        title="物料零部件"
+        description="物料信息与核心部件 SN 级追溯。物料编码 / 批次 / 库存 / 入库等字段只读同步自 ERP，本页为只读视图。"
       />
 
       <StatGrid cols={4}>
@@ -157,7 +169,7 @@ export default function Materials() {
           <Select value={matStock} onChange={(e) => setMatStock(e.target.value)}><option value="">全部库存状态</option>{matStockOpts.map((s) => <option key={s}>{s}</option>)}</Select>
           <Select value={matBatch} onChange={(e) => setMatBatch(e.target.value)}><option value="">全部批次号</option>{matBatchOpts.map((s) => <option key={s}>{s}</option>)}</Select>
         </Toolbar>
-        <Section title="物料信息" subtitle={`共 ${materialRows.length} 条 · 入库 / 库存 / 同步时间只读同步自 ERP`} bodyClassName="p-0">
+        <Section title="物料信息" subtitle={`共 ${materialRows.length} 条 · 物料编码 / 名称 / 规格 / 分类 / 供应商 / 批次 / 入库 / 库存 / 同步时间均为 ERP 只读同步字段`} bodyClassName="p-0">
         <Table
           head={['物料编码', '物料名称', '规格型号', '物料分类', '供应商', '批次号', 'ERP 入库状态', 'ERP 库存状态', '最近同步时间']}
           empty="暂无物料"
@@ -195,34 +207,32 @@ export default function Materials() {
           <Select value={partReplaced} onChange={(e) => setPartReplaced(e.target.value)}><option value="">是否发生换件</option><option value="是">是</option><option value="否">否</option></Select>
           <Select value={partRepaired} onChange={(e) => setPartRepaired(e.target.value)}><option value="">是否发生返修</option><option value="是">是</option><option value="否">否</option></Select>
         </Toolbar>
-        <Section title="核心部件追溯" subtitle={`共 ${partRows.length} 个核心部件 · ERP 只读状态 + 平台占用状态双视图，追踪装配绑定、换件与返修`} bodyClassName="p-0">
+        <Section title="核心部件追溯" subtitle={`共 ${partRows.length} 个核心部件 · 以下为核心零部件 SN 级追溯：物料编码 / 批次 / 库存等为 ERP 同步字段；模块 SN、平台占用状态、绑定关系为平台补充字段`} bodyClassName="p-0">
         <Table
-          head={['模块 SN / 内部 ID', '核心部件类型', '关联物料编码', '物料名称', '规格型号', '供应商', '批次号', 'ERP 入库状态', 'ERP 检验状态', 'ERP 库存状态', '平台占用状态', '绑定设备 SN', '绑定槽位', '绑定人', '绑定时间', '是否发生换件', '是否发生返修', '最近更新时间', '操作']}
+          head={['物料编码', '物料名称', '批次号', '库存组织', '仓库', '库存单位', '数量', '主计量', '生产日期', '有效期至', '来源 ERP 单据', '平台占用状态', '绑定设备 SN', '绑定槽位', <span key="mod" className="inline-flex items-center gap-1">模块 SN / 内部 ID<Chip tone="outline">平台补充</Chip></span>, '最近更新时间', '操作']}
           empty="暂无核心部件"
           footer={<Pagination page={partPaged.page} total={partPaged.total} totalPages={partPaged.totalPages} onChange={partPaged.setPage} />}
         >
           {partPaged.pageItems.map((p) => (
             <tr key={p.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 font-mono text-xs text-gray-800 font-medium whitespace-nowrap">{p.materialCode}</td>
+              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{p.name}</td>
+              <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{p.batchNo}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{p.invOrg}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{p.warehouse}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{p.unit}</td>
+              <td className="px-3 py-2 text-gray-700 text-xs whitespace-nowrap">{p.qty}</td>
+              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{p.unit}</td>
+              <td className="px-3 py-2 text-gray-400 text-xs whitespace-nowrap">{p.prodDate}</td>
+              <td className="px-3 py-2 text-gray-400 text-xs whitespace-nowrap">{p.expiryDate}</td>
+              <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{p.erpDocNo}</td>
+              <td className="px-3 py-2"><StatusBadge status={p.platform} /></td>
+              <td className="px-3 py-2 text-xs whitespace-nowrap">{p.device ? <LinkAction to={`/devices/${p.device.id}`}>{p.device.sn}</LinkAction> : <span className="text-gray-300">—</span>}</td>
+              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{p.slot}</td>
               <td className="px-3 py-2 whitespace-nowrap">
                 <div className="font-mono text-xs text-gray-800 font-medium">{p.sn}</div>
                 <div className="text-[11px] text-gray-400 font-mono">{p.id}</div>
               </td>
-              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{p.partType}</td>
-              <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{p.materialCode}</td>
-              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{p.name}</td>
-              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{p.model}</td>
-              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{p.supplierName}</td>
-              <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{p.batchNo}</td>
-              <td className="px-3 py-2"><StatusBadge status={p.erpInbound} /></td>
-              <td className="px-3 py-2"><StatusBadge status={p.erpInspection} /></td>
-              <td className="px-3 py-2"><StatusBadge status={p.erpStock} /></td>
-              <td className="px-3 py-2"><StatusBadge status={p.platform} /></td>
-              <td className="px-3 py-2 text-xs whitespace-nowrap">{p.device ? <LinkAction to={`/devices/${p.device.id}`}>{p.device.sn}</LinkAction> : <span className="text-gray-300">—</span>}</td>
-              <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{p.slot}</td>
-              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{p.binder}</td>
-              <td className="px-3 py-2 text-gray-400 text-xs whitespace-nowrap">{p.bindTime}</td>
-              <td className="px-3 py-2 text-xs">{yesNo(p.replaced)}</td>
-              <td className="px-3 py-2 text-xs">{yesNo(p.repaired)}</td>
               <td className="px-3 py-2 text-gray-400 text-xs whitespace-nowrap">{p.syncAt}</td>
               <td className="px-3 py-2 whitespace-nowrap">
                 <div className="flex items-center gap-3">
@@ -254,6 +264,10 @@ export default function Materials() {
               ['规格型号', erpModule.model],
               ['供应商', erpModule.supplierName],
               ['批次号', erpModule.batchNo],
+              ['库存组织', erpModule.invOrg],
+              ['仓库', erpModule.warehouse],
+              ['库存单位', erpModule.unit],
+              ['来源 ERP 单据', erpModule.erpDocNo],
               ['ERP 入库状态', <StatusBadge key="i" status={erpModule.erpInbound} />],
               ['ERP 检验状态', <StatusBadge key="q" status={erpModule.erpInspection} />],
               ['ERP 库存状态', <StatusBadge key="s" status={erpModule.erpStock} />],

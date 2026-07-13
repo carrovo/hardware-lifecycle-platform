@@ -13,35 +13,45 @@ const ICONS = {
   projects: (p) => <svg {...I(p)}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>,
   assets: (p) => <svg {...I(p)}><path d="M12 3 3 7.5v9L12 21l9-4.5v-9z" /><path d="m3 7.5 9 4.5 9-4.5" /><path d="M12 12v9" /></svg>,
   aftersales: (p) => <svg {...I(p)}><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.1-.4-.4-2.1z" /></svg>,
+  erp: (p) => <svg {...I(p)}><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6" /><path d="M9 13h6M9 17h6" /></svg>,
   system: (p) => <svg {...I(p)}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.2A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H1a2 2 0 1 1 0-4h.2A1.7 1.7 0 0 0 2.6 7a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 8 2.6h.1A1.7 1.7 0 0 0 9 1.1V1a2 2 0 1 1 4 0v.2A1.7 1.7 0 0 0 15 2.6a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1z" /></svg>,
 };
 
 // 一级导航 + 可展开的二级菜单。二级菜单通过 ?tab= 深链到既有页面。
+// R6-A：ERP 单据中心从项目中心独立；看板收口为 总览/质量/售后；生产计划→生产关联、交付计划→交付执行。
 const NAV_ITEMS = [
   { label: '首页', path: '/home', icon: 'home' },
   {
     label: '看板中心', base: '/dashboard', icon: 'dashboard',
     children: [
       { label: '总览看板', to: '/dashboard?tab=overview', tab: 'overview' },
-      { label: '项目看板', to: '/dashboard?tab=project', tab: 'project' },
       { label: '质量看板', to: '/dashboard?tab=quality', tab: 'quality' },
-      { label: '交付看板', to: '/dashboard?tab=delivery', tab: 'delivery' },
       { label: '售后看板', to: '/dashboard?tab=aftersales', tab: 'aftersales' },
+    ],
+  },
+  {
+    label: 'ERP 单据中心', base: '/erp-center', icon: 'erp',
+    children: [
+      { label: '单据总览', to: '/erp-center?tab=overview', tab: 'overview' },
+      { label: '采购与入库', to: '/erp-center?tab=purchase', tab: 'purchase' },
+      { label: '生产与用料', to: '/erp-center?tab=production', tab: 'production' },
+      { label: '出库与交付', to: '/erp-center?tab=outbound', tab: 'outbound' },
+      { label: '检验与库存', to: '/erp-center?tab=inspection', tab: 'inspection' },
+      { label: '同步日志', to: '/erp-center?tab=synclog', tab: 'synclog' },
     ],
   },
   {
     label: '项目中心', base: '/projects', icon: 'projects', match: ['/projects', '/production-plans', '/delivery-plans'],
     children: [
       { label: '项目列表', to: '/projects?tab=list', tab: 'list' },
-      { label: '生产计划', to: '/projects?tab=production', tab: 'production' },
-      { label: '交付计划', to: '/projects?tab=delivery', tab: 'delivery' },
-      { label: 'ERP 表单', to: '/projects?tab=erp', tab: 'erp' },
+      { label: '生产关联', to: '/projects?tab=production', tab: 'production' },
+      { label: '交付执行', to: '/projects?tab=delivery', tab: 'delivery' },
     ],
   },
   {
     label: '资产管理', base: '/assets', icon: 'assets', match: ['/assets', '/devices'],
     children: [
-      { label: '物料与部件台账', to: '/assets?tab=materials', tab: 'materials' },
+      { label: '物料零部件', to: '/assets?tab=materials', tab: 'materials' },
       { label: '设备台账', to: '/assets?tab=devices', tab: 'devices' },
     ],
   },
@@ -56,15 +66,11 @@ const NAV_ITEMS = [
   {
     label: '系统管理', base: '/system', icon: 'system',
     children: [
+      { label: '用户管理', to: '/system?tab=users', tab: 'users' },
       { label: '角色权限', to: '/system?tab=roles', tab: 'roles' },
+      { label: '字典管理', to: '/system?tab=dict', tab: 'dict' },
       { label: '流程模板', to: '/system?tab=workflow', tab: 'workflow' },
-      { label: '节点字段配置', to: '/system?tab=fields', tab: 'fields' },
-      { label: '故障原因字典', to: '/system?tab=faults', tab: 'faults' },
-      { label: '机器人型号字典', to: '/system?tab=models', tab: 'models' },
-      { label: '项目类型/业务场景字典', to: '/system?tab=projectTypes', tab: 'projectTypes' },
-      { label: '模块/核心部件字典', to: '/system?tab=modules', tab: 'modules' },
       { label: '通知规则', to: '/system?tab=notifications', tab: 'notifications' },
-      { label: '状态字典', to: '/system?tab=statuses', tab: 'statuses' },
     ],
   },
 ];

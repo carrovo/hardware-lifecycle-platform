@@ -87,40 +87,6 @@ function ProjectFormModal({ isOpen, onClose, project, onSave }) {
   );
 }
 
-function CreatePlanModal({ isOpen, onClose, type, project, onSave }) {
-  const [form, setForm] = useState({
-    name: project ? `${project.name}${type === 'production' ? '生产计划' : '交付计划'}` : '',
-    targetCount: project?.targetCount || 1,
-    owner: project?.manager || '',
-    date: '',
-    erpNo: '',
-  });
-  if (!project) return null;
-  const label = type === 'production' ? '生产计划' : '交付计划';
-  const submit = (e) => {
-    e.preventDefault();
-    onSave({ ...form, targetCount: Number(form.targetCount || 1) });
-    onClose();
-  };
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`新建${label}`} size="lg">
-      <form onSubmit={submit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">{label}名称 *</label><input className={INPUT} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">计划数量 *</label><input className={INPUT} type="number" min="1" required value={form.targetCount} onChange={(e) => setForm({ ...form, targetCount: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">负责人</label><input className={INPUT} value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} /></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">{type === 'production' ? '计划完成日期' : '计划客户验收时间'}</label><input className={INPUT} type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></div>
-          <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">ERP单号</label><input className={INPUT} value={form.erpNo} onChange={(e) => setForm({ ...form, erpNo: e.target.value })} /></div>
-        </div>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={BTN_GHOST}>取消</button>
-          <button type="submit" className={BTN_PRIMARY}>保存</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
 function ConfirmModal({ isOpen, onClose, title, text, onConfirm, danger = false }) {
   const [reason, setReason] = useState('');
   return (
@@ -277,9 +243,8 @@ export default function ProjectDetail() {
         )}
         actions={(
           <>
-            <Btn variant="secondary" onClick={() => setModal('edit')}>编辑</Btn>
-            <Btn variant="secondary" onClick={() => setModal('production')}>新建生产计划</Btn>
-            <Btn variant="primary" onClick={() => setModal('delivery')}>新建交付计划</Btn>
+            <Btn variant="secondary" onClick={() => setModal('edit')}>编辑平台补充信息</Btn>
+            <Btn variant="secondary" as="link" to="/erp-center?tab=overview">查看关联 ERP 单据</Btn>
             <Btn variant="secondary" onClick={() => setModal('logs')}>查看日志</Btn>
           </>
         )}
@@ -503,31 +468,6 @@ export default function ProjectDetail() {
         onSave={(form) => {
           updateProject(form);
           writeLog('编辑项目', '更新项目基础信息');
-        }}
-      />
-
-      <CreatePlanModal
-        isOpen={modal === 'production'}
-        onClose={() => setModal(null)}
-        type="production"
-        project={project}
-        onSave={(form) => {
-          const plan = { id: `PP-${Date.now().toString().slice(-6)}`, projectId: id, name: form.name, targetCount: form.targetCount, owner: form.owner, endDate: form.date, erpProductionOrderNo: form.erpNo, status: '生产中', currentNode: '来料准备', createdAt: nowText() };
-          dispatch({ type: 'ADD_PRODUCTION_PLAN', payload: plan });
-          updateProject({ status: '进行中' });
-          writeLog('创建生产计划', `创建 ${plan.name}`, status, '进行中');
-        }}
-      />
-
-      <CreatePlanModal
-        isOpen={modal === 'delivery'}
-        onClose={() => setModal(null)}
-        type="delivery"
-        project={project}
-        onSave={(form) => {
-          const plan = { id: `DP-${Date.now().toString().slice(-6)}`, projectId: id, name: form.name, targetCount: form.targetCount, owner: form.owner, dueDate: form.date, acceptanceDate: form.date, status: '交付中', currentNode: '绑定设备', records: { binding: [], factoryInspection: [], siteInstall: [], customerAccept: [] } };
-          dispatch({ type: 'ADD_DELIVERY_PLAN', payload: plan });
-          writeLog('创建交付计划', `创建 ${plan.name}`);
         }}
       />
 

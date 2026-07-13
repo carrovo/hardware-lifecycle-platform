@@ -14,40 +14,37 @@ import {
   ROBOT_MODELS, PROJECT_TYPES, CORE_PART_TYPES,
 } from '../data/mockData';
 
-// 系统管理：9 个二级配置页（角色权限 / 流程模板 / 节点字段 / 故障原因 / 机器人型号 /
-// 项目类型 / 模块部件 / 通知规则 / 状态字典）。二级菜单在左侧侧边栏，页面本身不再重复横向 tab 条，
-// 仅读 ?tab= 深链决定渲染哪个子页；兼容旧 key（permissions/logs → roles）。
+// 系统管理：5 个二级配置页（用户管理 / 角色权限 / 字典管理 / 流程模板 / 通知规则）。
+// 二级菜单在左侧侧边栏，页面本身不再重复横向 tab 条，仅读 ?tab= 深链决定渲染哪个子页。
+// 字典管理内部再用本地 state 切换多套字典（不写入 URL）；流程模板内含节点字段配置。
+// 兼容旧 key：permissions/logs → roles；fields → workflow；faults/models/projectTypes/modules/statuses → dict。
 const TODAY = new Date().toISOString().slice(0, 10);
 
 const TABS = [
+  { key: 'users', label: '用户管理' },
   { key: 'roles', label: '角色权限' },
+  { key: 'dict', label: '字典管理' },
   { key: 'workflow', label: '流程模板' },
-  { key: 'fields', label: '节点字段配置' },
-  { key: 'faults', label: '故障原因字典' },
-  { key: 'models', label: '机器人型号字典' },
-  { key: 'projectTypes', label: '项目类型 / 业务场景字典' },
-  { key: 'modules', label: '模块 / 核心部件字典' },
   { key: 'notifications', label: '通知规则' },
-  { key: 'statuses', label: '状态字典' },
 ];
 
 const TAB_DESC = {
-  roles: '维护用户、角色，以及各角色的导航可见性与操作权限。',
-  workflow: '维护生产、交付、售后等业务流程模板，供各业务模块引用。',
-  fields: '按业务节点配置采集字段、字段类型与必填规则。',
-  faults: '维护故障原因字典（一级 / 二级 / 三级），统一服务质量测试 NG、问题池预处理与售后工单分类。',
-  models: '维护机器人型号字典，供设备类型与生产计划引用。',
-  projectTypes: '维护项目类型 / 业务场景字典，供项目与看板筛选引用。',
-  modules: '维护模块 / 核心部件字典，供来料、装配与换件引用。',
+  users: '维护飞书同步的用户、部门与角色分配，查看账号状态与最近登录。',
+  roles: '维护各角色的导航可见性与操作权限，并查看审计 / 操作日志。',
+  dict: '集中维护项目类型、设备类型、核心零部件、故障原因与状态等基础字典。',
+  workflow: '维护生产、交付、售后等业务流程模板及其节点字段配置，供各业务模块引用。',
   notifications: '维护触发事件对应的通知对象、渠道与开关。',
-  statuses: '集中查看各业务对象的状态枚举与语义色，统一状态口径。',
 };
 
-const LEGACY_TAB = { permissions: 'roles', logs: 'roles' };
+const LEGACY_TAB = {
+  permissions: 'roles', logs: 'roles',
+  fields: 'workflow',
+  faults: 'dict', models: 'dict', projectTypes: 'dict', modules: 'dict', statuses: 'dict',
+};
 const resolveTab = (raw) => {
-  if (!raw) return 'roles';
+  if (!raw) return 'users';
   const mapped = LEGACY_TAB[raw] || raw;
-  return TABS.some((t) => t.key === mapped) ? mapped : 'roles';
+  return TABS.some((t) => t.key === mapped) ? mapped : 'users';
 };
 
 // 内部角色值 → 展示名（与右上角用户菜单一致）。
@@ -171,8 +168,7 @@ const WORKFLOW_TEMPLATES = [
   },
 ];
 
-const NODE_OPTIONS = ['整机装配', '初测', '中测', 'OQT终测', '出厂检验', '现场安装调试', '客户验收'];
-const FIELD_TYPES = ['文本', '数字', '单选', '多选', '日期', '附件'];
+// 节点字段配置（原折叠进流程模板详情，供 WorkflowTab 展示各业务节点采集字段）。
 const FIELD_ROWS = [
   { id: 'FLD-1', node: '整机装配', field: '装配批次号', type: '单选', required: true, enabled: true },
   { id: 'FLD-2', node: '初测', field: '初测结论', type: '单选', required: true, enabled: true },
@@ -391,20 +387,6 @@ const nameDescColumns = (nameLabel) => [
 const nameDescFields = (nameLabel) => [
   { key: 'name', label: nameLabel, type: 'text', required: true },
   { key: 'desc', label: '说明', type: 'text' },
-];
-
-const FIELD_COLUMNS = [
-  { key: 'node', label: '业务节点' },
-  { key: 'field', label: '字段名', render: (r) => <span className="font-medium text-gray-800">{r.field}</span> },
-  { key: 'type', label: '字段类型' },
-  { key: 'required', label: '是否必填', render: (r) => (r.required ? <Chip>必填</Chip> : <span className="text-gray-400 text-xs">选填</span>) },
-  { key: 'enabled', label: '是否启用', render: (r) => <EnabledBadge on={r.enabled} /> },
-];
-const FIELD_FIELDS = [
-  { key: 'node', label: '业务节点', type: 'select', options: NODE_OPTIONS },
-  { key: 'field', label: '字段名', type: 'text', required: true },
-  { key: 'type', label: '字段类型', type: 'select', options: FIELD_TYPES },
-  { key: 'required', label: '是否必填', type: 'bool' },
 ];
 
 const FAULT_COLUMNS = [
@@ -807,6 +789,14 @@ function WorkflowTab() {
   const viewing = rows.find((r) => r.id === viewId) || null;
   const setF = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
 
+  // 节点字段配置：优先按模板节点名匹配 FIELD_ROWS；无匹配（如交付 / 售后模板）则展示全部字段口径。
+  const viewNodeNames = viewing ? viewing.nodes.map((n) => n.name) : [];
+  const viewFieldRows = (() => {
+    if (!viewing) return [];
+    const matched = FIELD_ROWS.filter((f) => viewNodeNames.some((nm) => nm.includes(f.node) || f.node.includes(nm)));
+    return matched.length ? matched : FIELD_ROWS;
+  })();
+
   const openAdd = () => { setForm({ name: '', type: '生产测试', projectScope: '全部', business: '生产', enabled: true }); setEdit({ mode: 'add' }); };
   const openEdit = (row) => { setForm({ name: row.name, type: row.type, projectScope: row.projectScope, business: row.business, enabled: row.enabled }); setEdit({ mode: 'edit', id: row.id }); };
   const closeEdit = () => setEdit(null);
@@ -881,6 +871,21 @@ function WorkflowTab() {
                 </tr>
               ))}
             </Table>
+            <div>
+              <div className="text-[13px] font-semibold text-gray-700 mb-2">节点字段配置</div>
+              <p className="text-xs text-gray-400 mb-2">该模板各业务节点采集的字段、字段类型与必填规则。</p>
+              <Table head={['业务节点', '字段名', '字段类型', '是否必填', '是否启用']} empty="该模板暂无节点字段配置">
+                {viewFieldRows.map((f) => (
+                  <tr key={f.id} className="hover:bg-[#fafafa]">
+                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{f.node}</td>
+                    <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{f.field}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{f.type}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{f.required ? <Chip>必填</Chip> : <span className="text-gray-400 text-xs">选填</span>}</td>
+                    <td className="px-3 py-2 whitespace-nowrap"><EnabledBadge on={f.enabled} /></td>
+                  </tr>
+                ))}
+              </Table>
+            </div>
           </div>
         )}
       </Modal>
@@ -927,22 +932,22 @@ function WorkflowTab() {
   );
 }
 
-/* ═════════ 1. 角色权限 ═════════ */
-function RolesTab() {
-  const { currentRole, navPermissions, updateNavPermission, actionPermissions, updateActionPermission } = useRole();
-  const { state } = useApp();
+/* ═════════ 用户管理（飞书同步用户列表 + 查看详情） ═════════ */
+// 账号：FEISHU_USERS 未内置账号字段，原型下以 feishu.<id> 派生展示。
+const userAccount = (u) => u.account || `feishu.${u.id}`;
+
+function UsersTab() {
   const [q, setQ] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
-  const isAdmin = currentRole === '管理员';
+  const [viewId, setViewId] = useState(null);
 
   const isOn = (u) => (u.status || '启用') === '启用';
   const users = FEISHU_USERS.filter(
     (u) => (!q || u.name.includes(q) || (u.dept || '').includes(q)) && (!roleFilter || u.role === roleFilter),
   );
   const enabledUsers = FEISHU_USERS.filter(isOn).length;
-
-  const logs = [...(state.operationLogs || [])].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || '')).slice(0, 20);
-  const moduleOf = (log) => (log.productionPlanId ? '生产计划' : log.deliveryPlanId ? '交付计划' : log.projectId ? '项目中心' : log.deviceId ? '资产管理' : '系统');
+  const deptCount = new Set(FEISHU_USERS.map((u) => u.dept)).size;
+  const viewing = FEISHU_USERS.find((u) => u.id === viewId) || null;
 
   return (
     <>
@@ -950,12 +955,12 @@ function RolesTab() {
         <StatCard label="用户总数" value={FEISHU_USERS.length} />
         <StatCard label="启用用户" value={enabledUsers} tone="success" />
         <StatCard label="角色数" value={ROLES_LIST.length} />
-        <StatCard label="系统模块" value={NAV_ROWS.length} />
+        <StatCard label="部门数" value={deptCount} />
       </StatGrid>
 
       <Section
         title="用户与角色"
-        subtitle="维护人员部门、角色与数据权限范围。"
+        subtitle="用户由飞书同步，维护部门、岗位、角色与数据权限范围。"
         right={
           <div className="flex items-center gap-2">
             <SearchInput placeholder="搜索用户 / 部门" value={q} onChange={(e) => setQ(e.target.value)} className="w-40" />
@@ -963,32 +968,73 @@ function RolesTab() {
               <option value="">全部角色</option>
               {ROLES_LIST.map((r) => <option key={r} value={r}>{roleDisplay(r)}</option>)}
             </Select>
-            <Btn variant="primary" size="sm">+ 新增用户</Btn>
+            <Btn variant="primary" size="sm" disabled title="用户由飞书同步，暂不支持手动新增">+ 新增用户</Btn>
           </div>
         }
         bodyClassName="p-0"
       >
-        <Table head={['用户', '部门', '岗位 / 职能', '当前角色', '可访问项目', '数据权限范围', '状态', '最近登录', '操作']} empty="未匹配到用户">
+        <Table head={['用户 / 账号', '姓名', '部门', '岗位 / 职能', '角色', '最近登录', '状态', '操作']} empty="未匹配到用户">
           {users.map((u) => (
             <tr key={u.id} className="hover:bg-[#fafafa]">
+              <td className="px-3 py-2 whitespace-nowrap">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#f0f0f0] text-gray-600 text-xs font-medium">{u.avatar || u.name.slice(0, 1)}</span>
+                  <span className="font-mono text-xs text-gray-500">{userAccount(u)}</span>
+                </div>
+              </td>
               <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{u.name}</td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{u.dept}</td>
               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{u.title || '—'}</td>
               <td className="px-3 py-2 whitespace-nowrap"><Chip>{roleDisplay(u.role)}</Chip></td>
-              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{u.projectScope || '—'}</td>
-              <td className="px-3 py-2 text-gray-600 text-xs whitespace-nowrap">{u.dataScope || '—'}</td>
-              <td className="px-3 py-2 whitespace-nowrap"><EnabledBadge on={isOn(u)} /></td>
               <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{u.lastLogin || '—'}</td>
+              <td className="px-3 py-2 whitespace-nowrap"><EnabledBadge on={isOn(u)} /></td>
               <td className="px-3 py-2 whitespace-nowrap">
-                <div className="flex items-center gap-3">
-                  <LinkAction>编辑</LinkAction>
-                  <LinkAction>{isOn(u) ? '停用' : '启用'}</LinkAction>
-                </div>
+                <LinkAction onClick={() => setViewId(u.id)}>查看</LinkAction>
               </td>
             </tr>
           ))}
         </Table>
       </Section>
+
+      <Modal isOpen={!!viewing} onClose={() => setViewId(null)} title={viewing ? `${viewing.name} · 用户详情` : ''}>
+        {viewing && (
+          <DescList
+            cols={2}
+            items={[
+              ['姓名', viewing.name],
+              ['账号', userAccount(viewing)],
+              ['部门', viewing.dept],
+              ['岗位 / 职能', viewing.title || '—'],
+              ['当前角色', roleDisplay(viewing.role)],
+              ['可访问项目', viewing.projectScope || '—'],
+              ['数据权限范围', viewing.dataScope || '—'],
+              ['状态', <EnabledBadge key="e" on={isOn(viewing)} />],
+              ['最近登录', viewing.lastLogin || '—'],
+            ]}
+          />
+        )}
+      </Modal>
+    </>
+  );
+}
+
+/* ═════════ 角色权限（导航 / 操作权限矩阵 + 审计日志） ═════════ */
+function RolesTab() {
+  const { currentRole, navPermissions, updateNavPermission, actionPermissions, updateActionPermission } = useRole();
+  const { state } = useApp();
+  const isAdmin = currentRole === '管理员';
+
+  const logs = [...(state.operationLogs || [])].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || '')).slice(0, 20);
+  const moduleOf = (log) => (log.productionPlanId ? '生产计划' : log.deliveryPlanId ? '交付计划' : log.projectId ? '项目中心' : log.deviceId ? '资产管理' : '系统');
+
+  return (
+    <>
+      <StatGrid cols={4}>
+        <StatCard label="角色数" value={ROLES_LIST.length} />
+        <StatCard label="导航模块" value={NAV_ROWS.length} />
+        <StatCard label="操作权限项" value={ACTION_ROWS.length} />
+        <StatCard label="审计日志（近 20 条）" value={logs.length} />
+      </StatGrid>
 
       <Section title="导航权限" subtitle={isAdmin ? '勾选各角色可见的导航模块（管理员可编辑）。' : '各角色可见的导航模块（只读）。'} bodyClassName="p-0">
         <PermMatrix rows={NAV_ROWS} perms={navPermissions} onToggle={updateNavPermission} editable={isAdmin} firstColLabel="导航模块" />
@@ -1095,6 +1141,44 @@ function StatusesTab() {
   );
 }
 
+/* ═════════ 字典管理（内部子 tab 聚合多套字典，选择态走本地 state 不写 URL） ═════════ */
+const DICT_SUBS = [
+  { key: 'projectTypes', label: '项目类型 / 业务场景' },
+  { key: 'models', label: '设备类型（机器人型号）' },
+  { key: 'modules', label: '核心零部件类型' },
+  { key: 'faults', label: '故障原因' },
+  { key: 'statuses', label: '状态字典' },
+];
+
+function DictTab() {
+  const [dictSub, setDictSub] = useState('projectTypes');
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {DICT_SUBS.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => setDictSub(s.key)}
+            className={`px-3 py-1.5 rounded-md text-[13px] font-medium border transition-colors ${
+              dictSub === s.key
+                ? 'bg-gray-900 text-white border-gray-900'
+                : 'bg-white text-gray-600 border-[#e5e5e5] hover:bg-[#fafafa]'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+      {dictSub === 'projectTypes' && <DictionaryTab title="项目类型 / 业务场景字典" entity="类型" idPrefix="PT" columns={nameDescColumns('类型名')} fields={nameDescFields('类型名')} initial={PROJECT_TYPE_ROWS} />}
+      {dictSub === 'models' && <ModelsTab />}
+      {dictSub === 'modules' && <DictionaryTab title="核心零部件类型字典" entity="部件" idPrefix="MOD" columns={nameDescColumns('部件类型')} fields={nameDescFields('部件类型')} initial={MODULE_ROWS} />}
+      {dictSub === 'faults' && <DictionaryTab title="故障原因字典" entity="故障原因" idPrefix="FA" columns={FAULT_COLUMNS} fields={FAULT_FIELDS} initial={FAULT_ROWS} defaults={{ updatedAt: TODAY }} />}
+      {dictSub === 'statuses' && <StatusesTab />}
+    </div>
+  );
+}
+
 /* ═════════ 页面 ═════════ */
 export default function SystemPage() {
   const [searchParams] = useSearchParams();
@@ -1108,15 +1192,11 @@ export default function SystemPage() {
         description={TAB_DESC[activeTab]}
         breadcrumb={<div className="text-xs text-gray-400 mb-1">系统管理 / {activeLabel}</div>}
       />
+      {activeTab === 'users' && <UsersTab />}
       {activeTab === 'roles' && <RolesTab />}
+      {activeTab === 'dict' && <DictTab />}
       {activeTab === 'workflow' && <WorkflowTab />}
-      {activeTab === 'fields' && <DictionaryTab title="节点字段配置" entity="字段" idPrefix="FLD" columns={FIELD_COLUMNS} fields={FIELD_FIELDS} initial={FIELD_ROWS} />}
-      {activeTab === 'faults' && <DictionaryTab title="故障原因字典" entity="故障原因" idPrefix="FA" columns={FAULT_COLUMNS} fields={FAULT_FIELDS} initial={FAULT_ROWS} defaults={{ updatedAt: TODAY }} />}
-      {activeTab === 'models' && <ModelsTab />}
-      {activeTab === 'projectTypes' && <DictionaryTab title="项目类型 / 业务场景字典" entity="类型" idPrefix="PT" columns={nameDescColumns('类型名')} fields={nameDescFields('类型名')} initial={PROJECT_TYPE_ROWS} />}
-      {activeTab === 'modules' && <DictionaryTab title="模块 / 核心部件字典" entity="部件" idPrefix="MOD" columns={nameDescColumns('部件类型')} fields={nameDescFields('部件类型')} initial={MODULE_ROWS} />}
       {activeTab === 'notifications' && <NotificationsTab />}
-      {activeTab === 'statuses' && <StatusesTab />}
     </Page>
   );
 }

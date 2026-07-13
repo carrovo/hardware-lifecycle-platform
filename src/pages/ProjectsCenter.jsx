@@ -7,14 +7,13 @@ import StatusBadge from '../components/StatusBadge';
 import OperationLog from '../components/OperationLog';
 import { Pagination, usePaged } from '../components/Pagination';
 import {
-  Page, PageHeader, Section, Card, Toolbar, Input, Select, SearchInput,
+  Page, PageHeader, Card, Toolbar, Input, Select, SearchInput,
   Btn, LinkAction, Chip, StatCard, StatGrid, DescList, Table, EmptyState,
 } from '../components/ui';
 import {
   isPass, projectStatus as deriveProjectStatus,
   productionPlanStatus, deliveryPlanStatus, TODAY,
 } from '../utils/status';
-import { erpSyncMeta, erpSyncLogs } from '../data/mockData';
 
 // 生产计划「当前卡点」派生阈值：创建早于 TODAY-45 天且未完成 → 长期未结。
 const LONG_UNSETTLED_BEFORE = (() => {
@@ -32,14 +31,13 @@ function planBottleneck(plan, status, devices, openRepairs) {
   return longUnsettled ? '长期未结' : '无明显卡点';
 }
 
-// 项目中心容器：项目列表 / 生产计划 / 交付计划 / ERP 表单 四个 tab。
+// 项目中心容器：项目列表 / 生产关联 / 交付执行 三个 tab（ERP 单据已迁移至 ERP 单据中心）。
 // tab 由 ?tab= 决定，默认 list。视觉统一复用 ../components/ui 设计系统。
 
 const TABS = [
   { key: 'list', label: '项目列表' },
-  { key: 'production', label: '生产计划' },
-  { key: 'delivery', label: '交付计划' },
-  { key: 'erp', label: 'ERP 表单' },
+  { key: 'production', label: '生产关联' },
+  { key: 'delivery', label: '交付执行' },
 ];
 
 const PROJECT_STATUSES = ['未开始', '进行中', '已交付', '已关闭', '已作废'];
@@ -64,23 +62,19 @@ function nowText() {
 
 const normalizeProjectStatus = deriveProjectStatus;
 
-function progressBar(done, total, color = 'bg-blue-500') {
-  const pct = total > 0 ? Math.min(Math.round((done / total) * 100), 100) : 0;
+// 非交互流程步骤条：用箭头连接的只读步骤，用于生产关联 / 交付执行页顶部说明业务流。
+function FlowBar({ steps }) {
   return (
-    <div className="flex items-center gap-2 min-w-[130px]">
-      <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-        <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${pct}%` }} />
+    <Card>
+      <div className="flex items-center flex-wrap gap-y-2 text-[13px]">
+        {steps.map((s, i) => (
+          <span key={s} className="flex items-center">
+            <span className="inline-flex items-center rounded-md bg-gray-50 border border-gray-200 px-2.5 py-1 text-gray-700">{s}</span>
+            {i < steps.length - 1 && <span className="mx-2 text-gray-300">→</span>}
+          </span>
+        ))}
       </div>
-      <span className="text-xs text-gray-500 whitespace-nowrap">{done}/{total || 0}</span>
-    </div>
-  );
-}
-
-function erpChip(linked) {
-  return (
-    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${linked ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
-      {linked ? '已关联' : '未关联'}
-    </span>
+    </Card>
   );
 }
 
@@ -114,9 +108,10 @@ function SimpleFormModal({ isOpen, onClose, title, fields, onSubmit, submitText 
               ) : field.options ? (
                 <select
                   required={field.required}
+                  disabled={field.disabled}
                   value={form[field.key]}
                   onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
-                  className={`${INPUT} w-full`}
+                  className={`${INPUT} w-full ${field.disabled ? 'bg-gray-50 text-gray-500' : ''}`}
                 >
                   <option value="">-- 请选择 --</option>
                   {field.options.map((opt) => (
@@ -242,6 +237,81 @@ function MemberConfigModal({ isOpen, onClose, project, onSave }) {
   );
 }
 
+// 新建项目（item 十五）：以 ERP 来源单据为入口，先选择 ERP 项目 / 生产订单 / 服务交付，
+// 自动带出 ERP 同步字段（只读），再补充平台字段；不允许自由填写 ERP 无关的项目名称。
+function CreateProjectModal({ isOpen, onClose, erpSources, onCreate }) {
+  const [sourceValue, setSourceValue] = useState('');
+  const [form, setForm] = useState({ manager: '', targetCount: 1, projectType: '', members: '', notes: '' });
+  const sel = erpSources.find((s) => s.value === sourceValue) || null;
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const ro = `${INPUT} w-full bg-gray-50 text-gray-500`;
+  const lbl = 'block text-xs text-gray-500 mb-1';
+
+  const reset = () => { setSourceValue(''); setForm({ manager: '', targetCount: 1, projectType: '', members: '', notes: '' }); };
+  const submit = (e) => {
+    e.preventDefault();
+    if (!sel) return;
+    onCreate(sel, form);
+    reset();
+    onClose();
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="新建项目" size="lg">
+      <form onSubmit={submit} className="space-y-4">
+        <div>
+          <label className={lbl}>选择 ERP 项目 / ERP 来源单据 *</label>
+          <select required value={sourceValue} onChange={(e) => setSourceValue(e.target.value)} className={`${INPUT} w-full`}>
+            <option value="">-- 选择已同步的 ERP 来源单据 --</option>
+            {erpSources.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+          <p className="text-xs text-gray-400 mt-1">项目名称、项目编码、客户、合同编号、订单编码来自 ERP，选择后自动带出，不支持在平台自由填写。</p>
+        </div>
+
+        <div>
+          <div className="text-[13px] font-semibold text-gray-800 mb-2">ERP 同步字段（只读）</div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className={lbl}>项目名称</label><input readOnly value={sel?.name || ''} placeholder="选择来源后自动带出" className={ro} /></div>
+            <div><label className={lbl}>项目编码</label><input readOnly value={sel?.code || ''} placeholder="选择来源后自动带出" className={ro} /></div>
+            <div><label className={lbl}>客户</label><input readOnly value={sel?.client || ''} placeholder="选择来源后自动带出" className={ro} /></div>
+            <div><label className={lbl}>合同编号</label><input readOnly value={sel?.contractNo || ''} placeholder="选择来源后自动带出" className={ro} /></div>
+            <div className="col-span-2"><label className={lbl}>订单编码</label><input readOnly value={sel?.orderCode || ''} placeholder="选择来源后自动带出" className={ro} /></div>
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[13px] font-semibold text-gray-800 mb-2">平台补充字段</div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={lbl}>项目负责人</label>
+              <select value={form.manager} onChange={(e) => set('manager', e.target.value)} className={`${INPUT} w-full`}>
+                <option value="">-- 请选择 --</option>
+                {MEMBER_CANDIDATES.map((n) => <option key={n}>{n}</option>)}
+              </select>
+            </div>
+            <div><label className={lbl}>目标台数</label><input type="number" min={1} value={form.targetCount} onChange={(e) => set('targetCount', e.target.value)} className={`${INPUT} w-full`} /></div>
+            <div>
+              <label className={lbl}>业务场景</label>
+              <select value={form.projectType} onChange={(e) => set('projectType', e.target.value)} className={`${INPUT} w-full`}>
+                <option value="">-- 请选择 --</option>
+                {PROJECT_TYPES.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div><label className={lbl}>项目成员（多个用逗号分隔）</label><input value={form.members} onChange={(e) => set('members', e.target.value)} placeholder="如：张三,李四" className={`${INPUT} w-full`} /></div>
+            <div className="col-span-2"><label className={lbl}>备注</label><textarea rows={2} value={form.notes} onChange={(e) => set('notes', e.target.value)} className={`${INPUT} w-full`} /></div>
+          </div>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">平台项目用于组织 ERP 来源单据和平台过程记录；项目名称、项目编码优先来自 ERP，平台仅补充负责人、目标台数、业务场景等字段。</div>
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button type="submit" className={BTN_PRIMARY}>创建项目</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 /* ═════════ 项目列表 ═════════ */
 function ProjectListTab() {
   const { state, dispatch } = useApp();
@@ -258,21 +328,51 @@ function ProjectListTab() {
   const owners = [...new Set(state.projects.map((p) => p.manager).filter(Boolean))];
   const customers = [...new Set(state.projects.map((p) => p.client).filter(Boolean))];
 
+  // 新建项目的 ERP 来源单据候选：ERP 项目单 / 生产订单 / 服务交付（销售出库），选择后带出 ERP 同步字段。
+  const erpSources = [];
+  const seenErp = new Set();
+  const pushErp = (value, opt) => { if (value && !seenErp.has(value)) { seenErp.add(value); erpSources.push({ value, ...opt }); } };
+  state.projects.forEach((p) => pushErp(p.erpProjectNo, {
+    label: `${p.erpProjectNo} · ${p.name}（ERP 项目）`, name: p.name, code: p.erpProjectNo, client: p.client || '',
+    contractNo: `HT-${p.erpProjectNo}`, orderCode: `SO-${p.erpProjectNo}`, sourceType: 'ERP 项目', erpProjectNo: p.erpProjectNo,
+  }));
+  (state.workflowProductionPlans || []).forEach((w) => {
+    const proj = state.projects.find((p) => p.id === w.projectId);
+    pushErp(w.erpProductionOrderNo, {
+      label: `${w.erpProductionOrderNo} · ${w.name}（ERP 生产订单）`, name: proj?.name || w.name, code: proj?.erpProjectNo || w.erpProductionOrderNo,
+      client: proj?.client || '', contractNo: proj?.erpProjectNo ? `HT-${proj.erpProjectNo}` : '', orderCode: w.erpProductionOrderNo,
+      sourceType: 'ERP 生产订单', erpProjectNo: proj?.erpProjectNo || '',
+    });
+  });
+  deliveryPlans.forEach((dp) => {
+    const proj = state.projects.find((p) => p.id === dp.projectId);
+    pushErp(dp.erpOutboundNo, {
+      label: `${dp.erpOutboundNo} · ${dp.name}（ERP 服务交付）`, name: proj?.name || dp.name, code: proj?.erpProjectNo || dp.erpOutboundNo,
+      client: proj?.client || '', contractNo: proj?.erpProjectNo ? `HT-${proj.erpProjectNo}` : '', orderCode: dp.erpOutboundNo,
+      sourceType: 'ERP 服务交付', erpProjectNo: proj?.erpProjectNo || '',
+    });
+  });
+
   const rows = state.projects.map((project) => {
     const status = normalizeProjectStatus(project, productionPlans, deliveryPlans);
-    // 生产进度口径：已入库及其下游状态设备数（封顶目标数），最能反映“已生产入库”的可信口径。
-    const stored = state.devices.filter((d) => {
+    // 已关联设备数：直接挂在项目上或经生产计划归属该项目的设备。
+    const deviceCount = state.devices.filter((d) => {
+      if (d.projectId === project.id) return true;
       const plan = productionPlans.find((p) => p.id === d.productionPlanId);
-      return plan?.projectId === project.id && ['已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status);
+      return plan?.projectId === project.id;
     }).length;
-    const accepted = deliveryPlans
-      .filter((plan) => plan.projectId === project.id)
-      .reduce((sum, plan) => sum + (plan.records?.customerAccept || []).filter(isPass).length, 0);
+    // 已关联 ERP 单据数：ERP 项目单 + 关联生产订单 + 关联销售出库（服务交付）单。
+    const erpDocCount = (project.erpProjectNo ? 1 : 0)
+      + productionPlans.filter((p) => p.projectId === project.id && p.erpProductionOrderNo).length
+      + deliveryPlans.filter((p) => p.projectId === project.id && p.erpOutboundNo).length;
+    const openIssues = (state.qualityIssues || []).filter((q) => q.projectId === project.id && q.status !== '已关闭').length;
     return {
       ...project,
       status,
-      producedDone: Math.min(stored, project.targetCount || 0),
-      deliveryDone: Math.min(accepted, project.targetCount || 0),
+      projectCode: project.erpProjectNo || project.id,
+      deviceCount,
+      erpDocCount,
+      openIssues,
       erpLinked: Boolean(project.erpPurchaseOrderNo || project.erpProjectNo),
     };
   });
@@ -313,33 +413,26 @@ function ProjectListTab() {
     });
   };
 
-  const actionButtons = (project) => {
-    const view = <LinkAction onClick={() => navigate(`/projects/${project.id}`)}>查看</LinkAction>;
-    const edit = <LinkAction onClick={() => openModal('editProject', project)}>编辑</LinkAction>;
-    const membersBtn = <LinkAction onClick={() => openModal('members', project)}>配置成员</LinkAction>;
-    const newProduction = <LinkAction onClick={() => openModal('createProduction', project)}>新建生产计划</LinkAction>;
-    const newDelivery = <LinkAction onClick={() => openModal('createDelivery', project)}>新建交付计划</LinkAction>;
-    const voidBtn = <LinkAction onClick={() => openModal('void', project)}>作废</LinkAction>;
-    const closeBtn = <LinkAction onClick={() => openModal('close', project)}>关闭</LinkAction>;
-    const logsBtn = <LinkAction onClick={() => navigate(`/projects/${project.id}`)}>查看日志</LinkAction>;
-
-    const map = {
-      未开始: [view, edit, membersBtn, newProduction, voidBtn],
-      进行中: [view, edit, membersBtn, newProduction, newDelivery, voidBtn, logsBtn],
-      已交付: [view, membersBtn, closeBtn, logsBtn],
-      已关闭: [view, logsBtn],
-      已作废: [view, logsBtn],
-    };
-    return <div className="flex items-center gap-x-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>{(map[project.status] || [view]).map((node, i) => <span key={i}>{node}</span>)}</div>;
-  };
+  const actionButtons = (project) => (
+    <div className="flex items-center gap-x-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+      <LinkAction onClick={() => navigate(`/projects/${project.id}`)}>查看详情</LinkAction>
+      <LinkAction onClick={() => openModal('editProject', project)}>编辑平台补充信息</LinkAction>
+      <LinkAction to="/erp-center?tab=overview">查看关联 ERP 单据</LinkAction>
+      <LinkAction onClick={() => navigate(`/projects/${project.id}`)}>查看日志</LinkAction>
+    </div>
+  );
 
   return (
     <Page>
       <PageHeader
         title="项目列表"
-        description="围绕项目、生产计划与交付计划追踪设备全生命周期质量进度。"
+        description="组织 ERP 来源单据与平台补充信息，追踪设备全生命周期质量进度。"
         actions={canDo('add_project') && <Btn variant="primary" onClick={() => openModal('newProject')}>新建项目</Btn>}
       />
+
+      <Card>
+        <p className="text-[13px] text-gray-600 leading-relaxed">平台项目用于组织 ERP 来源单据和平台过程记录。项目名称、项目编码优先来自 ERP；负责人、目标台数、业务场景等为平台补充字段。</p>
+      </Card>
 
       <Toolbar right={<><span className="text-xs text-gray-400">共 {filtered.length} 个项目</span><Btn variant="ghost" size="sm" onClick={resetFilters}>重置</Btn></>}>
         <SearchInput className="w-60" placeholder="项目名称 / 项目ID" value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })} />
@@ -365,146 +458,77 @@ function ProjectListTab() {
       </Toolbar>
 
       <Table
-        head={['项目ID', '项目名称', '项目类型 / 业务场景', '客户', '负责人', '项目成员', '状态', '生产进度', '交付进度', 'ERP 状态', '操作']}
+        head={['项目名称', '项目编码', 'ERP 来源单据', '客户', '项目负责人', '目标台数', '已关联 ERP 单据数', '已关联设备数', '未关闭问题数', '最近更新时间', '操作']}
         empty="暂无匹配项目"
         footer={<Pagination page={paged.page} total={paged.total} totalPages={paged.totalPages} onChange={paged.setPage} />}
       >
         {paged.pageItems.map((project) => (
           <tr key={project.id} onClick={() => navigate(`/projects/${project.id}`)} className="hover:bg-[#fafafa] cursor-pointer">
-            <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{project.id}</td>
             <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{project.name}</td>
-            <td className="px-3 py-2 whitespace-nowrap">{project.projectType ? <Chip>{project.projectType}</Chip> : '—'}</td>
+            <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{project.projectCode}</td>
+            <td className="px-3 py-2 whitespace-nowrap">{project.erpProjectNo ? <Chip>{project.erpProjectNo}</Chip> : <span className="text-gray-400">未关联</span>}</td>
             <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{project.client || '—'}</td>
             <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{project.manager || '—'}</td>
-            <td className="px-3 py-2 whitespace-nowrap">
-              {(() => {
-                const mems = project.members || [];
-                if (mems.length === 0) return <span className="text-gray-400 text-xs">未配置</span>;
-                return (
-                  <div className="flex items-center gap-1">
-                    {mems.slice(0, 3).map((mem) => <span key={mem.name} className="text-xs bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">{mem.name}</span>)}
-                    {mems.length > 3 && <span className="text-xs text-gray-400">+{mems.length - 3}</span>}
-                  </div>
-                );
-              })()}
-            </td>
-            <td className="px-3 py-2"><StatusBadge status={project.status} /></td>
-            <td className="px-3 py-2">{progressBar(project.producedDone, project.targetCount, 'bg-blue-500')}</td>
-            <td className="px-3 py-2">{progressBar(project.deliveryDone, project.targetCount, 'bg-emerald-500')}</td>
-            <td className="px-3 py-2">{erpChip(project.erpLinked)}</td>
+            <td className="px-3 py-2 text-gray-600">{project.targetCount || 0}</td>
+            <td className="px-3 py-2 text-gray-600">{project.erpDocCount}</td>
+            <td className="px-3 py-2 text-gray-600">{project.deviceCount}</td>
+            <td className="px-3 py-2">{project.openIssues > 0 ? <span className="text-amber-600 font-medium">{project.openIssues}</span> : <span className="text-gray-400">0</span>}</td>
+            <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{(project.updatedAt || '').slice(0, 16) || '—'}</td>
             <td className="px-3 py-2">{actionButtons(project)}</td>
           </tr>
         ))}
       </Table>
 
-      <SimpleFormModal
-        key="new-project"
-        isOpen={modal === 'newProject'}
-        onClose={() => setModal(null)}
-        title="新建项目"
-        fields={[
-          { key: 'name', label: '项目名称 *', required: true },
-          { key: 'projectType', label: '项目类型 / 业务场景', options: PROJECT_TYPES },
-          { key: 'client', label: '客户' },
-          { key: 'manager', label: '负责人', options: ['张三', '李四', '王五', '赵六', '蔡八'] },
-          { key: 'targetCount', label: '目标设备数 *', type: 'number', min: 1, defaultValue: 1, required: true },
-          { key: 'erpProjectNo', label: 'ERP 项目号' },
-          { key: 'background', label: '项目背景', type: 'textarea', full: true },
-        ]}
-        onSubmit={(form) => {
-          const project = {
-            id: `PROJ-${Date.now().toString().slice(-6)}`,
-            ...form,
-            targetCount: Number(form.targetCount || 1),
-            status: '未开始',
-            createdAt: nowText(),
-            updatedAt: nowText(),
-          };
-          dispatch({ type: 'ADD_PROJECT', payload: project });
-          writeProjectLog(project.id, '新建项目', '项目初始化', '', '未开始');
-        }}
-      />
+      {modal === 'newProject' && (
+        <CreateProjectModal
+          isOpen
+          onClose={() => setModal(null)}
+          erpSources={erpSources}
+          onCreate={(sel, form) => {
+            const members = form.members.split(/[,，、]/).map((s) => s.trim()).filter(Boolean).map((name) => ({ name, role: '只读成员' }));
+            const project = {
+              id: `PROJ-${Date.now().toString().slice(-6)}`,
+              name: sel.name,
+              projectCode: sel.code,
+              erpProjectNo: sel.erpProjectNo || sel.code,
+              erpSourceNo: sel.value,
+              erpSourceType: sel.sourceType,
+              contractNo: sel.contractNo,
+              orderCode: sel.orderCode,
+              client: sel.client,
+              projectType: form.projectType,
+              manager: form.manager,
+              targetCount: Number(form.targetCount || 1),
+              members,
+              notes: form.notes,
+              status: '未开始',
+              createdAt: nowText(),
+              updatedAt: nowText(),
+            };
+            dispatch({ type: 'ADD_PROJECT', payload: project });
+            writeProjectLog(project.id, '新建项目', `从 ERP 来源单据 ${sel.value} 创建项目`, '', '未开始');
+          }}
+        />
+      )}
 
       <SimpleFormModal
         key={`edit-${target?.id || 'none'}`}
         isOpen={modal === 'editProject'}
         onClose={() => setModal(null)}
-        title="编辑项目"
+        title="编辑平台补充信息"
+        note="项目名称、ERP 项目号、客户来自 ERP，只读同步；此处仅编辑平台补充字段（项目负责人 / 目标台数 / 业务场景 / 备注）。"
         fields={[
-          { key: 'name', label: '项目名称 *', defaultValue: target?.name || '', required: true },
-          { key: 'projectType', label: '项目类型 / 业务场景', options: PROJECT_TYPES, defaultValue: target?.projectType || '' },
-          { key: 'client', label: '客户', defaultValue: target?.client || '' },
-          { key: 'manager', label: '负责人', defaultValue: target?.manager || '', options: ['张三', '李四', '王五', '赵六', '蔡八'] },
-          { key: 'targetCount', label: '目标设备数 *', type: 'number', min: 1, defaultValue: target?.targetCount || 1, required: true },
-          { key: 'erpProjectNo', label: 'ERP 项目号', defaultValue: target?.erpProjectNo || '' },
-          { key: 'notes', label: '备注', type: 'textarea', full: true, defaultValue: target?.notes || '' },
+          { key: 'name', label: '项目名称（ERP 同步）', defaultValue: target?.name || '', readOnly: true },
+          { key: 'erpProjectNo', label: 'ERP 项目号（ERP 同步）', defaultValue: target?.erpProjectNo || '', readOnly: true },
+          { key: 'client', label: '客户（ERP 同步）', defaultValue: target?.client || '', readOnly: true },
+          { key: 'manager', label: '项目负责人（平台补充）', defaultValue: target?.manager || '', options: ['张三', '李四', '王五', '赵六', '蔡八'] },
+          { key: 'targetCount', label: '目标台数（平台补充）', type: 'number', min: 1, defaultValue: target?.targetCount || 1, required: true },
+          { key: 'projectType', label: '业务场景（平台补充）', options: PROJECT_TYPES, defaultValue: target?.projectType || '' },
+          { key: 'notes', label: '备注（平台补充）', type: 'textarea', full: true, defaultValue: target?.notes || '' },
         ]}
         onSubmit={(form) => {
           dispatch({ type: 'UPDATE_PROJECT', payload: { id: target.id, ...form, targetCount: Number(form.targetCount || 1), updatedAt: nowText() } });
-          writeProjectLog(target.id, '编辑项目', '更新项目基础信息');
-        }}
-      />
-
-      <SimpleFormModal
-        key={`production-${target?.id || 'none'}`}
-        isOpen={modal === 'createProduction'}
-        onClose={() => setModal(null)}
-        title="新建生产计划"
-        fields={[
-          { key: 'projectName', label: '所属项目', defaultValue: target?.name || '', readOnly: true },
-          { key: 'name', label: '生产计划名称 *', defaultValue: target ? `${target.name}Q2批次生产` : '', required: true },
-          { key: 'batchNo', label: '生产批次 / 计划批次', defaultValue: 'Q2' },
-          { key: 'deviceType', label: '设备类型 *', required: true, options: ['AlphaBot 1', 'AlphaBot 2', 'AlphaBot 1S'], defaultValue: 'AlphaBot 1' },
-          { key: 'targetCount', label: '计划数量 *', type: 'number', min: 1, defaultValue: target?.targetCount || 1, required: true },
-          { key: 'owner', label: '负责人 *', required: true, options: ['张三', '李四', '王五', '赵六'], defaultValue: target?.manager || '张三' },
-          { key: 'creator', label: '创建人', defaultValue: state.currentUser, readOnly: true },
-          { key: 'startDate', label: '计划开始时间', type: 'date' },
-          { key: 'endDate', label: '计划结束时间', type: 'date' },
-          { key: 'erpProductionOrderNo', label: '关联 ERP 生产订单号' },
-          { key: 'notes', label: '备注', type: 'textarea', full: true },
-        ]}
-        onSubmit={(form) => {
-          const plan = {
-            id: `PP-${Date.now().toString().slice(-6)}`,
-            projectId: target.id,
-            status: '生产中',
-            currentNode: '来料准备',
-            createdAt: nowText(),
-            ...form,
-            targetCount: Number(form.targetCount || 1),
-          };
-          dispatch({ type: 'ADD_PRODUCTION_PLAN', payload: plan });
-          dispatch({ type: 'UPDATE_PROJECT', payload: { id: target.id, status: '进行中', updatedAt: nowText() } });
-          writeProjectLog(target.id, '创建生产计划', `创建 ${plan.name}`, target.status, '进行中');
-        }}
-      />
-
-      <SimpleFormModal
-        key={`delivery-${target?.id || 'none'}`}
-        isOpen={modal === 'createDelivery'}
-        onClose={() => setModal(null)}
-        title="新建交付计划"
-        fields={[
-          { key: 'name', label: '交付计划名称 *', defaultValue: target ? `${target.name}交付计划` : '', required: true },
-          { key: 'batchNo', label: '交付批次', defaultValue: target ? `BATCH-${target.id}` : 'BATCH-NEW' },
-          { key: 'targetCount', label: '计划交付数量 *', type: 'number', min: 1, defaultValue: target?.targetCount || 1, required: true },
-          { key: 'owner', label: '负责人', options: ['张三', '李四', '王五', '赵六'] },
-          { key: 'factoryDate', label: '计划出厂时间', type: 'date' },
-          { key: 'acceptanceDate', label: '计划客户验收时间', type: 'date' },
-        ]}
-        onSubmit={(form) => {
-          const plan = {
-            id: `DP-${Date.now().toString().slice(-6)}`,
-            projectId: target.id,
-            status: '交付中',
-            currentNode: '绑定设备',
-            dueDate: form.acceptanceDate,
-            records: { binding: [], factoryInspection: [], siteInstall: [], customerAccept: [] },
-            ...form,
-            targetCount: Number(form.targetCount || 1),
-          };
-          dispatch({ type: 'ADD_DELIVERY_PLAN', payload: plan });
-          writeProjectLog(target.id, '创建交付计划', `创建 ${plan.name}`);
+          writeProjectLog(target.id, '编辑平台补充信息', '更新项目平台补充字段');
         }}
       />
 
@@ -552,8 +576,11 @@ function ProductionPlanTab() {
   const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const [filters, setFilters] = useState({ keyword: '', projectId: '', deviceType: '', status: '', owner: '', delayed: '' });
-  const [placeholder, setPlaceholder] = useState(null);
   const [editPlan, setEditPlan] = useState(null);
+  const [linkErpOpen, setLinkErpOpen] = useState(false);
+  const [linkErpNo, setLinkErpNo] = useState('');
+  const [toast, setToast] = useState('');
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2600); };
   // 生产计划列表只展示流程型生产计划 (WPP-*)。PLAN-* 属于日产能数据，不混入此列表。
   const plans = state.workflowProductionPlans || [];
   const projects = state.projects || [];
@@ -601,7 +628,13 @@ function ProductionPlanTab() {
 
   return (
     <Page>
-      <PageHeader title="生产计划" description="流程型生产计划（WPP）列表，跟踪来料、装配、测试与入库四节点。" />
+      <PageHeader
+        title="生产关联"
+        description="平台不新建 ERP 生产订单。此处关联 ERP 生产订单并补充设备级生产过程与质量追溯记录。"
+        actions={<Btn variant="primary" onClick={() => setLinkErpOpen(true)}>关联 ERP 生产订单</Btn>}
+      />
+
+      <FlowBar steps={['选择 ERP 生产订单', '查看订单 BOM / LRP', '查看材料出库 / 出库申请', '查看产品入库 / 产品检验', '补充设备 SN 与测试记录']} />
 
       <StatGrid cols={4}>
         <StatCard label="计划总数" value={enriched.length} />
@@ -651,11 +684,9 @@ function ProductionPlanTab() {
             <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap">{plan.erpProductionOrderNo || '—'}</td>
             <td className="px-3 py-2 text-xs whitespace-nowrap" onClick={stop}>
               <div className="flex items-center gap-x-3">
-                <LinkAction onClick={() => navigate(`/production-plans/${plan.id}`)}>查看</LinkAction>
-                <LinkAction onClick={() => setEditPlan(plan)}>编辑</LinkAction>
-                {!['已完成', '已作废'].includes(plan.status) && (
-                  <LinkAction onClick={() => setPlaceholder({ title: '作废生产计划', text: `作废「${plan.name || plan.id}」的入口已保留，后续接入审批流程。` })}>作废</LinkAction>
-                )}
+                <LinkAction onClick={() => navigate(`/production-plans/${plan.id}`)}>查看详情</LinkAction>
+                <LinkAction to="/erp-center?tab=production">查看 ERP 源单据</LinkAction>
+                <LinkAction onClick={() => setEditPlan(plan)}>补充生产过程记录</LinkAction>
                 <LinkAction onClick={() => navigate(`/projects/${plan.projectId}`)}>查看日志</LinkAction>
               </div>
             </td>
@@ -663,11 +694,29 @@ function ProductionPlanTab() {
         ))}
       </Table>
 
-      <Modal isOpen={!!placeholder} onClose={() => setPlaceholder(null)} title={placeholder?.title || ''}>
+      <Modal isOpen={linkErpOpen} onClose={() => setLinkErpOpen(false)} title="关联 ERP 生产订单">
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">{placeholder?.text}</p>
-          <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">本阶段以可演示的流程结构为主，动作入口先占位。</div>
-          <div className="flex justify-end"><button onClick={() => setPlaceholder(null)} className={BTN_PRIMARY}>知道了</button></div>
+          <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">请在 ERP 中维护生产订单，平台在此选择已同步的 ERP 生产订单建立关联。</div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">选择已同步的 ERP 生产订单</label>
+            <select value={linkErpNo} onChange={(e) => setLinkErpNo(e.target.value)} className={`${INPUT} w-full`}>
+              <option value="">-- 请选择 --</option>
+              {erpOrderNos.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setLinkErpOpen(false)} className={BTN_GHOST}>取消</button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!linkErpNo) { showToast('请先选择 ERP 生产订单'); return; }
+                showToast(`已选择 ERP 生产订单 ${linkErpNo} 建立关联（原型演示）`);
+                setLinkErpOpen(false);
+                setLinkErpNo('');
+              }}
+              className={BTN_PRIMARY}
+            >确认关联</button>
+          </div>
         </div>
       </Modal>
 
@@ -676,7 +725,7 @@ function ProductionPlanTab() {
           key={`edit-plan-${editPlan.id}`}
           isOpen
           onClose={() => setEditPlan(null)}
-          title="编辑生产计划"
+          title="补充生产过程记录"
           note="ERP 生产订单、工单、产品入库、产品检验状态来自 ERP，只读同步，不能在平台编辑。"
           fields={[
             { key: 'name', label: '生产计划名称 *', required: true, defaultValue: editPlan.name || '' },
@@ -686,7 +735,7 @@ function ProductionPlanTab() {
             { key: 'startDate', label: '计划开始时间', type: 'date', defaultValue: editPlan.startDate || '' },
             { key: 'endDate', label: '计划完成时间', type: 'date', defaultValue: editPlan.endDate || '' },
             { key: 'enabled', label: '是否启用', options: ['启用', '停用'], defaultValue: editPlan.enabled === false ? '停用' : '启用' },
-            { key: 'erpProductionOrderNo', label: '绑定 / 更换 ERP 工单（选择绑定，只读引用）', options: erpOrderNos, defaultValue: editPlan.erpProductionOrderNo || '' },
+            { key: 'erpProductionOrderNo', label: '关联 ERP 生产订单（只读引用）', options: erpOrderNos, disabled: true, defaultValue: editPlan.erpProductionOrderNo || '' },
             { key: 'notes', label: '备注', type: 'textarea', full: true, defaultValue: editPlan.notes || '' },
           ]}
           onSubmit={(form) => {
@@ -722,6 +771,12 @@ function ProductionPlanTab() {
             });
           }}
         />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-slate-800 text-white text-[13px] px-4 py-2 rounded-md shadow-lg">
+          {toast}
+        </div>
       )}
     </Page>
   );
@@ -1145,7 +1200,7 @@ function EditDeliveryModal({ planId, state, dispatch, onClose, onToast }) {
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="编辑交付计划" size="xl">
+    <Modal isOpen onClose={onClose} title="补充平台交付记录" size="xl">
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div><label className={lbl}>交付计划编号</label><input readOnly value={plan.id} className={ro} /></div>
@@ -1313,9 +1368,12 @@ function DeliveryPlanTab() {
   const [filters, setFilters] = useState({ keyword: '', projectId: '', status: '', node: '', owner: '', delayed: '' });
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
+  const [selectErpOpen, setSelectErpOpen] = useState(false);
+  const [selectErpNo, setSelectErpNo] = useState('');
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2600); };
   const openModal = (type, planId) => setModal({ type, planId });
   const projects = state.projects || [];
+  const erpServiceNos = [...new Set((state.deliveryPlans || []).map((p) => p.erpOutboundNo).filter(Boolean))];
 
   const enriched = (state.deliveryPlans || []).map((plan) => {
     const project = projects.find((p) => p.id === plan.projectId);
@@ -1350,7 +1408,13 @@ function DeliveryPlanTab() {
 
   return (
     <Page>
-      <PageHeader title="交付计划" description="按交付计划跟踪绑定设备、出厂检验、现场安装调试与客户验收进度。" />
+      <PageHeader
+        title="交付执行"
+        description="平台不新建 ERP 服务交付。此处选择 ERP 服务交付并补充现场部署、设备绑定、异常与售后关联。"
+        actions={<Btn variant="primary" onClick={() => setSelectErpOpen(true)}>选择 ERP 服务交付</Btn>}
+      />
+
+      <FlowBar steps={['选择 ERP 服务交付', '绑定交付设备', '记录现场执行', '上传交付资料', '记录交付异常', '提交问题池 / 关联售后工单']} />
 
       <StatGrid cols={4}>
         <StatCard label="计划总数" value={enriched.length} />
@@ -1401,9 +1465,11 @@ function DeliveryPlanTab() {
             <td className="px-3 py-2 text-xs whitespace-nowrap" onClick={stop}>
               <div className="flex items-center gap-x-3">
                 <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}`)}>查看详情</LinkAction>
-                <LinkAction onClick={() => openModal('devices', plan.id)}>管理设备</LinkAction>
+                <LinkAction to="/erp-center?tab=outbound">查看 ERP 源单据</LinkAction>
+                <LinkAction onClick={() => openModal('devices', plan.id)}>管理交付设备</LinkAction>
                 <LinkAction onClick={() => openModal('subOrders', plan.id)}>管理子工单</LinkAction>
-                <LinkAction onClick={() => openModal('edit', plan.id)}>编辑</LinkAction>
+                <LinkAction onClick={() => openModal('edit', plan.id)}>补充平台交付记录</LinkAction>
+                <LinkAction onClick={() => navigate(`/delivery-plans/${plan.id}`)}>记录交付异常</LinkAction>
                 {!['已验收', '已作废'].includes(plan.status) && (
                   <LinkAction onClick={() => openModal('void', plan.id)}>作废</LinkAction>
                 )}
@@ -1420,593 +1486,33 @@ function DeliveryPlanTab() {
       {modal?.type === 'void' && <VoidDeliveryModal planId={modal.planId} state={state} dispatch={dispatch} onClose={() => setModal(null)} onToast={showToast} />}
       {modal?.type === 'logs' && <DeliveryLogsModal planId={modal.planId} state={state} onClose={() => setModal(null)} />}
 
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-slate-800 text-white text-[13px] px-4 py-2 rounded-md shadow-lg">
-          {toast}
-        </div>
+      {selectErpOpen && (
+        <Modal isOpen onClose={() => setSelectErpOpen(false)} title="选择 ERP 服务交付">
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">请在 ERP 中维护服务交付单，平台在此选择已同步的 ERP 服务交付建立关联并补充交付执行记录。</div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">选择已同步的 ERP 服务交付</label>
+              <select value={selectErpNo} onChange={(e) => setSelectErpNo(e.target.value)} className={`${INPUT} w-full`}>
+                <option value="">-- 请选择 --</option>
+                {erpServiceNos.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setSelectErpOpen(false)} className={BTN_GHOST}>取消</button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectErpNo) { showToast('请先选择 ERP 服务交付'); return; }
+                  showToast(`已选择 ERP 服务交付 ${selectErpNo} 建立关联（原型演示）`);
+                  setSelectErpOpen(false);
+                  setSelectErpNo('');
+                }}
+                className={BTN_PRIMARY}
+              >确认关联</button>
+            </div>
+          </div>
+        </Modal>
       )}
-    </Page>
-  );
-}
-
-/* ═════════ ERP 表单（只读同步数据池） ═════════ */
-// 单个只读单据池：筛选 + 搜索 + 分页；所有行只读，操作列仅“查看详情 / 查看关联对象”只读动作。
-function ErpPool({ title, subtitle, columns, rows, typeOptions, onView, onRelated }) {
-  const [q, setQ] = useState('');
-  const [type, setType] = useState('');
-  const filtered = rows.filter((r) =>
-    (!type || r.type === type)
-    && (!q || (r.search || '').toLowerCase().includes(q.trim().toLowerCase())));
-  const pager = usePaged(filtered, 6);
-
-  return (
-    <Section
-      title={title}
-      subtitle={subtitle}
-      bodyClassName="p-0"
-      right={
-        <div className="flex items-center gap-2">
-          {typeOptions && (
-            <Select value={type} onChange={(e) => setType(e.target.value)}>
-              <option value="">全部单据类型</option>{typeOptions.map((t) => <option key={t}>{t}</option>)}
-            </Select>
-          )}
-          <SearchInput className="w-52" placeholder="搜索单号 / 关联对象" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-      }
-    >
-      <Table
-        head={[...columns, '操作']}
-        empty="暂无同步单据"
-        footer={<Pagination page={pager.page} total={pager.total} totalPages={pager.totalPages} onChange={pager.setPage} />}
-      >
-        {pager.pageItems.map((r) => (
-          <tr key={r.id} className="hover:bg-[#fafafa]">
-            {r.cells.map((c, i) => <td key={i} className="px-3 py-2 text-gray-700 align-middle whitespace-nowrap">{c}</td>)}
-            <td className="px-3 py-2 text-xs whitespace-nowrap">
-              <div className="flex items-center gap-x-3">
-                <LinkAction onClick={() => onView(r)}>查看详情</LinkAction>
-                <LinkAction onClick={() => onRelated(r)}>查看关联对象</LinkAction>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </Table>
-    </Section>
-  );
-}
-
-// ERP 数据刷新 / 只读提示文案（原型仅模拟，不写回 ERP）。
-const ERP_REFRESH_MSG = '本原型仅模拟 ERP 数据刷新，真实刷新依赖 ERP API。';
-const ERP_READONLY_NOTE = 'ERP 数据只读展示，平台仅建立关联关系，不修改 ERP 单据和库存主账。';
-
-// 同步结果彩色标签：成功=绿 / 部分成功=橙 / 失败=红（只读展示，保持紧凑风格）。
-function SyncResultBadge({ result }) {
-  const tone = result === '成功'
-    ? 'bg-green-50 text-green-700 border-green-200'
-    : result === '部分成功'
-      ? 'bg-amber-50 text-amber-700 border-amber-200'
-      : 'bg-red-50 text-red-700 border-red-200';
-  return <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${tone}`}>{result}</span>;
-}
-
-// ERP 单据详情抽屉：五段式（基础信息 / 单据明细 / 关联平台对象 / 同步信息 / 只读说明），全只读。
-function ErpDetailSections({ row }) {
-  const dash = (v) => (v == null || v === '' ? '—' : v);
-  const mono = (v) => <span className="font-mono text-xs text-gray-600">{dash(v)}</span>;
-  const b = row.base || {};
-  const sync = row.sync || {};
-  const refs = row.refs || [];
-  const heading = (t) => <div className="text-[13px] font-semibold text-gray-800 mb-2">{t}</div>;
-  const refLinks = (type) => {
-    const list = refs.filter((r) => r.type === type);
-    if (list.length === 0) return '—';
-    return (
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        {list.map((r) => (r.to
-          ? <LinkAction key={r.id} to={r.to}>{r.label}</LinkAction>
-          : <span key={r.id} className="text-[13px] text-gray-700">{r.label}</span>))}
-      </div>
-    );
-  };
-
-  return (
-    <div className="space-y-5">
-      <div>
-        {heading('基础信息')}
-        <DescList
-          cols={3}
-          items={[
-            ['ERP 单据号', mono(b.docNo)],
-            ['ERP 单据类型', b.docType ? <StatusBadge status={b.docType} /> : '—'],
-            ['单据状态', dash(b.docStatus)],
-            ['业务日期', dash(b.bizDate)],
-            ['单据日期', dash(b.docDate)],
-            ['创建人', dash(b.creator)],
-            ['审核人', dash(b.auditor)],
-            ['审核时间', dash(b.auditTime)],
-            ['来源组织', dash(b.sourceOrg)],
-            ['仓库', dash(b.warehouse)],
-            ['部门', dash(b.dept)],
-            ['供应商·客户', dash(b.partner)],
-          ]}
-        />
-      </div>
-      <div>
-        {heading('单据明细')}
-        <DescList cols={2} items={row.lines || []} />
-      </div>
-      <div>
-        {heading('关联平台对象')}
-        <DescList
-          cols={3}
-          items={[
-            ['关联项目', refLinks('项目')],
-            ['关联生产计划', refLinks('生产计划')],
-            ['关联设备 SN', refLinks('设备')],
-            ['关联交付计划', refLinks('交付计划')],
-            ['关联售后工单', refLinks('售后工单')],
-            ['关联换件记录', refLinks('换件记录')],
-          ]}
-        />
-      </div>
-      <div>
-        {heading('同步信息')}
-        <DescList
-          cols={3}
-          items={[
-            ['同步状态', sync.status ? <StatusBadge status={sync.status} /> : '—'],
-            ['最近同步时间', dash(sync.lastSyncTime)],
-            ['同步批次号', mono(sync.syncBatchNo)],
-            ['同步来源', dash(sync.source)],
-            ['同步结果', sync.result ? <SyncResultBadge result={sync.result} /> : '—'],
-            ['异常说明', dash(sync.exception)],
-          ]}
-        />
-      </div>
-      <div>
-        {heading('只读说明')}
-        <div className="bg-gray-50 border border-[#ececec] rounded-md p-3 text-xs text-gray-500">{ERP_READONLY_NOTE}</div>
-      </div>
-    </div>
-  );
-}
-
-function ErpFormsTab() {
-  const { state } = useApp();
-  const [detail, setDetail] = useState(null);
-  const [related, setRelated] = useState(null);
-  const [logOpen, setLogOpen] = useState(false);
-  const [toast, setToast] = useState('');
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2600); };
-
-  const projects = state.projects || [];
-  const wpp = state.workflowProductionPlans || [];
-  const batches = state.materialBatches || [];
-  const devices = state.devices || [];
-  const deliveryPlans = state.deliveryPlans || [];
-  const dash = (v) => (v == null || v === '' ? '—' : v);
-  const projName = (pid) => projects.find((p) => p.id === pid)?.name ?? '—';
-
-  const mono = (v) => <span className="font-mono text-xs text-gray-600">{dash(v)}</span>;
-  const typeBadge = (t) => <StatusBadge status={t} />;
-  // 平台关联对象引用（可点击跳转到对应业务对象详情）。
-  const devRef = (d) => ({ type: '设备', id: d.id, label: d.sn, to: `/devices/${d.id}` });
-  const projRef = (p) => ({ type: '项目', id: p.id, label: p.name, to: `/projects/${p.id}` });
-  const planRef = (p) => ({ type: '生产计划', id: p.id, label: p.name || p.id, to: `/production-plans/${p.id}` });
-  const dpRef = (dp) => ({ type: '交付计划', id: dp.id, label: dp.batchNo || dp.name || dp.id, to: `/delivery-plans/${dp.id}` });
-
-  // 同步信息：来自 erpSyncMeta（全池只读共享）。
-  const syncBase = {
-    status: erpSyncMeta.status,
-    lastSyncTime: erpSyncMeta.lastSyncTime,
-    syncBatchNo: erpSyncMeta.syncBatchNo,
-    source: erpSyncMeta.source,
-    result: erpSyncMeta.status === '已同步' ? '成功' : erpSyncMeta.status === '同步异常' ? '失败' : '同步中',
-    exception: '',
-  };
-  const storedCount = (planId) => devices.filter((d) => d.productionPlanId === planId && ['已入库', '待分配项目', '已分配项目', '在线运营'].includes(d.status)).length;
-  const batchDate = (b) => (b.inspectionTime || '').slice(0, 10);
-  const batchInspectStatus = (b) => {
-    const items = b.items || [];
-    if (items.some((i) => i.result === '不合格')) return '不合格';
-    if (items.some((i) => i.result === '特批使用')) return '特批使用';
-    return items.length ? '合格' : '—';
-  };
-  const materialLines = (b) => [
-    ['物料编码', dash(b.model)],
-    ['物料名称', dash(b.category)],
-    ['规格型号', dash(b.model)],
-    ['批次号', dash(b.batchNo)],
-    ['数量', dash(b.quantity)],
-    ['单位', '件'],
-    ['单据行状态', batchInspectStatus(b)],
-    ['备注', dash(b.notes)],
-  ];
-
-  // 池一：ERP 项目单
-  const projectRows = projects.map((p) => ({
-    id: `erp-proj-${p.id}`,
-    docType: 'ERP 项目单',
-    type: 'ERP 项目单',
-    search: `${p.erpProjectNo ?? ''} ${p.name} ${p.client ?? ''}`,
-    cells: [mono(p.erpProjectNo), <span className="text-gray-800">{p.name}</span>, dash(p.client), p.projectType ? <Chip>{p.projectType}</Chip> : '—'],
-    base: {
-      docNo: p.erpProjectNo, docType: 'ERP 项目单', docStatus: '有效',
-      bizDate: (p.createdAt || '').slice(0, 10), docDate: (p.createdAt || '').slice(0, 10),
-      creator: p.manager, auditor: '—', auditTime: '—',
-      sourceOrg: 'ERP 项目管理', warehouse: '—', dept: '项目部', partner: p.client,
-    },
-    lines: [
-      ['项目', p.name],
-      ['客户', dash(p.client)],
-      ['项目类型', dash(p.projectType)],
-      ['负责人', dash(p.manager)],
-      ['目标设备数', dash(p.targetCount)],
-    ],
-    refs: [
-      projRef(p),
-      ...wpp.filter((w) => w.projectId === p.id).map(planRef),
-      ...deliveryPlans.filter((dp) => dp.projectId === p.id).map(dpRef),
-    ],
-    sync: syncBase,
-  }));
-
-  // 池二：ERP 生产订单 / 工单（每个生产计划各派生一条生产订单 + 一条 ERP 工单，均只读）
-  const productionRows = [];
-  wpp.forEach((p) => {
-    const proj = projects.find((x) => x.id === p.projectId);
-    const status = productionPlanStatus(p);
-    const woNo = p.erpWorkOrderNo || ('MO-WO-' + (p.erpProductionOrderNo || p.id));
-    const startPlan = p.startDate || (p.createdAt || '').slice(0, 10);
-    const done = storedCount(p.id);
-    const refs = [
-      ...(proj ? [projRef(proj)] : []),
-      planRef(p),
-      ...devices.filter((d) => d.productionPlanId === p.id).map(devRef),
-    ];
-    const prodLines = [
-      ['生产订单号', dash(p.erpProductionOrderNo)],
-      ['工单号', woNo],
-      ['计划数量', dash(p.targetCount)],
-      ['完工数量', done],
-      ['工单状态', status],
-      ['计划开工时间', dash(startPlan)],
-      ['计划完工时间', dash(p.endDate)],
-    ];
-    const baseCommon = {
-      docStatus: status,
-      bizDate: (p.createdAt || '').slice(0, 10),
-      docDate: (p.createdAt || '').slice(0, 10),
-      creator: p.owner, auditor: '—', auditTime: '—',
-      sourceOrg: 'ERP 生产制造', warehouse: p.warehouse, dept: '生产部', partner: '—',
-    };
-    productionRows.push({
-      id: `erp-mo-${p.id}`, docType: '生产订单', type: '生产订单',
-      search: `${p.erpProductionOrderNo ?? ''} ${p.name} ${projName(p.projectId)} 生产订单`,
-      cells: [typeBadge('生产订单'), mono(p.erpProductionOrderNo), <span className="text-gray-800">{p.name}</span>, projName(p.projectId), <StatusBadge status={status} />],
-      base: { ...baseCommon, docNo: p.erpProductionOrderNo, docType: '生产订单' },
-      lines: prodLines, refs, sync: syncBase,
-    });
-    productionRows.push({
-      id: `erp-wo-${p.id}`, docType: 'ERP 工单', type: 'ERP 工单',
-      search: `${woNo} ${p.name} ${projName(p.projectId)} ERP 工单`,
-      cells: [typeBadge('ERP 工单'), mono(woNo), <span className="text-gray-800">{p.name}</span>, projName(p.projectId), <StatusBadge status={status} />],
-      base: { ...baseCommon, docNo: woNo, docType: 'ERP 工单' },
-      lines: prodLines, refs, sync: syncBase,
-    });
-  });
-
-  // 池三：ERP 采购 / 到货 / 入库 / 检验单（聚合 materialBatches + devices + plans）
-  const piiRows = [];
-  let piiIdx = 0;
-  const pushPii = (row) => piiRows.push({ id: `erp-pii-${piiIdx++}`, sync: syncBase, ...row });
-  const deviceLines = (d) => [
-    ['物料编码', dash(d.sn)],
-    ['物料名称', dash(deviceTypeName(state, d.deviceTypeId))],
-    ['规格型号', dash(deviceTypeName(state, d.deviceTypeId))],
-    ['批次号', '—'],
-    ['数量', 1],
-    ['单位', '台'],
-    ['单据行状态', dash(d.erpStockStatus)],
-    ['备注', dash(d.exceptionNote)],
-  ];
-  batches.forEach((b) => {
-    const bPlan = wpp.find((p) => p.id === b.planId);
-    const bRefs = bPlan ? [planRef(bPlan)] : [];
-    const arrived = b.erpArrivalNo ? (b.quantity || 0) : 0;
-    if (b.erpPurchaseOrderNo) {
-      pushPii({
-        docType: '采购单', type: '采购单',
-        search: `${b.erpPurchaseOrderNo} ${b.batchNo} ${dash(b.supplier)} 采购单`,
-        cells: [typeBadge('采购单'), mono(b.erpPurchaseOrderNo), `${b.batchNo} · ${dash(b.supplier)}`, dash(b.model)],
-        base: { docNo: b.erpPurchaseOrderNo, docType: '采购单', docStatus: b.erpArrivalNo ? '已到货' : '采购中', bizDate: batchDate(b), docDate: batchDate(b), creator: dash(b.inspector), auditor: dash(b.inspector), auditTime: dash(b.inspectionTime), sourceOrg: 'ERP 采购', warehouse: dash(b.warehouse), dept: '采购部', partner: dash(b.supplier) },
-        lines: [
-          ['供应商', dash(b.supplier)],
-          ['采购数量', dash(b.quantity)],
-          ['已到货数量', b.erpArrivalNo ? arrived : '—'],
-          ['未到货数量', b.erpArrivalNo ? (b.quantity || 0) - arrived : '—'],
-          ...materialLines(b),
-        ],
-        refs: bRefs,
-      });
-    }
-    if (b.erpArrivalNo) {
-      pushPii({
-        docType: '到货单', type: '到货单',
-        search: `${b.erpArrivalNo} ${b.batchNo} ${dash(b.supplier)} 到货单`,
-        cells: [typeBadge('到货单'), mono(b.erpArrivalNo), `${b.batchNo} · ${dash(b.supplier)}`, dash(b.warehouse)],
-        base: { docNo: b.erpArrivalNo, docType: '到货单', docStatus: batchInspectStatus(b), bizDate: batchDate(b), docDate: batchDate(b), creator: dash(b.inspector), auditor: dash(b.inspector), auditTime: dash(b.inspectionTime), sourceOrg: 'ERP 采购', warehouse: dash(b.warehouse), dept: '仓储部', partner: dash(b.supplier) },
-        lines: [
-          ['到货数量', dash(b.quantity)],
-          ['到货日期', dash(batchDate(b))],
-          ['到货检验状态', batchInspectStatus(b)],
-          ...materialLines(b),
-        ],
-        refs: bRefs,
-      });
-    }
-  });
-  devices.forEach((d) => {
-    if (d.erpInboundNo) {
-      pushPii({
-        docType: '入库单', type: '入库单',
-        search: `${d.erpInboundNo} ${d.sn} 入库单`,
-        cells: [typeBadge('入库单'), mono(d.erpInboundNo), d.sn, dash(d.erpStockStatus)],
-        base: { docNo: d.erpInboundNo, docType: '入库单', docStatus: dash(d.erpStockStatus), bizDate: (d.inboundTime || '').slice(0, 10), docDate: (d.inboundTime || '').slice(0, 10), creator: dash(d.assembler), auditor: '—', auditTime: '—', sourceOrg: 'ERP 生产制造', warehouse: dash(d.warehouse), dept: '仓储部', partner: '—' },
-        lines: [
-          ['入库仓库', dash(d.warehouse)],
-          ['入库数量', 1],
-          ['入库时间', dash(d.inboundTime)],
-          ['入库状态', dash(d.erpStockStatus)],
-          ...deviceLines(d),
-        ],
-        refs: [devRef(d)],
-      });
-    }
-    if (d.erpInspectionNo) {
-      const insp = dash(d.erpInspectionStatus);
-      pushPii({
-        docType: '检验单', type: '检验单',
-        search: `${d.erpInspectionNo} ${d.sn} 检验单`,
-        cells: [typeBadge('检验单'), mono(d.erpInspectionNo), d.sn, dash(d.erpInspectionStatus)],
-        base: { docNo: d.erpInspectionNo, docType: '检验单', docStatus: insp, bizDate: (d.inboundTime || '').slice(0, 10), docDate: (d.inboundTime || '').slice(0, 10), creator: '—', auditor: '—', auditTime: '—', sourceOrg: 'ERP 质量管理', warehouse: dash(d.warehouse), dept: '质检部', partner: '—' },
-        lines: [
-          ['检验结果', insp],
-          ['检验人', '—'],
-          ['检验时间', '—'],
-          ['不合格数量', d.erpInspectionStatus === '合格' ? 0 : '—'],
-          ['不合格原因', dash(d.exceptionNote)],
-          ...deviceLines(d),
-        ],
-        refs: [devRef(d)],
-      });
-    }
-  });
-  wpp.forEach((p) => {
-    const pRefs = [planRef(p), ...devices.filter((d) => d.productionPlanId === p.id).map(devRef)];
-    if (p.erpInboundNo) {
-      pushPii({
-        docType: '入库单', type: '入库单',
-        search: `${p.erpInboundNo} ${p.name} 入库单`,
-        cells: [typeBadge('入库单'), mono(p.erpInboundNo), p.name, dash(p.erpStockStatus)],
-        base: { docNo: p.erpInboundNo, docType: '入库单', docStatus: dash(p.erpStockStatus), bizDate: (p.updatedAt || '').slice(0, 10), docDate: (p.updatedAt || '').slice(0, 10), creator: dash(p.owner), auditor: '—', auditTime: '—', sourceOrg: 'ERP 生产制造', warehouse: dash(p.warehouse), dept: '仓储部', partner: '—' },
-        lines: [
-          ['入库仓库', dash(p.warehouse)],
-          ['入库数量', dash(p.targetCount)],
-          ['入库时间', dash((p.updatedAt || '').slice(0, 16))],
-          ['入库状态', dash(p.erpStockStatus)],
-          ['物料名称', dash(p.name)],
-          ['数量', dash(p.targetCount)],
-          ['单位', '台'],
-          ['备注', dash(p.notes)],
-        ],
-        refs: pRefs,
-      });
-    }
-    if (p.erpInspectionNo) {
-      const insp = dash(p.erpInspectionStatus ?? p.erpStockStatus);
-      pushPii({
-        docType: '检验单', type: '检验单',
-        search: `${p.erpInspectionNo} ${p.name} 检验单`,
-        cells: [typeBadge('检验单'), mono(p.erpInspectionNo), p.name, insp],
-        base: { docNo: p.erpInspectionNo, docType: '检验单', docStatus: insp, bizDate: (p.updatedAt || '').slice(0, 10), docDate: (p.updatedAt || '').slice(0, 10), creator: '—', auditor: dash(p.owner), auditTime: dash(p.updatedAt), sourceOrg: 'ERP 质量管理', warehouse: dash(p.warehouse), dept: '质检部', partner: '—' },
-        lines: [
-          ['检验结果', insp],
-          ['检验人', dash(p.owner)],
-          ['检验时间', dash(p.updatedAt)],
-          ['不合格数量', '—'],
-          ['不合格原因', '—'],
-          ['物料名称', dash(p.name)],
-          ['数量', dash(p.targetCount)],
-          ['单位', '台'],
-        ],
-        refs: pRefs,
-      });
-    }
-  });
-
-  // 池四：ERP 出库 / 领料单（生产领料单 / 销售出库单 / 出库申请单，均只读）
-  const outRows = [];
-  let outIdx = 0;
-  const pushOut = (row) => outRows.push({ id: `erp-out-${outIdx++}`, sync: syncBase, ...row });
-  batches.forEach((b) => {
-    if (b.erpDeliveryNo) {
-      const bPlan = wpp.find((p) => p.id === b.planId);
-      pushOut({
-        docType: '生产领料单', type: '生产领料单',
-        search: `${b.erpDeliveryNo} ${b.batchNo} ${b.planId ?? ''} 生产领料单`,
-        cells: [typeBadge('生产领料单'), mono(b.erpDeliveryNo), `${b.batchNo}${b.planId ? ` · ${b.planId}` : ''}`, b.overIssued ? '超额领料' : dash(b.warehouse)],
-        base: { docNo: b.erpDeliveryNo, docType: '生产领料单', docStatus: b.overIssued ? '超额领料' : '已领料', bizDate: batchDate(b), docDate: batchDate(b), creator: dash(b.inspector), auditor: '—', auditTime: '—', sourceOrg: 'ERP 生产制造', warehouse: dash(b.warehouse), dept: '生产部', partner: dash(b.supplier) },
-        lines: [
-          ['领料部门', '生产部'],
-          ['领料数量', dash(b.quantity)],
-          ['领料状态', b.overIssued ? '超额领料' : '已领料'],
-          ['关联生产订单·工单', dash(bPlan?.erpProductionOrderNo || b.planId)],
-          ...materialLines(b),
-        ],
-        refs: bPlan ? [planRef(bPlan)] : [],
-      });
-    }
-  });
-  deliveryPlans.forEach((dp) => {
-    const dpProj = projects.find((x) => x.id === dp.projectId);
-    const dpStatus = deliveryPlanStatus(dp);
-    const boundCount = dp.boundDeviceIds?.length || dp.records?.binding?.length || 0;
-    const outLines = [
-      ['客户名称', dash(dpProj?.client)],
-      ['出库仓库', '成品库'],
-      ['出库数量', dash(dp.targetCount)],
-      ['出库状态', dpStatus],
-      ['关联项目·交付计划', `${projName(dp.projectId)} · ${dp.id}`],
-    ];
-    const outRefs = [dpRef(dp), ...(dpProj ? [projRef(dpProj)] : [])];
-    const outBaseCommon = { docStatus: dpStatus, bizDate: dash(dp.factoryDate), docDate: dash(dp.factoryDate), creator: dash(dp.owner), auditor: '—', auditTime: '—', sourceOrg: 'ERP 销售', warehouse: '成品库', dept: '交付部', partner: dash(dpProj?.client) };
-    if (dp.erpOutboundNo) {
-      pushOut({
-        docType: '销售出库单', type: '销售出库单',
-        search: `${dp.erpOutboundNo} ${dp.batchNo || dp.name} ${projName(dp.projectId)} 销售出库单`,
-        cells: [typeBadge('销售出库单'), mono(dp.erpOutboundNo), `${dp.batchNo || dp.name} · ${projName(dp.projectId)}`, dpStatus],
-        base: { ...outBaseCommon, docNo: dp.erpOutboundNo, docType: '销售出库单' },
-        lines: [...outLines, ['已绑定设备数', boundCount]],
-        refs: outRefs,
-      });
-    }
-    const reqNo = dp.erpOutboundRequestNo || ('OA-' + (dp.erpOutboundNo || dp.id));
-    pushOut({
-      docType: '出库申请单', type: '出库申请单',
-      search: `${reqNo} ${dp.batchNo || dp.name} ${projName(dp.projectId)} 出库申请单`,
-      cells: [typeBadge('出库申请单'), mono(reqNo), `${dp.batchNo || dp.name} · ${projName(dp.projectId)}`, dpStatus],
-      base: { ...outBaseCommon, docNo: reqNo, docType: '出库申请单', dept: '销售部' },
-      lines: [...outLines, ['申请数量', dash(dp.targetCount)]],
-      refs: outRefs,
-    });
-  });
-
-  const openDetail = (poolTitle, r) => setDetail({ title: `${poolTitle} · 详情`, row: r });
-  const openRelated = (poolTitle, r) => setRelated({ title: `${poolTitle} · 关联的平台对象`, items: r.refs || [] });
-
-  return (
-    <Page>
-      <PageHeader
-        title="ERP 表单"
-        description="ERP 只读数据池：汇总项目、生产、采购入库检验、出库领料等 ERP 单据，供平台各业务模块建立关联关系。"
-        actions={
-          <>
-            <Btn variant="secondary" onClick={() => showToast(ERP_REFRESH_MSG)}>手动刷新</Btn>
-            <Btn variant="secondary" onClick={() => showToast(ERP_REFRESH_MSG)}>刷新全部</Btn>
-            <Btn variant="primary" onClick={() => setLogOpen(true)}>查看同步日志</Btn>
-          </>
-        }
-      />
-
-      <Card>
-        <DescList
-          cols={4}
-          items={[
-            ['最近同步时间', erpSyncMeta.lastSyncTime],
-            ['同步状态', <StatusBadge status={erpSyncMeta.status} />],
-            ['同步来源', erpSyncMeta.source],
-            ['同步批次号', <span className="font-mono text-xs text-gray-600">{erpSyncMeta.syncBatchNo}</span>],
-          ]}
-        />
-      </Card>
-
-      <Card className="border-amber-200 bg-amber-50">
-        <div className="flex items-start gap-2.5">
-          <svg className="mt-0.5 text-amber-600 flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
-          <div className="text-[13px]">
-            <div className="font-medium text-amber-800">只读同步自 ERP，平台不新增 / 编辑 / 删除 ERP 单据</div>
-            <div className="text-amber-700 mt-0.5">本页汇总项目、生产、采购入库检验、出库领料等 ERP 单据，仅作为各业务模块选择与绑定的数据来源；所有单据均为只读。</div>
-          </div>
-        </div>
-      </Card>
-
-      <ErpPool
-        title="ERP 项目单"
-        subtitle="来源：ERP 项目主数据"
-        columns={['ERP 项目号', '项目名称', '客户', '项目类型']}
-        rows={projectRows}
-        onView={(r) => openDetail('ERP 项目单', r)}
-        onRelated={(r) => openRelated('ERP 项目单', r)}
-      />
-      <ErpPool
-        title="ERP 生产订单 / 工单"
-        subtitle="来源：ERP 生产制造订单与工单"
-        columns={['单据类型', 'ERP 单号', '生产计划名称', '关联项目', '状态（只读）']}
-        rows={productionRows}
-        typeOptions={['生产订单', 'ERP 工单']}
-        onView={(r) => openDetail('ERP 生产订单 / 工单', r)}
-        onRelated={(r) => openRelated('ERP 生产订单 / 工单', r)}
-      />
-      <ErpPool
-        title="ERP 采购 / 入库 / 检验单"
-        subtitle="来源：ERP 采购、到货、入库与质量检验单据"
-        columns={['单据类型', 'ERP 单号', '关联对象', '状态 / 备注']}
-        rows={piiRows}
-        typeOptions={['采购单', '到货单', '入库单', '检验单']}
-        onView={(r) => openDetail('ERP 采购 / 入库 / 检验单', r)}
-        onRelated={(r) => openRelated('ERP 采购 / 入库 / 检验单', r)}
-      />
-      <ErpPool
-        title="ERP 出库 / 领料单"
-        subtitle="来源：ERP 生产领料、销售出库与出库申请单据"
-        columns={['单据类型', 'ERP 单号', '关联对象', '状态 / 仓库']}
-        rows={outRows}
-        typeOptions={['生产领料单', '销售出库单', '出库申请单']}
-        onView={(r) => openDetail('ERP 出库 / 领料单', r)}
-        onRelated={(r) => openRelated('ERP 出库 / 领料单', r)}
-      />
-
-      <Modal isOpen={!!detail} onClose={() => setDetail(null)} title={detail?.title || 'ERP 单据详情'} size="xl">
-        {detail && <ErpDetailSections row={detail.row} />}
-      </Modal>
-
-      <Modal isOpen={!!related} onClose={() => setRelated(null)} title={related?.title || '关联的平台对象'}>
-        {related && (
-          <div className="space-y-3">
-            {related.items.length === 0 ? (
-              <div className="bg-gray-50 border border-[#ececec] rounded-md p-4 text-sm text-gray-500 text-center">暂无平台关联</div>
-            ) : (
-              <div className="border border-[#ececec] rounded-md divide-y divide-[#f2f2f2]">
-                {related.items.map((it) => (
-                  <div key={`${it.type}-${it.id}`} className="flex items-center gap-3 px-3 py-2">
-                    <Chip>{it.type}</Chip>
-                    <span className="text-[13px] text-gray-800 flex-1 min-w-0 truncate">{it.label}</span>
-                    <span className="font-mono text-xs text-gray-400">{it.id}</span>
-                    {it.to && <LinkAction to={it.to}>查看</LinkAction>}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="bg-gray-50 border border-[#ececec] rounded-md p-3 text-xs text-gray-500">此处仅展示平台内与该 ERP 单据建立关联的业务对象；ERP 单据本身只读，不受平台影响。</div>
-          </div>
-        )}
-      </Modal>
-
-      <Modal isOpen={logOpen} onClose={() => setLogOpen(false)} title="ERP 同步日志" size="xl">
-        <div className="space-y-3">
-          <div className="text-xs text-gray-500">ERP 同步日志为只读记录，展示定时任务与手动刷新的同步结果，平台不写回 ERP。</div>
-          <Table
-            head={['同步时间', '同步对象', '同步类型', '同步结果', '成功条数', '失败条数', '异常说明', '操作人·系统任务']}
-            empty="暂无同步日志"
-          >
-            {erpSyncLogs.map((log) => (
-              <tr key={log.id} className="hover:bg-[#fafafa]">
-                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{log.time}</td>
-                <td className="px-3 py-2 whitespace-nowrap text-gray-700">{log.object}</td>
-                <td className="px-3 py-2 whitespace-nowrap"><Chip tone="outline">{log.syncType}</Chip></td>
-                <td className="px-3 py-2 whitespace-nowrap"><SyncResultBadge result={log.result} /></td>
-                <td className="px-3 py-2 text-gray-600">{log.successCount}</td>
-                <td className="px-3 py-2 text-gray-600">{log.failCount}</td>
-                <td className="px-3 py-2 text-gray-600 min-w-[200px] whitespace-normal">{log.exception || '—'}</td>
-                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{log.operator}</td>
-              </tr>
-            ))}
-          </Table>
-          <div className="bg-gray-50 border border-[#ececec] rounded-md p-3 text-xs text-gray-500">手动刷新 / 刷新全部在本原型中仅为模拟；真实刷新依赖 ERP API。</div>
-        </div>
-      </Modal>
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-slate-800 text-white text-[13px] px-4 py-2 rounded-md shadow-lg">
@@ -2027,7 +1533,6 @@ export default function ProjectsCenter() {
       {activeTab === 'list' && <ProjectListTab />}
       {activeTab === 'production' && <ProductionPlanTab />}
       {activeTab === 'delivery' && <DeliveryPlanTab />}
-      {activeTab === 'erp' && <ErpFormsTab />}
     </>
   );
 }

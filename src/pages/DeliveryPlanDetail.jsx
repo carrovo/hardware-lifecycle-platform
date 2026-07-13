@@ -824,7 +824,17 @@ export default function DeliveryPlanDetail() {
         )}
         title={<span className="inline-flex items-center gap-3">{plan.name ?? plan.id}<StatusBadge status={planStatus} size="md" /></span>}
         description={`交付批次 ${plan.batchNo ?? plan.name ?? plan.id}。围绕设备 SN 记录交付全过程，交付异常转售后为流程分支，非独立菜单。`}
-        actions={<Btn as="link" to="/projects?tab=delivery" variant="secondary">返回交付计划</Btn>}
+        actions={(
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Btn size="sm" variant="secondary" onClick={() => alert('请在 ERP 中维护服务交付单，平台在此选择已同步的 ERP 服务交付建立关联并补充交付执行记录。')}>选择 ERP 服务交付</Btn>
+            <Btn size="sm" as="link" to="/erp-center?tab=outbound" variant="secondary">查看 ERP 源单据</Btn>
+            <Btn size="sm" variant="secondary" onClick={() => document.getElementById('platform-delivery-records')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>补充平台交付记录</Btn>
+            <Btn size="sm" variant="secondary" onClick={() => goTab('exception')}>记录交付异常</Btn>
+            <Btn size="sm" variant="secondary" onClick={() => document.getElementById('related-issues')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>查看关联问题</Btn>
+            <Btn size="sm" variant="secondary" onClick={() => document.getElementById('related-workorders')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>查看关联售后工单</Btn>
+            <Btn size="sm" as="link" to="/projects?tab=delivery" variant="secondary">返回交付计划</Btn>
+          </div>
+        )}
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -838,6 +848,27 @@ export default function DeliveryPlanDetail() {
         <StatCard label="验收通过设备数" value={acceptedPass} tone="success" hint="客户验收通过（Pass）" />
         <StatCard label="未结售后工单数" value={openWO} tone={openWO ? 'warning' : 'default'} hint="关联未关闭交付/售后工单" />
       </StatGrid>
+
+      <Section
+        title="ERP 服务交付信息（ERP 只读同步）"
+        subtitle="以下字段来自 ERP 服务交付单，平台只读同步展示，不创建、不编辑 ERP 单据（无对应字段时显示 —）。"
+        right={<Chip>ERP 只读同步</Chip>}
+      >
+        <DescList
+          cols={3}
+          items={[
+            ['ERP 销售出库单号', plan.erpOutboundNo],
+            ['ERP 验收单号', plan.erpAcceptanceNo],
+            ['同步口径', '只读同步'],
+          ]}
+        />
+        <p className="text-xs text-gray-400 mt-4 pt-3 border-t border-[#f2f2f2]">ERP 服务交付记录合同、客户、订单、结算等源信息；平台补充现场部署、设备绑定、异常和售后关联。</p>
+      </Section>
+
+      <div id="platform-delivery-records" className="pt-1">
+        <h2 className="text-sm font-semibold text-gray-800">平台交付执行记录</h2>
+        <p className="text-xs text-gray-400 mt-0.5">ERP 服务交付单之外，平台补充的交付执行记录：交付流程 / 阶段操作 / 子工单（前置准备 · 设备部署）/ 设备 / 资料 / 异常 / 关联问题 / 关联售后 / 操作日志。</p>
+      </div>
 
       <Section
         title="交付流程进度"
@@ -893,7 +924,7 @@ export default function DeliveryPlanDetail() {
         </Section>
       </div>
 
-      <Section title="交付基础信息">
+      <Section title="交付基础信息（平台补充）" subtitle="平台补充的交付计划信息（负责人 / 计划节点 / 设备数等）；ERP 正式服务交付字段见上方「ERP 服务交付信息」。">
         <DescList
           cols={3}
           items={[
@@ -909,8 +940,6 @@ export default function DeliveryPlanDetail() {
             ['计划出厂', plan.factoryDate],
             ['计划现场安装调试', plan.siteInstallDate],
             ['计划验收', plan.acceptanceDate ?? plan.dueDate],
-            ['ERP 销售出库单号', plan.erpOutboundNo],
-            ['ERP 验收单号', plan.erpAcceptanceNo],
             ['是否超期', overdue ? '是' : '否'],
           ]}
         />
@@ -958,6 +987,7 @@ export default function DeliveryPlanDetail() {
         </Table>
       </Section>
 
+      <div id="related-issues">
       <Section title="关联问题池记录" subtitle="该交付计划关联设备产生的问题池记录（qualityIssues）。设备 / 软件 / 使用 / 质量问题经技术客服预处理后决定是否转售后。" bodyClassName="p-0">
         <Table
           head={['问题编号', '关联设备SN', '问题描述', '来源节点', '问题类型', '严重程度', '状态', '关联售后工单', '操作']}
@@ -979,7 +1009,9 @@ export default function DeliveryPlanDetail() {
           ))}
         </Table>
       </Section>
+      </div>
 
+      <div id="related-workorders">
       <Section title="关联售后工单" subtitle="交付子工单产生的售后 / 交付工单（deliveryWorkOrders + 关联 workOrders）" bodyClassName="p-0">
         <Table
           head={['工单编号', '类型', '设备SN', '问题描述', '严重程度', '负责人', '状态', '操作']}
@@ -1000,6 +1032,7 @@ export default function DeliveryPlanDetail() {
           ))}
         </Table>
       </Section>
+      </div>
 
       <Section title="操作日志" subtitle={`共 ${planLogs.length} 条`}>
         {planLogs.length ? <OperationLog logs={planLogs} /> : <EmptyState>暂无操作日志</EmptyState>}

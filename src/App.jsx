@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import HomePage from './pages/HomePage';
 import Dashboard from './pages/Dashboard';
+import ErpCenter from './pages/ErpCenter';
 import ProjectsCenter from './pages/ProjectsCenter';
 import ProjectDetail from './pages/ProjectDetail';
 import ProductionPlanDetail from './pages/ProductionPlanDetail';
@@ -32,6 +33,7 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="/home" element={<HomePage />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/erp-center" element={<ErpCenter />} />
         <Route path="/projects" element={<ProjectsCenter />} />
         <Route path="/projects/:id" element={<ProjectDetail />} />
         <Route path="/production-plans/:id" element={<ProductionPlanDetail />} />
@@ -49,6 +51,7 @@ function AppRoutes() {
         <Route path="/devices" element={<Navigate to="/assets?tab=devices" replace />} />
         <Route path="/work-orders" element={<Navigate to="/after-sales" replace />} />
         <Route path="/delivery" element={<Navigate to="/projects?tab=delivery" replace />} />
+        <Route path="/erp-forms" element={<Navigate to="/erp-center" replace />} />
         <Route path="/users" element={<Navigate to="/system?tab=roles" replace />} />
         <Route path="/roles" element={<Navigate to="/system?tab=roles" replace />} />
         <Route path="/operations" element={<Navigate to="/assets?tab=devices" replace />} />
