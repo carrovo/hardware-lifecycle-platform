@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRole } from '../context/RoleContext';
@@ -27,60 +27,18 @@ function nowText() {
   return new Date().toISOString().slice(0, 16).replace('T', ' ');
 }
 
-/* ── 点位关联设备（平台补充记录） ───────────────────────────
- * 按项目点位聚合的现场设备清单，仅项目详情页使用的确定性 mock，
- * 不扩展全局设备台账、不改设备详情、不改售后 mock。
- * 使用通用字段：设备 SN/编号、设备名称、型号/规格；不引入设备类型枚举，不写死具体设备品类。 */
-const LOC_DEV_STATUSES = ['在线运营', '现场安装调试中', '维修中', '待交付'];
-const LOC_DEV_MODELS = ['M-100', 'M-200', 'S-300', 'S-320'];
-const LOC_DEV_ISSUES = ['传感器读数异常', '网络连接不稳定', '现场校准待复核', '电机异响待排查'];
-
-// 稳定哈希：同一点位 id 每次生成相同结果（纯函数，渲染期可安全调用）。
-function hashId(str) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i += 1) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
+// 点位关联设备判定：设备是否属于某点位（用于「查看设备」按点位筛选下方设备列表，以及点位表计数）。
+// 数据来自项目下真实设备列表（设备的所属点位 / 点位的设备清单），不生成额外设备、不扩展全局设备台账。
+function deviceInLocation(device, loc) {
+  if (!loc) return false;
+  return device.locationId === loc.id
+    || device.preAssignedLocationId === loc.id
+    || (loc.deviceIds || []).includes(device.id);
 }
 
-// 依据点位 id 确定性生成 1-3 台关联设备。
-function buildLocationDevices(loc) {
-  const seed = hashId(loc.id);
-  const count = 1 + (seed % 3); // 1..3
-  const suffix = ((loc.id.match(/\d+/g) || ['00']).join('').slice(-4) || '0000').padStart(4, '0');
-  const list = [];
-  for (let i = 0; i < count; i += 1) {
-    const s = hashId(`${loc.id}#${i}`);
-    const status = LOC_DEV_STATUSES[s % LOC_DEV_STATUSES.length];
-    const online = status === '在线运营';
-    const openIssues = (s >>> 4) % 3 === 0 ? (s >>> 6) % 2 : 0; // 多数为 0，部分点位设备存在未关闭问题
-    const day = 10 + ((s >>> 8) % 18);
-    list.push({
-      sn: `SN-${suffix}-${String(i + 1).padStart(2, '0')}`,
-      name: `${loc.name}-现场设备${i + 1}`,
-      model: LOC_DEV_MODELS[s % LOC_DEV_MODELS.length],
-      status,
-      online,
-      lastIssue: openIssues > 0 ? LOC_DEV_ISSUES[s % LOC_DEV_ISSUES.length] : '—',
-      openIssues,
-      updatedAt: `2026-06-${String(day).padStart(2, '0')} 10:${String(s % 60).padStart(2, '0')}`,
-    });
-  }
-  return list;
-}
-
-// 为一组点位构建「点位 -> 关联设备」映射，并确定性兜底保证至少一个点位存在未关闭问题。
-function buildLocDeviceMap(locList) {
-  const map = {};
-  locList.forEach((loc) => { map[loc.id] = buildLocationDevices(loc); });
-  const anyOpen = locList.some((loc) => map[loc.id].some((d) => d.openIssues > 0));
-  if (!anyOpen && locList.length) {
-    const first = map[locList[0].id];
-    if (first.length) first[0] = { ...first[0], openIssues: 1, lastIssue: LOC_DEV_ISSUES[0] };
-  }
-  return map;
+// 在线判定：与下方设备列表「在线状态」列口径保持一致（在线运营阶段视为在线）。
+function isDeviceOnline(device) {
+  return device.status === '在线运营';
 }
 
 function erpChip(linked) {
@@ -192,48 +150,14 @@ function LocationFormModal({ isOpen, onClose, initial, projectName, onSave }) {
   );
 }
 
-// 点位关联设备清单弹窗（复用现有 Modal + Table，无新路由、不跳转资产管理）。
-function LocationDevicesModal({ isOpen, onClose, location, devices }) {
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="点位关联设备" size="xl">
-      <div className="space-y-3">
-        <p className="text-xs text-gray-500 leading-relaxed">
-          {location ? <>点位「<span className="text-gray-700">{location.name}</span>」共 {devices.length} 台关联设备。</> : null}
-          {' '}点位关联设备为平台补充记录，用于按现场点位聚合设备，便于售后维护、设备流转与问题追溯。
-        </p>
-        <Table
-          head={['设备 SN / 编号', '设备名称', '型号 / 规格', '当前状态', '在线状态', '最近问题', '未关闭问题数', '最近更新时间', '操作']}
-          empty="该点位暂无关联设备"
-        >
-          {devices.map((d) => (
-            <tr key={d.sn} className="hover:bg-[#fafafa]">
-              <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{d.sn}</td>
-              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{d.name}</td>
-              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{d.model}</td>
-              <td className="px-3 py-2"><StatusBadge status={d.status} /></td>
-              <td className="px-3 py-2">{d.online ? <StatusBadge status="在线" /> : <span className="text-gray-300 text-xs">—</span>}</td>
-              <td className="px-3 py-2 text-gray-600 text-xs max-w-[200px]"><div className="truncate">{d.lastIssue}</div></td>
-              <td className="px-3 py-2">{d.openIssues > 0 ? <span className="text-amber-600 font-medium">{d.openIssues}</span> : <span className="text-gray-400">0</span>}</td>
-              <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">{d.updatedAt}</td>
-              <td className="px-3 py-2 text-xs whitespace-nowrap">
-                {d.openIssues > 0
-                  ? <LinkAction to="/after-sales?tab=quality">查看问题</LinkAction>
-                  : <span className="text-gray-300">查看问题</span>}
-              </td>
-            </tr>
-          ))}
-        </Table>
-      </div>
-    </Modal>
-  );
-}
-
 export default function ProjectDetail() {
   const { id } = useParams();
   const { state, dispatch } = useApp();
   const { canDo } = useRole();
   const [modal, setModal] = useState(null);
   const [locTarget, setLocTarget] = useState(null);
+  const [locFilter, setLocFilter] = useState(null); // 当前按点位筛选下方设备列表的 locationId（null = 全部设备）
+  const deviceListRef = useRef(null);
 
   const {
     projects, workflowProductionPlans = [], deliveryPlans = [],
@@ -262,9 +186,13 @@ export default function ProjectDetail() {
     ...projWorkOrders.map((w) => ({ id: w.id, kind: w.type === 'production' ? '生产返修记录' : w.type === 'delivery' ? '交付工单' : '售后工单', deviceSN: w.deviceSN, stage: w.stage || w.sourceNode || w.ngStation || '—', desc: w.description, severity: w.severity || '中', status: w.status, target: w.type === 'production' ? 'none' : 'orders' })),
   ];
 
+  // 点位筛选：下方设备列表按当前查看点位过滤；未筛选时展示项目下全部设备。
+  const filterLoc = locFilter ? projLocations.find((l) => l.id === locFilter) : null;
+  const visibleDevices = filterLoc ? projDevices.filter((d) => deviceInLocation(d, filterLoc)) : projDevices;
+
   const prodPaged = usePaged(projProductionPlans, 8);
   const delivPaged = usePaged(projDeliveryPlans, 8);
-  const devPaged = usePaged(projDevices, 8);
+  const devPaged = usePaged(visibleDevices, 8);
   const locPaged = usePaged(projLocations, 8);
   const relatedPaged = usePaged(relatedRows, 8);
   const logPaged = usePaged(projLogs, 8);
@@ -273,8 +201,22 @@ export default function ProjectDetail() {
     return <div className="p-6 text-gray-400">项目不存在</div>;
   }
 
-  // 点位关联设备映射（点位维度聚合，表格计数与「查看设备」弹窗共用同一份数据，保证一致）。
-  const locDeviceMap = buildLocDeviceMap(projLocations);
+  // 点位维度聚合：关联设备数 / 在线设备数 / 未关闭问题数。点位表与设备列表筛选提示条共用同一口径，保证一致。
+  const statsForLocation = (loc) => {
+    const locDevices = projDevices.filter((d) => deviceInLocation(d, loc));
+    const ids = new Set(locDevices.map((d) => d.id));
+    const sns = new Set(locDevices.map((d) => d.sn));
+    const online = locDevices.filter(isDeviceOnline).length;
+    const openIssues = projIssues.filter((q) => q.status !== '已关闭' && (ids.has(q.deviceId) || sns.has(q.deviceSN))).length;
+    return { count: locDevices.length, online, openIssues };
+  };
+  const filterStats = filterLoc ? statsForLocation(filterLoc) : null;
+
+  // 点击「查看设备」：按该点位筛选下方设备列表，并定位到设备列表区域（不弹窗、不新增路由、不跳转资产管理）。
+  const viewLocationDevices = (loc) => {
+    setLocFilter(loc.id);
+    setTimeout(() => { deviceListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0);
+  };
 
   const status = projectStatus(project, allProductionPlans, deliveryPlans);
   const erpLinked = Boolean(project.erpProjectNo || project.erpPurchaseOrderNo);
@@ -317,9 +259,10 @@ export default function ProjectDetail() {
     setModal(null);
     setLocTarget(null);
   };
-  const deleteLocation = (loc) => {
-    dispatch({ type: 'DELETE_LOCATION', payload: loc.id });
-    writeLog('删除点位', `删除点位 ${loc.name}`);
+  // 停用点位（不删除数据）：仅标记为已停用，历史设备 / 交付记录 / 问题 / 日志仍保留。
+  const disableLocation = (loc) => {
+    dispatch({ type: 'UPDATE_LOCATION', payload: { id: loc.id, disabled: true, updatedAt: nowText() } });
+    writeLog('停用点位', `停用点位 ${loc.name}`);
   };
 
   const canManageLoc = canDo('manage_locations');
@@ -378,28 +321,26 @@ export default function ProjectDetail() {
       {/* 点位管理 */}
       <Section
         title={`点位管理（${projLocations.length}）`}
-        subtitle="该项目下点位主数据，支撑交付预分配、现场安装与在线运营点位归属。"
+        subtitle="该项目下的现场点位信息，支持维护点位并按点位查看关联设备，便于后续售后维护、设备流转和问题追溯。"
         right={canManageLoc && <Btn variant="primary" size="sm" onClick={() => { setLocTarget('new'); setModal('locationForm'); }}>新增点位</Btn>}
         bodyClassName="p-0"
       >
         <p className="px-4 pt-3 text-xs text-gray-500 leading-relaxed">
-          点位关联设备用于按项目点位聚合现场设备，方便后续售后维护、设备流转和问题追溯。
+          点击“查看设备”后，将在下方设备列表中筛选展示该点位关联设备。
         </p>
         <Table
-          head={['点位名称', '地址', '计划数', '负责人', '关联交付计划', '关联设备数', '在线设备数', '未关闭问题数', '更新时间', '操作']}
+          head={['点位名称', '地址', '计划数', '负责人', '关联交付执行', '关联设备数', '在线设备数', '未关闭问题数', '状态', '更新时间', '操作']}
           empty="暂无点位"
           footer={<Pagination page={locPaged.page} total={locPaged.total} totalPages={locPaged.totalPages} onChange={locPaged.setPage} />}
         >
           {locPaged.pageItems.map((loc) => {
-            const locDevs = locDeviceMap[loc.id] || [];
-            const linkedCount = locDevs.length;
-            const onlineCount = locDevs.filter((d) => d.online).length;
-            const openIssueCount = locDevs.reduce((sum, d) => sum + d.openIssues, 0);
+            const stats = statsForLocation(loc);
             const planned = loc.plannedCount ?? (loc.deviceIds || []).length ?? 0;
             const planLinks = (loc.deliveryPlanIds || []).map((pid) => deliveryPlans.find((dp) => dp.id === pid)).filter(Boolean);
+            const active = locFilter === loc.id;
             return (
-              <tr key={loc.id} className={`hover:bg-[#fafafa] ${loc.disabled ? 'opacity-60' : ''}`}>
-                <td className="px-3 py-2 text-gray-800 whitespace-nowrap">{loc.name}{loc.disabled && <span className="ml-2 text-xs text-gray-400">已停用</span>}</td>
+              <tr key={loc.id} className={`hover:bg-[#fafafa] ${loc.disabled ? 'opacity-60' : ''} ${active ? 'bg-blue-50/60' : ''}`}>
+                <td className="px-3 py-2 text-gray-800 whitespace-nowrap">{loc.name}</td>
                 <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{loc.address || '—'}</td>
                 <td className="px-3 py-2 text-gray-600">{planned}</td>
                 <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{loc.owner || '—'}</td>
@@ -408,16 +349,21 @@ export default function ProjectDetail() {
                     ? <div className="flex flex-wrap gap-x-3 gap-y-1">{planLinks.map((dp) => <Link key={dp.id} to={`/delivery-plans/${dp.id}`} className="ui-link">{dp.batchNo || dp.name}</Link>)}</div>
                     : '—'}
                 </td>
-                <td className="px-3 py-2 text-gray-600">{linkedCount}</td>
-                <td className="px-3 py-2 text-gray-600">{onlineCount}</td>
-                <td className="px-3 py-2">{openIssueCount > 0 ? <span className="text-amber-600 font-medium">{openIssueCount}</span> : <span className="text-gray-400">0</span>}</td>
+                <td className="px-3 py-2 text-gray-600">{stats.count}</td>
+                <td className="px-3 py-2 text-gray-600">{stats.online}</td>
+                <td className="px-3 py-2">{stats.openIssues > 0 ? <span className="text-amber-600 font-medium">{stats.openIssues}</span> : <span className="text-gray-400">0</span>}</td>
+                <td className="px-3 py-2">
+                  {loc.disabled
+                    ? <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium bg-gray-50 text-gray-500 border-gray-200">已停用</span>
+                    : <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium bg-green-50 text-green-700 border-green-200">启用</span>}
+                </td>
                 <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">{loc.updatedAt || '—'}</td>
                 <td className="px-3 py-2 text-xs whitespace-nowrap">
                   <div className="flex items-center gap-x-3">
-                    <LinkAction onClick={() => { setLocTarget(loc); setModal('locDevices'); }}>查看设备</LinkAction>
-                    {canManageLoc && <>
+                    <LinkAction onClick={() => viewLocationDevices(loc)}>查看设备</LinkAction>
+                    {canManageLoc && !loc.disabled && <>
                       <LinkAction onClick={() => { setLocTarget(loc); setModal('locationForm'); }}>编辑</LinkAction>
-                      <LinkAction onClick={() => { setLocTarget(loc); setModal('deleteLoc'); }}>删除</LinkAction>
+                      <LinkAction onClick={() => { setLocTarget(loc); setModal('disableLoc'); }}>停用</LinkAction>
                     </>}
                   </div>
                 </td>
@@ -427,17 +373,30 @@ export default function ProjectDetail() {
         </Table>
       </Section>
 
-      {/* 设备列表 */}
-      <Section title={`设备列表（${projDevices.length}）`} subtitle="该项目关联设备，覆盖生产、交付与在线运营各阶段。" bodyClassName="p-0">
+      {/* 设备列表（承接点位「查看设备」筛选结果） */}
+      <div ref={deviceListRef} className={`scroll-mt-4 ${filterLoc ? 'rounded-xl ring-2 ring-blue-200 transition' : ''}`}>
+      <Section
+        title={filterLoc ? `设备列表｜当前查看点位：${filterLoc.name}` : `设备列表（${projDevices.length}）`}
+        subtitle="该项目关联设备，覆盖生产、交付与在线运营各阶段。"
+        bodyClassName="p-0"
+      >
+        {filterLoc && (
+          <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2">
+            <span className="text-[13px] text-blue-800">
+              已筛选出 <b>{filterStats.count}</b> 台关联设备，其中在线 <b>{filterStats.online}</b> 台，未关闭问题 <b>{filterStats.openIssues}</b> 个。
+            </span>
+            <Btn variant="ghost" size="sm" onClick={() => setLocFilter(null)}>查看全部设备</Btn>
+          </div>
+        )}
         <Table
           head={['设备SN', '机器人型号', '当前状态', '在线状态', '所属点位', '最近更新', '操作']}
-          empty="暂无项目设备"
+          empty={filterLoc ? '该点位下暂无关联设备' : '暂无项目设备'}
           footer={<Pagination page={devPaged.page} total={devPaged.total} totalPages={devPaged.totalPages} onChange={devPaged.setPage} />}
         >
           {devPaged.pageItems.map((device) => {
             const typeName = deviceTypes.find((t) => t.id === device.deviceTypeId)?.name || device.deviceTypeId || '—';
-            const loc = locations.find((l) => l.id === (device.locationId || device.preAssignedLocationId));
-            const online = device.status === '在线运营';
+            const loc = projLocations.find((l) => deviceInLocation(device, l)) || locations.find((l) => l.id === (device.locationId || device.preAssignedLocationId));
+            const online = isDeviceOnline(device);
             const dp = deliveryPlans.find((p) => (p.boundDeviceIds || []).includes(device.id) || (p.records?.binding || []).some((b) => b.deviceId === device.id));
             return (
               <tr key={device.id} className="hover:bg-[#fafafa]">
@@ -458,6 +417,7 @@ export default function ProjectDetail() {
           })}
         </Table>
       </Section>
+      </div>
 
       {/* 当前项目生产计划 */}
       <Section title={`当前项目生产计划（${projProductionPlans.length}）`} bodyClassName="p-0">
@@ -587,19 +547,12 @@ export default function ProjectDetail() {
       )}
 
       <ConfirmModal
-        isOpen={modal === 'deleteLoc'}
+        isOpen={modal === 'disableLoc'}
         onClose={() => { setModal(null); setLocTarget(null); }}
-        title="删除点位"
+        title="停用点位"
         danger
-        text={`确认删除点位「${locTarget && locTarget !== 'new' ? locTarget.name : ''}」？删除后该点位主数据将不再可用。`}
-        onConfirm={() => { if (locTarget && locTarget !== 'new') deleteLocation(locTarget); }}
-      />
-
-      <LocationDevicesModal
-        isOpen={modal === 'locDevices'}
-        onClose={() => { setModal(null); setLocTarget(null); }}
-        location={locTarget && locTarget !== 'new' ? locTarget : null}
-        devices={locTarget && locTarget !== 'new' ? (locDeviceMap[locTarget.id] || []) : []}
+        text="停用后该点位不再作为新增设备或交付关联的可选项，历史设备、交付记录、问题和日志仍保留。确认停用吗？"
+        onConfirm={() => { if (locTarget && locTarget !== 'new') disableLocation(locTarget); }}
       />
 
       <Modal isOpen={modal === 'logs'} onClose={() => setModal(null)} title="操作日志" size="lg">
